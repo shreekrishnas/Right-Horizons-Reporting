@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Right Horizons · Reports</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800;9..144,900&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="/static/trilliant.css">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<!-- Atmosphere -->
+<div class="atmosphere" aria-hidden="true"></div>
+
+<!-- Page loader -->
+<div id="page-loader">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:1rem">
+    <div class="pl-ring"></div>
+    <span class="pl-label">Right Horizons Reports</span>
+  </div>
+</div>
+
+<div class="app-outer">
+  <div class="app-shell glass-panel">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-logo" title="Right Horizons">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M2 17l10 5 10-5" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M2 12l10 5 10-5" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="sidebar-nav">
+        <button class="sidebar-item active" data-view="dashboard" onclick="setView('dashboard')" title="Dashboard">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+          </svg>
+          <span class="sidebar-tooltip">Dashboard</span>
+        </button>
+        <button class="sidebar-item" data-view="gsc" onclick="setView('gsc')" title="Search Console">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <span class="sidebar-tooltip">Search Console</span>
+        </button>
+        <button class="sidebar-item" data-view="ga4" onclick="setView('ga4')" title="Analytics">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+            <line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>
+          </svg>
+          <span class="sidebar-tooltip">Analytics</span>
+        </button>
+        <button class="sidebar-item" data-view="social" onclick="setView('social')" title="Social Media">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm-10 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm5 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10z"/>
+          </svg>
+          <span class="sidebar-tooltip">Social</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <div class="app-content">
+
+      <!-- TOPBAR -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <div>
+            <div class="topbar-title">Right Horizons Reports</div>
+            <div class="topbar-sub" id="topbar-sub">Digital Marketing Intelligence</div>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <!-- Date range -->
+          <div class="date-range-group" id="date-range-group">
+            <button class="dr-btn" data-days="7" onclick="setDateRange(7)">7d</button>
+            <button class="dr-btn active" data-days="28" onclick="setDateRange(28)">28d</button>
+            <button class="dr-btn" data-days="90" onclick="setDateRange(90)">90d</button>
+            <input type="date" id="start-date" class="glass-input date-input" onchange="setCustomRange()">
+            <span style="color:var(--text-muted);font-size:0.75rem">→</span>
+            <input type="date" id="end-date" class="glass-input date-input" onchange="setCustomRange()">
+          </div>
+          <!-- Export -->
+          <button class="btn-export" id="btn-export" onclick="exportReport()" title="Export to Excel">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export
+          </button>
+          <!-- Auth -->
+          <div id="auth-area"></div>
+        </div>
+      </header>
+
+      <!-- APP MAIN -->
+      <main class="app-main page-enter">
+
+        <!-- Auth Banner (shown when not connected) -->
+        <div id="auth-banner" class="auth-banner" style="display:none">
+          <div class="auth-banner-inner glass-card-static">
+            <div class="auth-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="auth-banner-title">Connect Google Account</div>
+              <div class="auth-banner-desc">Sign in with Google to fetch data from Search Console and Analytics 4 for all three Right Horizons properties.</div>
+            </div>
+            <a href="/auth/google" class="btn-brand-gradient">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15.545 6.558a9.42 9.42 0 0 1 .139 1.626c0 2.434-.87 4.492-2.384 5.885h.002C11.978 15.292 10.158 16 8 16A8 8 0 1 1 8 0a7.689 7.689 0 0 1 5.352 2.082l-2.284 2.284A4.347 4.347 0 0 0 8 3.166c-2.087 0-3.86 1.408-4.492 3.304a4.792 4.792 0 0 0 0 3.063h.003c.635 1.893 2.405 3.301 4.492 3.301 1.078 0 2.004-.276 2.722-.764h-.003a3.702 3.702 0 0 0 1.599-2.431H8v-3.08h7.545z"/>
+              </svg>
+              Connect Google
+            </a>
+          </div>
+        </div>
+
+        <!-- Domain Tabs -->
+        <div class="domain-tabs" id="domain-tabs">
+          <button class="domain-tab active" data-domain="rh" onclick="setDomain('rh')">
+            <span class="domain-dot" style="background:#7C3AED"></span>
+            Right Horizons
+          </button>
+          <button class="domain-tab" data-domain="pms" onclick="setDomain('pms')">
+            <span class="domain-dot" style="background:#0EA5E9"></span>
+            RH PMS
+          </button>
+          <button class="domain-tab" data-domain="aif" onclick="setDomain('aif')">
+            <span class="domain-dot" style="background:#10B981"></span>
+            RH AIF
+          </button>
+        </div>
+
+        <!-- DASHBOARD VIEW -->
+        <div id="view-dashboard" class="view active">
+          <!-- KPI Row: GSC -->
+          <div class="section-label">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Google Search Console
+          </div>
+          <div class="kpi-grid stagger" id="gsc-kpis">
+            <div class="kpi-card skeleton"></div>
+            <div class="kpi-card skeleton"></div>
+            <div class="kpi-card skeleton"></div>
+            <div class="kpi-card skeleton"></div>
+          </div>
+
+          <!-- KPI Row: GA4 -->
+          <div class="section-label" style="margin-top:1.5rem">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+            Google Analytics 4
+          </div>
+          <div class="kpi-grid stagger" id="ga4-kpis">
+            <div class="kpi-card skeleton"></div>
+            <div class="kpi-card skeleton"></div>
+            <div class="kpi-card skeleton"></div>
+            <div class="kpi-card skeleton"></div>
+            <div class="kpi-card skeleton"></div>
+          </div>
+
+          <!-- Charts row -->
+          <div class="charts-row" style="margin-top:1.5rem">
+            <!-- GSC Click chart -->
+            <div class="glass-card-static chart-card">
+              <div class="card-header-row">
+                <span class="card-title">Clicks &amp; Impressions</span>
+                <span class="card-badge">GSC</span>
+              </div>
+              <canvas id="gsc-chart" height="180"></canvas>
+            </div>
+            <!-- GA4 sessions chart -->
+            <div class="glass-card-static chart-card">
+              <div class="card-header-row">
+                <span class="card-title">Sessions &amp; Users</span>
+                <span class="card-badge">GA4</span>
+              </div>
+              <canvas id="ga4-chart" height="180"></canvas>
+            </div>
+          </div>
+
+          <!-- Tables row -->
+          <div class="tables-row" style="margin-top:1.5rem">
+            <div class="glass-card-static table-card" id="queries-card">
+              <div class="card-header-row">
+                <span class="card-title">Top Search Queries</span>
+                <span class="card-badge">GSC</span>
+              </div>
+              <div class="table-wrap" id="queries-table-wrap">
+                <div class="table-loading">Loading…</div>
+              </div>
+            </div>
+            <div class="glass-card-static table-card" id="ga4pages-card">
+              <div class="card-header-row">
+                <span class="card-title">Top Pages</span>
+                <span class="card-badge">GA4</span>
+              </div>
+              <div class="table-wrap" id="ga4pages-table-wrap">
+                <div class="table-loading">Loading…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- GSC VIEW -->
+        <div id="view-gsc" class="view">
+          <div class="section-label">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Search Console — Deep Dive
+          </div>
+          <div class="kpi-grid stagger" id="gsc-kpis-2"></div>
+          <div class="glass-card-static" style="margin-top:1.25rem;padding:0;overflow:hidden">
+            <div class="card-header-row" style="padding:1rem 1.25rem">
+              <span class="card-title">Top Queries (Top 20)</span>
+              <span class="card-badge">GSC</span>
+            </div>
+            <div class="table-wrap" id="gsc-queries-full"></div>
+          </div>
+          <div class="glass-card-static" style="margin-top:1.25rem;padding:0;overflow:hidden">
+            <div class="card-header-row" style="padding:1rem 1.25rem">
+              <span class="card-title">Top Pages (Top 20)</span>
+              <span class="card-badge">GSC</span>
+            </div>
+            <div class="table-wrap" id="gsc-pages-full"></div>
+          </div>
+        </div>
+
+        <!-- GA4 VIEW -->
+        <div id="view-ga4" class="view">
+          <div class="section-label">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+            Analytics 4 — Deep Dive
+          </div>
+          <div class="kpi-grid stagger" id="ga4-kpis-2"></div>
+          <div class="tables-row" style="margin-top:1.25rem">
+            <div class="glass-card-static" style="padding:0;overflow:hidden;flex:1.4">
+              <div class="card-header-row" style="padding:1rem 1.25rem">
+                <span class="card-title">Top Pages (Top 20)</span>
+                <span class="card-badge">GA4</span>
+              </div>
+              <div class="table-wrap" id="ga4-pages-full"></div>
+            </div>
+            <div class="glass-card-static" style="padding:0;overflow:hidden;flex:1">
+              <div class="card-header-row" style="padding:1rem 1.25rem">
+                <span class="card-title">Traffic Sources</span>
+                <span class="card-badge">GA4</span>
+              </div>
+              <div class="table-wrap" id="ga4-sources-full"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SOCIAL VIEW -->
+        <div id="view-social" class="view">
+          <div class="section-label">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm-10 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm5 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10z"/></svg>
+            Social &amp; Paid Media
+          </div>
+
+          <!-- Meta Ads -->
+          <div class="glass-card-static" style="padding:1.25rem;margin-bottom:1.25rem" id="meta-ads-card">
+            <div class="card-header-row">
+              <span class="card-title">Meta Ads Performance</span>
+              <span class="card-badge" style="background:rgba(24,119,242,0.10);color:#1877F2">Marketing API</span>
+            </div>
+            <div class="table-loading">Loading Meta Ads data…</div>
+          </div>
+
+          <!-- Meta Spend Chart -->
+          <div class="glass-card-static chart-card" style="margin-bottom:1.25rem">
+            <div class="card-header-row">
+              <span class="card-title">Daily Ad Spend &amp; Clicks</span>
+              <span class="card-badge" style="background:rgba(24,119,242,0.10);color:#1877F2">Meta</span>
+            </div>
+            <canvas id="meta-chart" height="180"></canvas>
+          </div>
+
+          <!-- Facebook Pages + Instagram side by side -->
+          <div class="tables-row">
+            <div class="glass-card-static" style="padding:1.25rem;overflow:hidden" id="facebook-card">
+              <div class="card-header-row">
+                <span class="card-title">Facebook Pages</span>
+                <span class="card-badge" style="background:rgba(24,119,242,0.10);color:#1877F2">Social API</span>
+              </div>
+              <div class="table-loading">Loading Facebook data…</div>
+            </div>
+            <div class="glass-card-static" style="padding:1.25rem;overflow:hidden" id="instagram-card">
+              <div class="card-header-row">
+                <span class="card-title">Instagram</span>
+                <span class="card-badge" style="background:rgba(225,48,108,0.10);color:#E1306C">Social API</span>
+              </div>
+              <div class="table-loading">Loading Instagram data…</div>
+            </div>
+          </div>
+
+          <!-- LinkedIn coming soon -->
+          <div class="glass-card-static" style="padding:1.25rem;margin-top:1.25rem">
+            <div class="social-card-header">
+              <div class="social-icon-wrap" style="background:linear-gradient(135deg,#0A66C2,#004182)">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+              </div>
+              <div>
+                <div class="social-platform">LinkedIn</div>
+                <div class="social-status-badge coming">Coming Soon</div>
+              </div>
+            </div>
+            <div class="social-desc">LinkedIn page impressions, follower growth, and post engagement coming next.</div>
+          </div>
+        </div>
+
+      </main>
+    </div><!-- /.app-content -->
+  </div><!-- /.app-shell -->
+</div><!-- /.app-outer -->
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
