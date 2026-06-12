@@ -11,6 +11,8 @@ SECRET_KEY           = os.getenv("SECRET_KEY", "dev-secret-change-me")
 META_MARKETING_TOKEN = os.getenv("META_MARKETING_TOKEN", "")
 META_SOCIAL_TOKEN    = os.getenv("META_SOCIAL_TOKEN", "")
 
+GOOGLE_REFRESH_TOKEN = os.getenv("GOOGLE_REFRESH_TOKEN", "")
+
 GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/webmasters.readonly",
     "https://www.googleapis.com/auth/analytics.readonly",

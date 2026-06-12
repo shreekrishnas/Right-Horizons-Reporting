@@ -10,7 +10,7 @@ from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 import io
 
-from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, GOOGLE_SCOPES, DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN
+from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, GOOGLE_SCOPES, DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN, GOOGLE_REFRESH_TOKEN
 import gsc_client
 import ga4_client
 import meta_client
@@ -43,7 +43,18 @@ def _flow() -> Flow:
 
 
 def _creds() -> Optional[dict]:
-    return _token_store.get("creds")
+    c = _token_store.get("creds")
+    if c:
+        return c
+    if GOOGLE_REFRESH_TOKEN:
+        return {
+            "token":         None,
+            "refresh_token": GOOGLE_REFRESH_TOKEN,
+            "client_id":     GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "scopes":        GOOGLE_SCOPES,
+        }
+    return None
 
 
 def _require_creds():
@@ -84,7 +95,7 @@ def auth_callback(code: str, request: Request):
 
 @app.get("/auth/status")
 def auth_status():
-    return {"connected": bool(_creds())}
+    return {"connected": bool(_creds()), "mode": "refresh_token" if (not _token_store.get("creds") and GOOGLE_REFRESH_TOKEN) else "oauth"}
 
 
 @app.post("/auth/disconnect")
