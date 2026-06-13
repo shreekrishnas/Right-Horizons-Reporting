@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN
+from config import DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN, META_PAGE_ID, META_AD_ACCOUNT
 from google_auth import get_credentials
 import gsc
 import ga4
@@ -202,7 +202,10 @@ def meta_accounts():
     if not META_MARKETING_TOKEN:
         raise HTTPException(400, "Meta Marketing token not configured")
     try:
-        return meta.get_ad_accounts(META_MARKETING_TOKEN)
+        accounts = meta.get_ad_accounts(META_MARKETING_TOKEN)
+        if META_AD_ACCOUNT:
+            accounts = [a for a in accounts if a["id"] == META_AD_ACCOUNT]
+        return accounts
     except Exception as e:
         raise HTTPException(502, f"Meta API error: {e}")
 
@@ -214,7 +217,10 @@ def social_pages():
     if not META_SOCIAL_TOKEN:
         raise HTTPException(400, "Meta Social token not configured")
     try:
-        return social.get_pages(META_SOCIAL_TOKEN)
+        pages = social.get_pages(META_SOCIAL_TOKEN)
+        if META_PAGE_ID:
+            pages = [p for p in pages if p["id"] == META_PAGE_ID]
+        return pages
     except Exception as e:
         raise HTTPException(502, f"Social API error: {e}")
 
