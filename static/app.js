@@ -113,16 +113,22 @@ function toggleTheme() {
 
 function switchView(view) {
     currentView = view;
-    ['overview', 'gsc', 'ga4', 'meta'].forEach(v => {
+    ['overview', 'gsc', 'ga4', 'meta', 'social', 'youtube', 'linkedin'].forEach(v => {
         const el = document.getElementById('view-' + v);
         if (el) el.style.display = v === view ? 'block' : 'none';
     });
     document.querySelectorAll('.sidebar-item').forEach(b => {
         b.classList.toggle('active', b.dataset.view === view);
     });
-    const subtitles = { overview: 'Reporting Dashboard', gsc: 'Search Console', ga4: 'Google Analytics', meta: 'Meta Ads' };
+    const subtitles = {
+        overview: 'Reporting Dashboard', gsc: 'Search Console', ga4: 'Google Analytics',
+        meta: 'Meta Ads', social: 'Social Media', youtube: 'YouTube', linkedin: 'LinkedIn',
+    };
     const sub = document.getElementById('topbar-sub');
     if (sub) sub.textContent = subtitles[view] || 'Dashboard';
+
+    if (view === 'social') loadSocial();
+    if (view === 'youtube') loadYouTube();
 }
 
 // ── Data loading ──
@@ -284,6 +290,173 @@ async function loadMeta() {
     }
 }
 
+async function loadSocial() {
+    try {
+        const pages = await api('/api/social/pages');
+        if (!pages || pages.length === 0) {
+            document.getElementById('social-fb-metrics').innerHTML =
+                '<div class="empty-state"><p>No Facebook pages found. Check Meta Social token.</p></div>';
+            return;
+        }
+        const page = pages[0];
+        const qs = `?page_id=${page.id}&start=${dateStart}&end=${dateEnd}`;
+
+        try {
+            const insights = await api(`/api/social/page-insights${qs}`);
+            renderMetric('fb-impressions', insights.page_impressions || 0);
+            renderMetric('fb-engaged', insights.page_engaged_users || 0);
+        } catch (e) {
+            renderMetric('fb-impressions', '-');
+            renderMetric('fb-engaged', '-');
+        }
+
+        try {
+            const posts = await api(`/api/social/page-posts${qs}`);
+            renderTable('fb-posts-table', [
+                { label: 'Post', key: 'message' },
+                { label: 'Date', key: 'created_time' },
+                { label: 'Impressions', key: 'post_impressions' },
+                { label: 'Engaged', key: 'post_engaged_users' },
+                { label: 'Clicks', key: 'post_clicks' },
+                { label: 'Shares', key: 'shares' },
+            ], posts);
+        } catch (e) {
+            showError('fb-posts-table', e.message);
+        }
+
+        try {
+            const igResp = await api(`/api/social/ig-account?page_id=${page.id}`);
+            if (igResp.ig_id) {
+                const [profile, insights, media] = await Promise.allSettled([
+                    api(`/api/social/ig-profile?ig_id=${igResp.ig_id}`),
+                    api(`/api/social/ig-insights?ig_id=${igResp.ig_id}&start=${dateStart}&end=${dateEnd}`),
+                    api(`/api/social/ig-media?ig_id=${igResp.ig_id}`),
+                ]);
+                if (profile.status === 'fulfilled') renderMetric('ig-followers', profile.value.followers_count);
+                if (insights.status === 'fulfilled') renderMetric('ig-reach', insights.value.reach || 0);
+                if (media.status === 'fulfilled') {
+                    renderTable('ig-media-table', [
+                        { label: 'Caption', key: 'caption' },
+                        { label: 'Type', key: 'media_type' },
+                        { label: 'Likes', key: 'like_count' },
+                        { label: 'Comments', key: 'comments_count' },
+                    ], (media.value || []).map(m => ({ ...m, caption: (m.caption || '').slice(0, 80) })));
+                }
+            }
+        } catch (e) {
+            document.getElementById('ig-media-table').innerHTML =
+                '<div class="empty-state"><p>No Instagram account linked</p></div>';
+        }
+    } catch (e) {
+        document.getElementById('social-fb-metrics').innerHTML =
+            `<div class="empty-state"><p>Social API not connected: ${e.message}</p></div>`;
+    }
+}
+
+async function loadYouTube() {
+    try {
+        const ch = await api('/api/youtube/channel');
+        if (ch.title) {
+            renderMetric('yt-subscribers', ch.subscribers);
+            renderMetric('yt-views', ch.views);
+            renderMetric('yt-videos', ch.videos);
+        } else {
+            document.getElementById('yt-metrics').innerHTML =
+                '<div class="empty-state"><p>No YouTube channel found</p></div>';
+        }
+    } catch (e) {
+        document.getElementById('yt-metrics').innerHTML =
+            `<div class="empty-state"><p>YouTube API error: ${e.message}</p></div>`;
+    }
+
+    try {
+        const videos = await api('/api/youtube/videos?limit=10');
+        renderTable('yt-videos-table', [
+            { label: 'Title', key: 'title' },
+            { label: 'Published', key: 'published' },
+            { label: 'Views', key: 'views' },
+            { label: 'Likes', key: 'likes' },
+            { label: 'Comments', key: 'comments' },
+        ], videos);
+    } catch (e) {
+        showError('yt-videos-table', e.message);
+    }
+}
+
+async function generateSEO() {
+    const topic = document.getElementById('yt-seo-topic').value.trim();
+    if (!topic) return;
+    const resultEl = document.getElementById('yt-seo-result');
+    resultEl.innerHTML = '<div class="empty-state"><p>Generating...</p></div>';
+    try {
+        const seo = await api(`/api/youtube/seo?topic=${encodeURIComponent(topic)}`);
+        let html = '<div class="glass-card-static" style="padding:1.5rem;">';
+        html += '<div class="table-title">Suggested Titles</div>';
+        html += '<ul style="list-style:none; margin-bottom:1rem;">';
+        seo.suggested_titles.forEach(t => html += `<li style="padding:0.3rem 0; font-size:0.85rem; color:var(--text-primary);">${t}</li>`);
+        html += '</ul>';
+        html += '<div class="table-title">Description</div>';
+        html += `<pre style="white-space:pre-wrap; font-size:0.8rem; color:var(--text-secondary); background:var(--surface-input); padding:1rem; border-radius:0.75rem; margin-bottom:1rem; font-family:Inter,sans-serif;">${seo.description}</pre>`;
+        html += '<div class="table-title">Hashtags</div>';
+        html += '<div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:1rem;">';
+        seo.hashtags.forEach(h => html += `<span style="background:var(--accent-primary-soft); color:var(--accent-primary); padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.75rem; font-weight:600;">${h}</span>`);
+        html += '</div>';
+        html += '<div class="table-title">Tags</div>';
+        html += '<div style="display:flex; flex-wrap:wrap; gap:0.4rem;">';
+        seo.tags.forEach(t => html += `<span style="background:var(--surface-hover); color:var(--text-secondary); padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.75rem;">${t}</span>`);
+        html += '</div></div>';
+        resultEl.innerHTML = html;
+    } catch (e) {
+        resultEl.innerHTML = `<div class="error-msg">${e.message}</div>`;
+    }
+}
+
+async function uploadLinkedIn() {
+    const fileInput = document.getElementById('li-file-input');
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const type = document.getElementById('li-upload-type').value;
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const resp = await fetch(`/api/linkedin/upload?type=${type}`, { method: 'POST', body: formData });
+        if (!resp.ok) throw new Error(await resp.text());
+        const data = await resp.json();
+
+        const summaryEl = document.getElementById('li-summary');
+        const metricsEl = document.getElementById('li-metrics');
+        const tableWrap = document.getElementById('li-table-wrap');
+
+        if (data.summary) {
+            summaryEl.style.display = 'block';
+            let metricsHtml = '';
+            const colors = ['#7C3AED', '#0EA5E9', '#10B981', '#F59E0B'];
+            let ci = 0;
+            for (const [key, val] of Object.entries(data.summary)) {
+                if (key === 'total_rows') {
+                    metricsHtml += `<div class="metric-card"><div class="accent-strip" style="background:${colors[ci++ % 4]}"></div><div class="metric-label">Total Rows</div><div class="metric-value">${val}</div></div>`;
+                } else if (typeof val === 'object' && val.sum !== undefined) {
+                    metricsHtml += `<div class="metric-card"><div class="accent-strip" style="background:${colors[ci++ % 4]}"></div><div class="metric-label">${key}</div><div class="metric-value">${formatNum(val.sum)}</div></div>`;
+                }
+            }
+            metricsEl.innerHTML = metricsHtml;
+        }
+
+        if (data.headers && data.rows) {
+            tableWrap.style.display = 'block';
+            renderTable('li-data-table',
+                data.headers.map(h => ({ label: h, key: h })),
+                data.rows.slice(0, 50),
+            );
+        }
+    } catch (e) {
+        document.getElementById('li-table-wrap').style.display = 'block';
+        showError('li-data-table', e.message);
+    }
+}
+
 async function loadAll() {
     await Promise.allSettled([loadGSC(), loadGA4(), loadMeta()]);
 }
@@ -370,6 +543,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('btn-export').addEventListener('click', exportReport);
     document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+    document.getElementById('btn-seo-generate').addEventListener('click', generateSEO);
+    document.getElementById('li-file-input').addEventListener('change', uploadLinkedIn);
+    document.getElementById('yt-seo-topic').addEventListener('keydown', (e) => { if (e.key === 'Enter') generateSEO(); });
 
     await loadAll();
 

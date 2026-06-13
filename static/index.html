@@ -48,6 +48,18 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
                 <span class="sidebar-tooltip">Meta Ads</span>
             </button>
+            <button class="sidebar-item" data-view="social" onclick="switchView('social')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                <span class="sidebar-tooltip">Social</span>
+            </button>
+            <button class="sidebar-item" data-view="youtube" onclick="switchView('youtube')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span class="sidebar-tooltip">YouTube</span>
+            </button>
+            <button class="sidebar-item" data-view="linkedin" onclick="switchView('linkedin')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-4 0v7h-4v-7a6 6 0 016-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+                <span class="sidebar-tooltip">LinkedIn</span>
+            </button>
         </div>
     </nav>
 
@@ -264,6 +276,115 @@
                         <div class="table-card" id="meta-campaigns-table">
                             <div class="empty-state"><p>Loading...</p></div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ Social view ═══ -->
+            <div id="view-social" style="display:none">
+                <div class="section page-enter">
+                    <div class="section-label">Facebook & Instagram</div>
+                    <div class="metrics-grid" id="social-fb-metrics">
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#1877F2"></div>
+                            <div class="metric-label">Page Impressions</div>
+                            <div class="metric-value" id="fb-impressions">-</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#1877F2"></div>
+                            <div class="metric-label">Engaged Users</div>
+                            <div class="metric-value" id="fb-engaged">-</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#E4405F"></div>
+                            <div class="metric-label">IG Reach</div>
+                            <div class="metric-value" id="ig-reach">-</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#E4405F"></div>
+                            <div class="metric-label">IG Followers</div>
+                            <div class="metric-value" id="ig-followers">-</div>
+                        </div>
+                    </div>
+                    <div class="two-col" style="margin-top:1.5rem;">
+                        <div>
+                            <div class="table-title">Facebook Posts</div>
+                            <div class="table-card" id="fb-posts-table">
+                                <div class="empty-state"><p>Connect Meta Social token to view data</p></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="table-title">Instagram Media</div>
+                            <div class="table-card" id="ig-media-table">
+                                <div class="empty-state"><p>Connect Meta Social token to view data</p></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ YouTube view ═══ -->
+            <div id="view-youtube" style="display:none">
+                <div class="section page-enter">
+                    <div class="section-label">YouTube Channel</div>
+                    <div class="metrics-grid" id="yt-metrics">
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#FF0000"></div>
+                            <div class="metric-label">Subscribers</div>
+                            <div class="metric-value" id="yt-subscribers">-</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#FF0000"></div>
+                            <div class="metric-label">Total Views</div>
+                            <div class="metric-value" id="yt-views">-</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#FF0000"></div>
+                            <div class="metric-label">Videos</div>
+                            <div class="metric-value" id="yt-videos">-</div>
+                        </div>
+                    </div>
+                    <div class="table-title" style="margin-top:1.5rem;">Recent Videos</div>
+                    <div class="table-card" id="yt-videos-table">
+                        <div class="empty-state"><p>Loading...</p></div>
+                    </div>
+
+                    <div class="section" style="margin-top:2rem;">
+                        <div class="section-label">YouTube SEO Generator</div>
+                        <div style="display:flex; gap:0.75rem; margin-bottom:1rem;">
+                            <input type="text" class="date-input" id="yt-seo-topic" placeholder="Enter video topic..." style="flex:1; height:40px; font-size:0.85rem;">
+                            <button class="btn-export" id="btn-seo-generate" style="white-space:nowrap;">Generate SEO</button>
+                        </div>
+                        <div id="yt-seo-result"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ LinkedIn view ═══ -->
+            <div id="view-linkedin" style="display:none">
+                <div class="section page-enter">
+                    <div class="section-label">LinkedIn Analytics (Excel Import)</div>
+                    <div class="glass-card-static" style="padding:2rem; text-align:center; margin-bottom:1.5rem;">
+                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">Upload your LinkedIn analytics export (Excel or CSV)</p>
+                        <div style="display:flex; gap:0.75rem; justify-content:center; align-items:center; flex-wrap:wrap;">
+                            <select id="li-upload-type" class="date-input" style="height:40px; font-size:0.85rem;">
+                                <option value="analytics">Page Analytics</option>
+                                <option value="followers">Follower Demographics</option>
+                            </select>
+                            <label class="btn-export" style="cursor:pointer;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                Upload File
+                                <input type="file" id="li-file-input" accept=".xlsx,.csv" style="display:none;">
+                            </label>
+                        </div>
+                    </div>
+                    <div id="li-summary" style="display:none;">
+                        <div class="section-label">Summary</div>
+                        <div class="metrics-grid" id="li-metrics"></div>
+                    </div>
+                    <div id="li-table-wrap" style="display:none;">
+                        <div class="table-title">Data</div>
+                        <div class="table-card" id="li-data-table"></div>
                     </div>
                 </div>
             </div>

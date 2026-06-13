@@ -2,7 +2,7 @@ import io
 import traceback
 from datetime import date, timedelta
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -11,6 +11,9 @@ from google_auth import get_credentials
 import gsc
 import ga4
 import meta
+import social
+import youtube
+import linkedin
 from exporter import build_report
 
 app = FastAPI(title="Right Horizons Reporting")
@@ -202,6 +205,128 @@ def meta_accounts():
         return meta.get_ad_accounts(META_MARKETING_TOKEN)
     except Exception as e:
         raise HTTPException(502, f"Meta API error: {e}")
+
+
+# ── Social (Facebook + Instagram) ────────────────────────────────────────────
+
+@app.get("/api/social/pages")
+def social_pages():
+    if not META_SOCIAL_TOKEN:
+        raise HTTPException(400, "Meta Social token not configured")
+    try:
+        return social.get_pages(META_SOCIAL_TOKEN)
+    except Exception as e:
+        raise HTTPException(502, f"Social API error: {e}")
+
+
+@app.get("/api/social/page-insights")
+def social_page_insights(page_id: str, start: str = "", end: str = ""):
+    if not META_SOCIAL_TOKEN:
+        raise HTTPException(400, "Meta Social token not configured")
+    start, end = _dates(start, end)
+    try:
+        return social.get_page_insights(META_SOCIAL_TOKEN, page_id, start, end)
+    except Exception as e:
+        raise HTTPException(502, f"Social API error: {e}")
+
+
+@app.get("/api/social/page-posts")
+def social_page_posts(page_id: str, start: str = "", end: str = "", limit: int = 10):
+    if not META_SOCIAL_TOKEN:
+        raise HTTPException(400, "Meta Social token not configured")
+    start, end = _dates(start, end)
+    try:
+        return social.get_page_posts(META_SOCIAL_TOKEN, page_id, start, end, limit)
+    except Exception as e:
+        raise HTTPException(502, f"Social API error: {e}")
+
+
+@app.get("/api/social/ig-account")
+def social_ig_account(page_id: str):
+    if not META_SOCIAL_TOKEN:
+        raise HTTPException(400, "Meta Social token not configured")
+    try:
+        ig_id = social.get_ig_account(META_SOCIAL_TOKEN, page_id)
+        if not ig_id:
+            raise HTTPException(404, "No Instagram business account linked to this page")
+        return {"ig_id": ig_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"Social API error: {e}")
+
+
+@app.get("/api/social/ig-profile")
+def social_ig_profile(ig_id: str):
+    if not META_SOCIAL_TOKEN:
+        raise HTTPException(400, "Meta Social token not configured")
+    try:
+        return social.get_ig_profile(META_SOCIAL_TOKEN, ig_id)
+    except Exception as e:
+        raise HTTPException(502, f"Social API error: {e}")
+
+
+@app.get("/api/social/ig-insights")
+def social_ig_insights(ig_id: str, start: str = "", end: str = ""):
+    if not META_SOCIAL_TOKEN:
+        raise HTTPException(400, "Meta Social token not configured")
+    start, end = _dates(start, end)
+    try:
+        return social.get_ig_insights(META_SOCIAL_TOKEN, ig_id, start, end)
+    except Exception as e:
+        raise HTTPException(502, f"Social API error: {e}")
+
+
+@app.get("/api/social/ig-media")
+def social_ig_media(ig_id: str, limit: int = 10):
+    if not META_SOCIAL_TOKEN:
+        raise HTTPException(400, "Meta Social token not configured")
+    try:
+        return social.get_ig_media(META_SOCIAL_TOKEN, ig_id, limit)
+    except Exception as e:
+        raise HTTPException(502, f"Social API error: {e}")
+
+
+# ── YouTube ──────────────────────────────────────────────────────────────────
+
+@app.get("/api/youtube/channel")
+def youtube_channel():
+    try:
+        creds = get_credentials()
+        return youtube.get_channel_stats(creds)
+    except Exception as e:
+        raise HTTPException(502, f"YouTube error: {e}")
+
+
+@app.get("/api/youtube/videos")
+def youtube_videos(limit: int = 10):
+    try:
+        creds = get_credentials()
+        return youtube.get_recent_videos(creds, limit)
+    except Exception as e:
+        raise HTTPException(502, f"YouTube error: {e}")
+
+
+@app.get("/api/youtube/seo")
+def youtube_seo(topic: str = ""):
+    if not topic.strip():
+        raise HTTPException(400, "topic parameter required")
+    return youtube.generate_seo_metadata(topic)
+
+
+# ── LinkedIn (Excel upload) ─────────────────────────────────────────────────
+
+@app.post("/api/linkedin/upload")
+async def linkedin_upload(file: UploadFile = File(...), type: str = Query("analytics")):
+    content = await file.read()
+    if not content:
+        raise HTTPException(400, "Empty file")
+    try:
+        if type == "followers":
+            return linkedin.parse_linkedin_followers(content, file.filename or "")
+        return linkedin.parse_linkedin_analytics(content, file.filename or "")
+    except Exception as e:
+        raise HTTPException(422, f"Failed to parse file: {e}")
 
 
 # ── Export ────────────────────────────────────────────────────────────────────
