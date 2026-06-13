@@ -79,15 +79,26 @@ def auth_google():
 
 @app.get("/auth/google/callback")
 def auth_callback(code: str, request: Request):
-    flow = _flow()
-    flow.fetch_token(code=code)
-    creds: Credentials = flow.credentials
+    import requests as http_requests
+    resp = http_requests.post(
+        "https://oauth2.googleapis.com/token",
+        data={
+            "code":          code,
+            "client_id":     GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "redirect_uri":  GOOGLE_REDIRECT_URI,
+            "grant_type":    "authorization_code",
+        },
+    )
+    tokens = resp.json()
+    if "error" in tokens:
+        raise HTTPException(400, f"Token exchange failed: {tokens}")
     _token_store["creds"] = {
-        "token":         creds.token,
-        "refresh_token": creds.refresh_token,
+        "token":         tokens.get("access_token"),
+        "refresh_token": tokens.get("refresh_token"),
         "client_id":     GOOGLE_CLIENT_ID,
         "client_secret": GOOGLE_CLIENT_SECRET,
-        "scopes":        list(creds.scopes or GOOGLE_SCOPES),
+        "scopes":        GOOGLE_SCOPES,
     }
     return RedirectResponse("/?connected=1")
 
