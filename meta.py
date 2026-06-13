@@ -7,7 +7,13 @@ def _get(path: str, token: str, params: dict = None) -> dict:
     params = params or {}
     params["access_token"] = token
     resp = requests.get(f"{BASE}{path}", params=params, timeout=30)
-    resp.raise_for_status()
+    if not resp.ok:
+        try:
+            err = resp.json().get("error", {})
+            msg = err.get("message", resp.text)
+        except Exception:
+            msg = resp.text
+        raise RuntimeError(f"Meta API ({resp.status_code}): {msg}")
     return resp.json()
 
 
