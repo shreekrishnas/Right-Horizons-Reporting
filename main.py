@@ -113,6 +113,14 @@ def get_domains():
 
 # ── GSC ───────────────────────────────────────────────────────────────────────
 
+@app.get("/api/debug/token")
+def debug_token():
+    c = _token_store.get("creds")
+    if not c:
+        return {"stored": False, "message": "No token in memory. Visit /auth/google first."}
+    return {"stored": True, "refresh_token": c.get("refresh_token"), "token_prefix": (c.get("token") or "")[:20]}
+
+
 @app.get("/api/debug/gsc")
 def debug_gsc():
     import traceback
