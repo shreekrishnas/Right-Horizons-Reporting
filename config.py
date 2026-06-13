@@ -3,23 +3,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-GOOGLE_REDIRECT_URI  = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google/callback")
-SECRET_KEY           = os.getenv("SECRET_KEY", "dev-secret-change-me")
-
-META_MARKETING_TOKEN = os.getenv("META_MARKETING_TOKEN", "")
-META_SOCIAL_TOKEN    = os.getenv("META_SOCIAL_TOKEN", "")
-
 GOOGLE_REFRESH_TOKEN = os.getenv("GOOGLE_REFRESH_TOKEN", "")
 
-GOOGLE_SCOPES = [
-    "https://www.googleapis.com/auth/webmasters.readonly",
-    "https://www.googleapis.com/auth/analytics.readonly",
-    "openid",
-    "email",
-    "profile",
-]
+META_MARKETING_TOKEN = os.getenv("META_MARKETING_TOKEN", "")
+META_SOCIAL_TOKEN = os.getenv("META_SOCIAL_TOKEN", "")
 
 DOMAINS = {
     "rh": {
