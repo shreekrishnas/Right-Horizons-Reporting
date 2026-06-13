@@ -10,7 +10,7 @@ def _service(creds_dict: dict):
         token_uri="https://oauth2.googleapis.com/token",
         client_id=creds_dict["client_id"],
         client_secret=creds_dict["client_secret"],
-        scopes=creds_dict.get("scopes"),
+        scopes=["https://www.googleapis.com/auth/webmasters.readonly"],
     )
     if not creds.valid:
         creds.refresh(Request())

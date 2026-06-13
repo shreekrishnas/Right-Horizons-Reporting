@@ -154,7 +154,7 @@ def debug_gsc():
             token_uri="https://oauth2.googleapis.com/token",
             client_id=creds.get("client_id") if creds else None,
             client_secret=creds.get("client_secret") if creds else None,
-            scopes=creds.get("scopes") if creds else None,
+            scopes=["https://www.googleapis.com/auth/webmasters.readonly"],
         )
         c.refresh(Request())
         return {"ok": True, "token_prefix": c.token[:20] if c.token else None, "valid": c.valid}
