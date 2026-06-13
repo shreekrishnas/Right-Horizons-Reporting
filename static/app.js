@@ -547,8 +547,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('li-file-input').addEventListener('change', uploadLinkedIn);
     document.getElementById('yt-seo-topic').addEventListener('keydown', (e) => { if (e.key === 'Enter') generateSEO(); });
 
-    await loadAll();
-
     const loader = document.getElementById('page-loader');
     if (loader) { loader.classList.add('fade'); setTimeout(() => loader.remove(), 400); }
+
+    loadAll();
 });
