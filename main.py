@@ -113,6 +113,16 @@ def get_domains():
 
 # ── GSC ───────────────────────────────────────────────────────────────────────
 
+@app.get("/api/debug/auth")
+def debug_auth():
+    try:
+        flow = _flow()
+        url, _ = flow.authorization_url(access_type="offline", prompt="consent")
+        return {"ok": True, "url_preview": url[:100], "client_id": GOOGLE_CLIENT_ID[:20], "redirect_uri": GOOGLE_REDIRECT_URI}
+    except Exception as e:
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+
 @app.get("/api/debug/token")
 def debug_token():
     c = _token_store.get("creds")
