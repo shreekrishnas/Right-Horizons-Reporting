@@ -1,0 +1,43 @@
+/* ── Trilliant Design System — CSS Tokens ── */
+
+:root {
+  --text-primary: #1E1B4B;
+  --text-secondary: #475569;
+  --text-muted: #9CA3AF;
+  --text-on-accent: #FFFFFF;
+  --surface-base: #FFFFFF;
+  --surface-card: rgba(255,255,255,0.85);
+  --surface-card-elevated: rgba(255,255,255,0.95);
+  --surface-card-header: rgba(0,0,0,0.02);
+  --surface-input: #FFFFFF;
+  --surface-hover: rgba(0,0,0,0.04);
+  --border-subtle: rgba(0,0,0,0.06);
+  --border-default: rgba(0,0,0,0.10);
+  --border-input: #E5E7EB;
+  --accent-primary: #7C3AED;
+  --accent-primary-soft: rgba(124,58,237,0.08);
+  --accent-section: #7C3AED;
+  --status-success: #10B981;
+  --status-warning: #F59E0B;
+  --status-danger: #DC2626;
+  --status-info: #0EA5E9;
+  --sidebar-width: 96px;
+  --topbar-height: 72px;
+}
+
+[data-theme="dark"] {
+  --text-primary: #F1F5F9;
+  --text-secondary: #CBD5E1;
+  --text-muted: #94A3B8;
+  --surface-base: #0F172A;
+  --surface-card: rgba(30,41,59,0.85);
+  --surface-card-elevated: rgba(51,65,85,0.95);
+  --surface-card-header: rgba(255,255,255,0.04);
+  --surface-input: rgba(15,23,42,0.6);
+  --surface-hover: rgba(255,255,255,0.06);
+  --border-subtle: rgba(255,255,255,0.08);
+  --border-default: rgba(255,255,255,0.14);
+  --border-input: rgba(255,255,255,0.16);
+  --accent-primary-soft: rgba(165,180,252,0.12);
+  --accent-section: #A5B4FC;
+}

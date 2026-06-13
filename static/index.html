@@ -4,140 +4,275 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Right Horizons — Reporting Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:wght@700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/trilliant.css">
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <!-- Loading Overlay -->
-    <div id="loading-overlay" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.7); z-index:999; justify-content:center; align-items:center;">
-        <div style="text-align:center; color:#f1f5f9;">
-            <div style="width:40px; height:40px; border:3px solid #475569; border-top-color:#7c3aed; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 12px;"></div>
-            <div style="font-size:14px;">Loading data...</div>
-        </div>
-        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+
+<!-- Page loader -->
+<div id="page-loader">
+    <div style="text-align:center; display:flex; flex-direction:column; align-items:center; gap:1rem;">
+        <div class="pl-ring"></div>
+        <div class="pl-label">LOADING DASHBOARD</div>
     </div>
+</div>
 
-    <!-- Header -->
-    <header class="header">
-        <div class="header-left">
-            <div class="logo">RH Reports</div>
+<!-- Atmosphere background -->
+<div class="atmosphere"></div>
+
+<div class="app-outer">
+<div class="app-shell glass-panel">
+
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="sidebar-logo">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </div>
+        <div class="sidebar-nav">
+            <button class="sidebar-item active" data-view="overview" onclick="switchView('overview')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                <span class="sidebar-tooltip">Overview</span>
+            </button>
+            <button class="sidebar-item" data-view="gsc" onclick="switchView('gsc')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span class="sidebar-tooltip">Search Console</span>
+            </button>
+            <button class="sidebar-item" data-view="ga4" onclick="switchView('ga4')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                <span class="sidebar-tooltip">Analytics</span>
+            </button>
+            <button class="sidebar-item" data-view="meta" onclick="switchView('meta')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                <span class="sidebar-tooltip">Meta Ads</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main content area -->
+    <div class="app-content">
+
+        <!-- Topbar -->
+        <header class="topbar">
+            <div class="topbar-left">
+                <div>
+                    <div class="topbar-title" id="topbar-title">Right Horizons</div>
+                    <div class="topbar-sub" id="topbar-sub">Reporting Dashboard</div>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="date-range-group">
+                    <button class="dr-btn" data-preset="7d">7D</button>
+                    <button class="dr-btn active" data-preset="28d">28D</button>
+                    <button class="dr-btn" data-preset="3m">3M</button>
+                    <button class="dr-btn" data-preset="6m">6M</button>
+                    <input type="date" class="date-input" id="date-start">
+                    <input type="date" class="date-input" id="date-end">
+                </div>
+                <button class="btn-export" id="btn-export">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Export
+                </button>
+                <button class="theme-toggle" id="theme-toggle" title="Toggle theme">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon-sun"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon-moon" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Scrollable main -->
+        <div class="app-main">
+
+            <!-- Domain tabs -->
             <div class="domain-tabs" id="domain-tabs">
-                <button class="domain-tab active" data-domain="rh">RH</button>
-                <button class="domain-tab" data-domain="pms">PMS</button>
-                <button class="domain-tab" data-domain="aif">AIF</button>
-            </div>
-        </div>
-        <div class="header-right">
-            <div class="date-controls">
-                <div class="date-presets">
-                    <button class="date-preset" data-preset="7d">7 Days</button>
-                    <button class="date-preset active" data-preset="28d">28 Days</button>
-                    <button class="date-preset" data-preset="3m">3 Months</button>
-                    <button class="date-preset" data-preset="6m">6 Months</button>
-                </div>
-                <input type="date" class="date-input" id="date-start">
-                <span style="color: var(--text-dim);">to</span>
-                <input type="date" class="date-input" id="date-end">
-            </div>
-            <button class="btn btn-primary" id="btn-export">Export Excel</button>
-        </div>
-    </header>
-
-    <main class="main">
-        <!-- Status Bar -->
-        <div class="status-bar" id="status-bar">
-            <span class="status-dot orange"></span>
-            <span class="status-text">Checking connections...</span>
-        </div>
-
-        <h2 id="domain-label" style="font-size:22px; font-weight:700; margin-bottom:24px;">Right Horizons</h2>
-
-        <!-- GSC Section -->
-        <div class="section">
-            <div class="section-title">Google Search Console</div>
-            <div class="metrics-grid" id="gsc-metrics">
-                <div class="metric-card">
-                    <div class="metric-label">Total Clicks</div>
-                    <div class="metric-value" id="gsc-clicks">-</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Impressions</div>
-                    <div class="metric-value" id="gsc-impressions">-</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Avg CTR</div>
-                    <div class="metric-value" id="gsc-ctr">-</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Avg Position</div>
-                    <div class="metric-value" id="gsc-position">-</div>
-                </div>
+                <button class="domain-tab active" data-domain="rh">
+                    <span class="domain-dot" style="background:#7C3AED"></span> Right Horizons
+                </button>
+                <button class="domain-tab" data-domain="pms">
+                    <span class="domain-dot" style="background:#0EA5E9"></span> PMS
+                </button>
+                <button class="domain-tab" data-domain="aif">
+                    <span class="domain-dot" style="background:#10B981"></span> AIF
+                </button>
             </div>
 
-            <div class="two-col" style="margin-top:20px;">
-                <div>
-                    <h4 style="font-size:14px; color:var(--text-dim); margin-bottom:12px;">Top Queries</h4>
-                    <div class="table-wrap" id="gsc-queries-table">
-                        <div class="empty-state"><p>Loading...</p></div>
+            <!-- Status bar -->
+            <div class="status-bar" id="status-bar">
+                <span class="status-dot orange"></span>
+                <span class="status-text">Checking connections...</span>
+            </div>
+
+            <!-- ═══ Overview view ═══ -->
+            <div id="view-overview" class="page-enter">
+
+                <!-- GSC summary metrics -->
+                <div class="section">
+                    <div class="section-label">Search Console</div>
+                    <div class="metrics-grid" id="gsc-metrics">
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#7C3AED"></div>
+                            <div class="metric-label">Total Clicks</div>
+                            <div class="metric-value loading" id="gsc-clicks"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#0EA5E9"></div>
+                            <div class="metric-label">Impressions</div>
+                            <div class="metric-value loading" id="gsc-impressions"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#10B981"></div>
+                            <div class="metric-label">Avg CTR</div>
+                            <div class="metric-value loading" id="gsc-ctr"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#F59E0B"></div>
+                            <div class="metric-label">Avg Position</div>
+                            <div class="metric-value loading" id="gsc-position"></div>
+                        </div>
                     </div>
                 </div>
-                <div>
-                    <h4 style="font-size:14px; color:var(--text-dim); margin-bottom:12px;">Top Pages</h4>
-                    <div class="table-wrap" id="gsc-pages-table">
-                        <div class="empty-state"><p>Loading...</p></div>
+
+                <!-- GA4 summary metrics -->
+                <div class="section">
+                    <div class="section-label">Google Analytics</div>
+                    <div class="metrics-grid" id="ga4-metrics">
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#7C3AED"></div>
+                            <div class="metric-label">Sessions</div>
+                            <div class="metric-value loading" id="ga4-sessions"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#0EA5E9"></div>
+                            <div class="metric-label">Users</div>
+                            <div class="metric-value loading" id="ga4-users"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#10B981"></div>
+                            <div class="metric-label">Pageviews</div>
+                            <div class="metric-value loading" id="ga4-pageviews"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#F59E0B"></div>
+                            <div class="metric-label">Bounce Rate</div>
+                            <div class="metric-value loading" id="ga4-bounce"></div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- GA4 Section -->
-        <div class="section">
-            <div class="section-title">Google Analytics</div>
-            <div class="metrics-grid" id="ga4-metrics">
-                <div class="metric-card">
-                    <div class="metric-label">Sessions</div>
-                    <div class="metric-value" id="ga4-sessions">-</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Users</div>
-                    <div class="metric-value" id="ga4-users">-</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Pageviews</div>
-                    <div class="metric-value" id="ga4-pageviews">-</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Bounce Rate</div>
-                    <div class="metric-value" id="ga4-bounce">-</div>
-                </div>
-            </div>
-
-            <div class="two-col" style="margin-top:20px;">
-                <div>
-                    <h4 style="font-size:14px; color:var(--text-dim); margin-bottom:12px;">Traffic Sources</h4>
-                    <div class="table-wrap" id="ga4-sources-table">
-                        <div class="empty-state"><p>Loading...</p></div>
-                    </div>
-                </div>
-                <div>
-                    <h4 style="font-size:14px; color:var(--text-dim); margin-bottom:12px;">Top Pages</h4>
-                    <div class="table-wrap" id="ga4-pages-table">
+                <!-- Meta summary -->
+                <div class="section">
+                    <div class="section-label">Meta Ads</div>
+                    <div id="meta-overview">
                         <div class="empty-state"><p>Loading...</p></div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Meta Section -->
-        <div class="section">
-            <div class="section-title">Meta Ads</div>
-            <div id="meta-section">
-                <div class="table-wrap" id="meta-campaigns-table">
-                    <div class="empty-state"><p>Loading...</p></div>
+            <!-- ═══ GSC detail view ═══ -->
+            <div id="view-gsc" style="display:none">
+                <div class="section page-enter">
+                    <div class="section-label">Search Console — Detail</div>
+                    <div class="metrics-grid" id="gsc-metrics-detail">
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#7C3AED"></div>
+                            <div class="metric-label">Total Clicks</div>
+                            <div class="metric-value loading" id="gsc-clicks-d"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#0EA5E9"></div>
+                            <div class="metric-label">Impressions</div>
+                            <div class="metric-value loading" id="gsc-impressions-d"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#10B981"></div>
+                            <div class="metric-label">Avg CTR</div>
+                            <div class="metric-value loading" id="gsc-ctr-d"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#F59E0B"></div>
+                            <div class="metric-label">Avg Position</div>
+                            <div class="metric-value loading" id="gsc-position-d"></div>
+                        </div>
+                    </div>
+                    <div class="two-col" style="margin-top:1.5rem;">
+                        <div>
+                            <div class="table-title">Top Queries</div>
+                            <div class="table-card" id="gsc-queries-table">
+                                <div class="empty-state"><p>Loading...</p></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="table-title">Top Pages</div>
+                            <div class="table-card" id="gsc-pages-table">
+                                <div class="empty-state"><p>Loading...</p></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-    </main>
 
-    <script src="/static/app.js"></script>
+            <!-- ═══ GA4 detail view ═══ -->
+            <div id="view-ga4" style="display:none">
+                <div class="section page-enter">
+                    <div class="section-label">Google Analytics — Detail</div>
+                    <div class="metrics-grid" id="ga4-metrics-detail">
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#7C3AED"></div>
+                            <div class="metric-label">Sessions</div>
+                            <div class="metric-value loading" id="ga4-sessions-d"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#0EA5E9"></div>
+                            <div class="metric-label">Users</div>
+                            <div class="metric-value loading" id="ga4-users-d"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#10B981"></div>
+                            <div class="metric-label">Pageviews</div>
+                            <div class="metric-value loading" id="ga4-pageviews-d"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="accent-strip" style="background:#F59E0B"></div>
+                            <div class="metric-label">Bounce Rate</div>
+                            <div class="metric-value loading" id="ga4-bounce-d"></div>
+                        </div>
+                    </div>
+                    <div class="two-col" style="margin-top:1.5rem;">
+                        <div>
+                            <div class="table-title">Traffic Sources</div>
+                            <div class="table-card" id="ga4-sources-table">
+                                <div class="empty-state"><p>Loading...</p></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="table-title">Top Pages</div>
+                            <div class="table-card" id="ga4-pages-table">
+                                <div class="empty-state"><p>Loading...</p></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ Meta detail view ═══ -->
+            <div id="view-meta" style="display:none">
+                <div class="section page-enter">
+                    <div class="section-label">Meta Ads — Detail</div>
+                    <div id="meta-section">
+                        <div class="table-card" id="meta-campaigns-table">
+                            <div class="empty-state"><p>Loading...</p></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /app-main -->
+    </div><!-- /app-content -->
+</div><!-- /app-shell -->
+</div><!-- /app-outer -->
+
+<script src="/static/app.js"></script>
 </body>
 </html>
