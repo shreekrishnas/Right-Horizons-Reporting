@@ -14,7 +14,7 @@ DOMAINS = {
     "rh": {
         "label": "Right Horizons",
         "short": "RH",
-        "gsc_site": "sc-domain:righthorizons.com",
+        "gsc_site": "https://www.righthorizons.com/",
         "ga4_property": os.getenv("GA4_PROPERTY_RH", ""),
         "color": "#7C3AED",
         "url": "https://www.righthorizons.com",
@@ -30,7 +30,7 @@ DOMAINS = {
     "aif": {
         "label": "Right Horizons AIF",
         "short": "AIF",
-        "gsc_site": "sc-domain:aif.righthorizonspms.com",
+        "gsc_site": "https://aif.righthorizonspms.com/",
         "ga4_property": os.getenv("GA4_PROPERTY_AIF", ""),
         "color": "#10B981",
         "url": "https://aif.righthorizonspms.com",
