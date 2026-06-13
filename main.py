@@ -69,7 +69,6 @@ def _require_creds():
 @app.get("/auth/google")
 def auth_google():
     flow = _flow()
-    flow.oauth2session.compliance_hook.add(lambda r: r)
     url, _ = flow.authorization_url(
         access_type="offline",
         prompt="consent",
