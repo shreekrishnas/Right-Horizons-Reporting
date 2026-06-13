@@ -113,6 +113,27 @@ def get_domains():
 
 # ── GSC ───────────────────────────────────────────────────────────────────────
 
+@app.get("/api/debug/gsc")
+def debug_gsc():
+    import traceback
+    creds = _creds()
+    try:
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        c = Credentials(
+            token=creds.get("token") if creds else None,
+            refresh_token=creds.get("refresh_token") if creds else None,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=creds.get("client_id") if creds else None,
+            client_secret=creds.get("client_secret") if creds else None,
+            scopes=creds.get("scopes") if creds else None,
+        )
+        c.refresh(Request())
+        return {"ok": True, "token_prefix": c.token[:20] if c.token else None, "valid": c.valid}
+    except Exception as e:
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+
 @app.get("/api/gsc/summary")
 def gsc_summary(domain: str = "rh", start: str = "", end: str = ""):
     creds = _require_creds()
