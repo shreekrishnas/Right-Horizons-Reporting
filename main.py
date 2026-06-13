@@ -141,6 +141,29 @@ def debug_token():
     return {"stored": True, "refresh_token": c.get("refresh_token"), "token_prefix": (c.get("token") or "")[:20]}
 
 
+@app.get("/api/debug/gsc/sites")
+def debug_gsc_sites():
+    creds = _creds()
+    try:
+        from google.auth.transport.requests import Request as GRequest
+        from googleapiclient.discovery import build
+        c = Credentials(
+            token=creds.get("token") if creds else None,
+            refresh_token=creds.get("refresh_token") if creds else None,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=creds.get("client_id") if creds else None,
+            client_secret=creds.get("client_secret") if creds else None,
+            scopes=None,
+        )
+        if not c.valid:
+            c.refresh(GRequest())
+        svc = build("webmasters", "v3", credentials=c, cache_discovery=False)
+        sites = svc.sites().list().execute()
+        return {"sites": [s["siteUrl"] for s in sites.get("siteEntry", [])]}
+    except Exception as e:
+        return {"error": str(e), "trace": traceback.format_exc()}
+
+
 @app.get("/api/debug/gsc")
 def debug_gsc():
     import traceback
