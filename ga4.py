@@ -1,0 +1,97 @@
+from google.analytics.data_v1beta import BetaAnalyticsDataClient
+from google.analytics.data_v1beta.types import (
+    RunReportRequest, DateRange, Dimension, Metric, OrderBy,
+)
+from google.oauth2.credentials import Credentials
+
+
+def _client(creds: Credentials) -> BetaAnalyticsDataClient:
+    return BetaAnalyticsDataClient(credentials=creds)
+
+
+def get_summary(creds: Credentials, property_id: str, start: str, end: str) -> dict:
+    client = _client(creds)
+    resp = client.run_report(RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start, end_date=end)],
+        metrics=[
+            Metric(name="sessions"),
+            Metric(name="totalUsers"),
+            Metric(name="newUsers"),
+            Metric(name="bounceRate"),
+            Metric(name="averageSessionDuration"),
+            Metric(name="screenPageViews"),
+        ],
+    ))
+    if not resp.rows:
+        return {"sessions": 0, "users": 0, "new_users": 0, "bounce_rate": 0, "avg_session": 0, "pageviews": 0}
+    v = [m.value for m in resp.rows[0].metric_values]
+    return {
+        "sessions": int(float(v[0])),
+        "users": int(float(v[1])),
+        "new_users": int(float(v[2])),
+        "bounce_rate": round(float(v[3]) * 100, 1),
+        "avg_session": round(float(v[4])),
+        "pageviews": int(float(v[5])),
+    }
+
+
+def get_top_pages(creds: Credentials, property_id: str, start: str, end: str, limit: int = 10) -> list:
+    client = _client(creds)
+    resp = client.run_report(RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start, end_date=end)],
+        dimensions=[Dimension(name="pagePath")],
+        metrics=[Metric(name="screenPageViews"), Metric(name="sessions"), Metric(name="averageSessionDuration")],
+        order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="screenPageViews"), desc=True)],
+        limit=limit,
+    ))
+    return [
+        {
+            "page": r.dimension_values[0].value,
+            "views": int(float(r.metric_values[0].value)),
+            "sessions": int(float(r.metric_values[1].value)),
+            "avg_dur": round(float(r.metric_values[2].value)),
+        }
+        for r in resp.rows
+    ]
+
+
+def get_traffic_sources(creds: Credentials, property_id: str, start: str, end: str) -> list:
+    client = _client(creds)
+    resp = client.run_report(RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start, end_date=end)],
+        dimensions=[Dimension(name="sessionDefaultChannelGroup")],
+        metrics=[Metric(name="sessions"), Metric(name="totalUsers")],
+        order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="sessions"), desc=True)],
+        limit=10,
+    ))
+    return [
+        {
+            "channel": r.dimension_values[0].value,
+            "sessions": int(float(r.metric_values[0].value)),
+            "users": int(float(r.metric_values[1].value)),
+        }
+        for r in resp.rows
+    ]
+
+
+def get_daily(creds: Credentials, property_id: str, start: str, end: str) -> list:
+    client = _client(creds)
+    resp = client.run_report(RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start, end_date=end)],
+        dimensions=[Dimension(name="date")],
+        metrics=[Metric(name="sessions"), Metric(name="totalUsers")],
+        order_bys=[OrderBy(dimension=OrderBy.DimensionOrderBy(dimension_name="date"))],
+        limit=500,
+    ))
+    return [
+        {
+            "date": r.dimension_values[0].value,
+            "sessions": int(float(r.metric_values[0].value)),
+            "users": int(float(r.metric_values[1].value)),
+        }
+        for r in resp.rows
+    ]
