@@ -1,16 +1,19 @@
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 
 
 def _service(creds_dict: dict):
     creds = Credentials(
-        token=creds_dict["token"],
+        token=creds_dict.get("token"),
         refresh_token=creds_dict.get("refresh_token"),
         token_uri="https://oauth2.googleapis.com/token",
         client_id=creds_dict["client_id"],
         client_secret=creds_dict["client_secret"],
         scopes=creds_dict.get("scopes"),
     )
+    if not creds.valid:
+        creds.refresh(Request())
     return build("webmasters", "v3", credentials=creds, cache_discovery=False)
 
 
