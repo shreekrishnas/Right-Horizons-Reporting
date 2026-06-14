@@ -5,6 +5,8 @@ let domains = {};
 let dateStart = '';
 let dateEnd = '';
 let activePreset = '28d';
+let socialPeriod = 'weekly';
+let seoPeriod = 'weekly';
 
 async function api(path) {
     const resp = await fetch(`${API}${path}`);
@@ -291,71 +293,110 @@ async function loadMeta() {
     }
 }
 
+function switchSocialPeriod(period) {
+    socialPeriod = period;
+    document.querySelectorAll('[data-social-period]').forEach(b =>
+        b.classList.toggle('active', b.dataset.socialPeriod === period));
+    loadSocial();
+}
+
+function switchSEOPeriod(period) {
+    seoPeriod = period;
+    document.querySelectorAll('[data-seo-period]').forEach(b =>
+        b.classList.toggle('active', b.dataset.seoPeriod === period));
+    const title = document.getElementById('seo-title');
+    if (title) title.textContent = `SEO ${period === 'weekly' ? 'Weekly' : 'Monthly'} Performance — ${period === 'weekly' ? '5 Week' : '5 Month'} Trend`;
+    loadSEOWeekly();
+}
+
+const socialMetricsDef = [
+    { label: 'Followers / Page Likes', fb: 'followers', ig: 'followers' },
+    { label: 'New Followers (net)', fb: 'new_followers', ig: 'new_followers' },
+    { label: 'Reach', fb: 'reach', ig: 'reach' },
+    { label: 'Views', fb: 'views', ig: 'views' },
+    { label: 'Engagements (total)', fb: 'engagements', ig: 'engagements' },
+    { label: 'Engagement Rate (%)', fb: 'engagement_rate', ig: 'engagement_rate' },
+    { label: 'Posts Published', fb: 'posts_published', ig: 'posts_published' },
+    { label: 'Stories / Reels', fb: 'reels_stories', ig: 'reels_stories' },
+    { label: 'Video Views', fb: 'video_views', ig: 'video_views' },
+    { label: 'Link Clicks', fb: 'link_clicks', ig: 'link_clicks' },
+    { label: 'Profile Visits / Page Views', fb: 'profile_visits', ig: 'profile_views' },
+    { label: 'Saves / Shares', fb: 'saves_shares', ig: 'saves_shares' },
+];
+
 async function loadSocial() {
-    const qs = `?start=${dateStart}&end=${dateEnd}`;
     const tableEl = document.getElementById('social-metrics-table');
     tableEl.innerHTML = '<div class="empty-state"><p>Loading social media data...</p></div>';
 
-    const socialMetrics = [
-        { label: 'Followers / Page Likes', fb: 'followers', ig: 'followers' },
-        { label: 'New Followers (net)', fb: 'new_followers', ig: 'new_followers' },
-        { label: 'Reach', fb: 'reach', ig: 'reach' },
-        { label: 'Views', fb: 'views', ig: 'views' },
-        { label: 'Engagements (total)', fb: 'engagements', ig: 'engagements' },
-        { label: 'Engagement Rate (%)', fb: 'engagement_rate', ig: 'engagement_rate' },
-        { label: 'Posts Published', fb: 'posts_published', ig: 'posts_published' },
-        { label: 'Stories / Reels', fb: 'reels_stories', ig: 'reels_stories' },
-        { label: 'Video Views', fb: 'video_views', ig: 'video_views' },
-        { label: 'Link Clicks', fb: 'link_clicks', ig: 'link_clicks' },
-        { label: 'Profile Visits / Page Views', fb: 'profile_visits', ig: 'profile_views' },
-        { label: 'Saves / Shares', fb: 'saves_shares', ig: 'saves_shares' },
-    ];
+    try {
+        const data = await api(`/api/social/trend?period=${socialPeriod}&periods=5`);
+        if (!data || data.length === 0) {
+            tableEl.innerHTML = '<div class="empty-state"><p>No social data available</p></div>';
+            return;
+        }
 
-    let fb = {}, ig = {};
-    const [fbRes, igRes] = await Promise.allSettled([
-        api(`/api/social/fb-comprehensive${qs}`),
-        api(`/api/social/ig-comprehensive${qs}`),
-    ]);
-    if (fbRes.status === 'fulfilled') fb = fbRes.value;
-    if (igRes.status === 'fulfilled') ig = igRes.value;
+        let html = '<table><thead><tr><th style="width:30%">Metric</th>';
+        data.forEach(p => html += `<th style="text-align:center; font-size:0.7rem;">${p.period}</th>`);
+        html += '</tr></thead><tbody>';
 
-    let html = '<table><thead><tr>';
-    html += '<th style="width:40%">Metric</th>';
-    html += '<th style="text-align:center">📷 Instagram</th>';
-    html += '<th style="text-align:center">👥 Facebook</th>';
-    html += '</tr></thead><tbody>';
-    socialMetrics.forEach(m => {
-        const igVal = ig[m.ig] !== undefined ? formatNum(ig[m.ig]) : '-';
-        const fbVal = fb[m.fb] !== undefined ? formatNum(fb[m.fb]) : '-';
-        html += `<tr><td style="font-weight:600;">${m.label}</td>`;
-        html += `<td style="text-align:center;">${igVal}</td>`;
-        html += `<td style="text-align:center;">${fbVal}</td>`;
-        html += '</tr>';
-    });
-    html += '</tbody></table>';
-    tableEl.innerHTML = html;
+        html += `<tr><td colspan="${data.length + 1}" style="background:rgba(232,64,95,0.08); font-weight:800; font-size:0.7rem; letter-spacing:0.08em; color:#E4405F; padding:0.5rem 1rem;">📷 INSTAGRAM</td></tr>`;
+        socialMetricsDef.forEach(m => {
+            html += `<tr><td style="font-weight:600;">${m.label}</td>`;
+            data.forEach(p => {
+                const val = p.ig && p.ig[m.ig] !== undefined ? p.ig[m.ig] : '-';
+                html += `<td style="text-align:center;">${formatNum(val)}</td>`;
+            });
+            html += '</tr>';
+        });
+
+        html += `<tr><td colspan="${data.length + 1}" style="background:rgba(24,119,242,0.08); font-weight:800; font-size:0.7rem; letter-spacing:0.08em; color:#1877F2; padding:0.5rem 1rem;">👥 FACEBOOK</td></tr>`;
+        socialMetricsDef.forEach(m => {
+            html += `<tr><td style="font-weight:600;">${m.label}</td>`;
+            data.forEach(p => {
+                const val = p.fb && p.fb[m.fb] !== undefined ? p.fb[m.fb] : '-';
+                html += `<td style="text-align:center;">${formatNum(val)}</td>`;
+            });
+            html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        tableEl.innerHTML = html;
+    } catch (e) {
+        tableEl.innerHTML = `<div class="error-msg">${e.message}</div>`;
+    }
 
     try {
-        const posts = await api(`/api/social/page-posts?page_id=${fb.page_id || ''}&start=${dateStart}&end=${dateEnd}`);
-        renderTable('fb-posts-table', [
-            { label: 'Post', key: 'message' },
-            { label: 'Impressions', key: 'post_impressions' },
-            { label: 'Engaged', key: 'post_engaged_users' },
-            { label: 'Clicks', key: 'post_clicks' },
-            { label: 'Shares', key: 'shares' },
-        ], posts);
+        const pages = await api('/api/social/pages');
+        const pageId = pages && pages.length > 0 ? pages[0].id : '';
+        if (pageId) {
+            const posts = await api(`/api/social/page-posts?page_id=${pageId}&start=${dateStart}&end=${dateEnd}`);
+            renderTable('fb-posts-table', [
+                { label: 'Post', key: 'message' },
+                { label: 'Impressions', key: 'post_impressions' },
+                { label: 'Engaged', key: 'post_engaged_users' },
+                { label: 'Clicks', key: 'post_clicks' },
+                { label: 'Shares', key: 'shares' },
+            ], posts);
+        }
     } catch (e) {
         showError('fb-posts-table', e.message);
     }
 
     try {
-        const igMedia = await api(`/api/social/ig-media?ig_id=${ig.id || ''}`);
-        renderTable('ig-media-table', [
-            { label: 'Caption', key: 'caption' },
-            { label: 'Type', key: 'media_type' },
-            { label: 'Likes', key: 'like_count' },
-            { label: 'Comments', key: 'comments_count' },
-        ], (igMedia || []).map(m => ({ ...m, caption: (m.caption || '').slice(0, 80) })));
+        const pages = await api('/api/social/pages');
+        const pageId = pages && pages.length > 0 ? pages[0].id : '';
+        if (pageId) {
+            const igResp = await api(`/api/social/ig-account?page_id=${pageId}`);
+            if (igResp.ig_id) {
+                const igMedia = await api(`/api/social/ig-media?ig_id=${igResp.ig_id}`);
+                renderTable('ig-media-table', [
+                    { label: 'Caption', key: 'caption' },
+                    { label: 'Type', key: 'media_type' },
+                    { label: 'Likes', key: 'like_count' },
+                    { label: 'Comments', key: 'comments_count' },
+                ], (igMedia || []).map(m => ({ ...m, caption: (m.caption || '').slice(0, 80) })));
+            }
+        }
     } catch (e) {
         showError('ig-media-table', e.message);
     }
@@ -366,7 +407,7 @@ async function loadSEOWeekly() {
     tableEl.innerHTML = '<div class="empty-state"><p>Loading SEO data...</p></div>';
 
     try {
-        const data = await api(`/api/seo/weekly?domain=${currentDomain}&weeks=5`);
+        const data = await api(`/api/seo/trend?domain=${currentDomain}&period=${seoPeriod}&periods=5`);
         if (!data || data.length === 0) {
             tableEl.innerHTML = '<div class="empty-state"><p>No SEO data available</p></div>';
             return;
@@ -390,7 +431,7 @@ async function loadSEOWeekly() {
         ];
 
         let html = '<table><thead><tr><th style="width:35%">Metric</th>';
-        data.forEach(w => html += `<th style="text-align:center; font-size:0.7rem;">${w.week}</th>`);
+        data.forEach(w => html += `<th style="text-align:center; font-size:0.7rem;">${w.period}</th>`);
         html += '</tr></thead><tbody>';
 
         sections.forEach(section => {

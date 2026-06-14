@@ -234,9 +234,58 @@ def social_fb_comprehensive(start: str = "", end: str = ""):
         raise HTTPException(400, "META_PAGE_ID not configured")
     start, end = _dates(start, end)
     try:
-        return social.get_fb_comprehensive(META_SOCIAL_TOKEN, page_id, start, end)
+        result = social.get_fb_comprehensive(META_SOCIAL_TOKEN, page_id, start, end)
+        result["page_id"] = page_id
+        return result
     except Exception as e:
         raise HTTPException(502, f"Social API error: {e}")
+
+
+@app.get("/api/social/trend")
+def social_trend(period: str = "weekly", periods: int = 5):
+    if not META_SOCIAL_TOKEN:
+        raise HTTPException(400, "Meta Social token not configured")
+    page_id = META_PAGE_ID
+    if not page_id:
+        raise HTTPException(400, "META_PAGE_ID not configured")
+
+    today = date.today()
+    days_per = 7 if period == "weekly" else 30
+    ig_id = None
+    try:
+        ig_id = social.get_ig_account(META_SOCIAL_TOKEN, page_id)
+    except Exception:
+        pass
+
+    results = []
+    for i in range(periods):
+        p_end = today - timedelta(days=i * days_per)
+        p_start = p_end - timedelta(days=days_per - 1)
+        ps = p_start.isoformat()
+        pe = p_end.isoformat()
+        if period == "weekly":
+            label = f"{p_start.strftime('%b %d')} - {p_end.strftime('%b %d')}"
+        else:
+            label = p_start.strftime('%B %Y')
+
+        row = {"period": label, "start": ps, "end": pe}
+        try:
+            fb = social.get_fb_comprehensive(META_SOCIAL_TOKEN, page_id, ps, pe)
+            row["fb"] = fb
+        except Exception:
+            row["fb"] = {}
+        if ig_id:
+            try:
+                ig = social.get_ig_comprehensive(META_SOCIAL_TOKEN, ig_id, ps, pe)
+                row["ig"] = ig
+            except Exception:
+                row["ig"] = {}
+        else:
+            row["ig"] = {}
+        results.append(row)
+
+    results.reverse()
+    return results
 
 
 @app.get("/api/social/ig-comprehensive")
@@ -315,27 +364,30 @@ def social_ig_media(ig_id: str, limit: int = 10):
         raise HTTPException(502, f"Social API error: {e}")
 
 
-# ── SEO Weekly ───────────────────────────────────────────────────────────────
+# ── SEO Trend ────────────────────────────────────────────────────────────────
 
-@app.get("/api/seo/weekly")
-def seo_weekly(domain: str = "rh", weeks: int = 5):
+@app.get("/api/seo/trend")
+def seo_trend(domain: str = "rh", period: str = "weekly", periods: int = 5):
     d = _domain(domain)
     try:
         creds = get_credentials()
     except Exception as e:
         raise HTTPException(502, f"Auth error: {e}")
 
-    from datetime import datetime
     today = date.today()
+    days_per = 7 if period == "weekly" else 30
     results = []
-    for i in range(weeks):
-        week_end = today - timedelta(days=i * 7)
-        week_start = week_end - timedelta(days=6)
-        ws = week_start.isoformat()
-        we = week_end.isoformat()
-        week_label = f"{week_start.strftime('%b %d')} - {week_end.strftime('%b %d')}"
+    for i in range(periods):
+        p_end = today - timedelta(days=i * days_per)
+        p_start = p_end - timedelta(days=days_per - 1)
+        ws = p_start.isoformat()
+        we = p_end.isoformat()
+        if period == "weekly":
+            label = f"{p_start.strftime('%b %d')} - {p_end.strftime('%b %d')}"
+        else:
+            label = p_start.strftime('%B %Y')
 
-        row = {"week": week_label, "start": ws, "end": we}
+        row = {"period": label, "start": ws, "end": we}
 
         try:
             gs = gsc.get_summary(creds, d["gsc_site"], ws, we)

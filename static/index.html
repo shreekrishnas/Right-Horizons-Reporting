@@ -284,10 +284,16 @@
                 </div>
             </div>
 
-            <!-- ═══ SEO Weekly view ═══ -->
+            <!-- ═══ SEO view ═══ -->
             <div id="view-seo" style="display:none">
                 <div class="section page-enter">
-                    <div class="section-label">SEO Weekly Performance — 5 Week Trend</div>
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+                        <div class="section-label" id="seo-title" style="margin-bottom:0">SEO Weekly Performance — 5 Week Trend</div>
+                        <div class="date-range-group">
+                            <button class="dr-btn active" data-seo-period="weekly" onclick="switchSEOPeriod('weekly')">Weekly</button>
+                            <button class="dr-btn" data-seo-period="monthly" onclick="switchSEOPeriod('monthly')">Monthly</button>
+                        </div>
+                    </div>
                     <div class="table-card" id="seo-weekly-table">
                         <div class="empty-state"><p>Loading SEO data...</p></div>
                     </div>
@@ -297,7 +303,13 @@
             <!-- ═══ Social view ═══ -->
             <div id="view-social" style="display:none">
                 <div class="section page-enter">
-                    <div class="section-label">Social Media Performance</div>
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+                        <div class="section-label" style="margin-bottom:0">Social Media Performance</div>
+                        <div class="date-range-group">
+                            <button class="dr-btn active" data-social-period="weekly" onclick="switchSocialPeriod('weekly')">Weekly</button>
+                            <button class="dr-btn" data-social-period="monthly" onclick="switchSocialPeriod('monthly')">Monthly</button>
+                        </div>
+                    </div>
                     <div class="table-card" id="social-metrics-table">
                         <div class="empty-state"><p>Loading social media data...</p></div>
                     </div>
