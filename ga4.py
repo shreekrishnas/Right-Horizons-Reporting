@@ -77,6 +77,38 @@ def get_traffic_sources(creds: Credentials, property_id: str, start: str, end: s
     ]
 
 
+def get_organic_summary(creds: Credentials, property_id: str, start: str, end: str) -> dict:
+    from google.analytics.data_v1beta.types import FilterExpression, Filter
+    client = _client(creds)
+    resp = client.run_report(RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start, end_date=end)],
+        dimension_filter=FilterExpression(
+            filter=Filter(
+                field_name="sessionDefaultChannelGroup",
+                string_filter=Filter.StringFilter(value="Organic Search"),
+            )
+        ),
+        metrics=[
+            Metric(name="sessions"),
+            Metric(name="totalUsers"),
+            Metric(name="bounceRate"),
+            Metric(name="averageSessionDuration"),
+            Metric(name="conversions"),
+        ],
+    ))
+    if not resp.rows:
+        return {"organic_sessions": 0, "organic_users": 0, "bounce_rate": 0, "avg_session_duration": 0, "leads": 0}
+    v = [m.value for m in resp.rows[0].metric_values]
+    return {
+        "organic_sessions": int(float(v[0])),
+        "organic_users": int(float(v[1])),
+        "bounce_rate": round(float(v[2]) * 100, 1),
+        "avg_session_duration": round(float(v[3])),
+        "leads": int(float(v[4])),
+    }
+
+
 def get_daily(creds: Credentials, property_id: str, start: str, end: str) -> list:
     client = _client(creds)
     resp = client.run_report(RunReportRequest(

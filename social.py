@@ -17,6 +17,13 @@ def _get(path: str, token: str, params: dict = None) -> dict:
     return resp.json()
 
 
+def _safe(fn, default=0):
+    try:
+        return fn()
+    except Exception:
+        return default
+
+
 # ── Facebook Pages ───────────────────────────────────────────────────────────
 
 def get_pages(token: str) -> list:
@@ -24,16 +31,65 @@ def get_pages(token: str) -> list:
     return data.get("data", [])
 
 
-def get_page_insights(token: str, page_id: str, start: str, end: str) -> dict:
-    metrics = "page_impressions,page_engaged_users,page_fans,page_views_total,page_post_engagements"
-    data = _get(
-        f"/{page_id}/insights", token,
-        {"metric": metrics, "period": "total_over_range", "since": start, "until": end},
-    )
-    result = {}
-    for item in data.get("data", []):
-        val = item.get("values", [{}])[0].get("value", 0)
-        result[item["name"]] = val
+def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict:
+    page = _get(f"/{page_id}", token, {"fields": "name,fan_count,followers_count"})
+    result = {
+        "page_name": page.get("name", ""),
+        "followers": page.get("followers_count", 0),
+        "page_likes": page.get("fan_count", 0),
+    }
+
+    range_metrics = "page_impressions,page_post_engagements,page_views_total,page_video_views,page_consumptions"
+    try:
+        data = _get(f"/{page_id}/insights", token, {
+            "metric": range_metrics, "period": "total_over_range",
+            "since": start, "until": end,
+        })
+        for item in data.get("data", []):
+            result[item["name"]] = item.get("values", [{}])[0].get("value", 0)
+    except Exception:
+        pass
+
+    day_metrics = "page_fan_adds,page_engaged_users"
+    try:
+        data = _get(f"/{page_id}/insights", token, {
+            "metric": day_metrics, "period": "day",
+            "since": start, "until": end,
+        })
+        for item in data.get("data", []):
+            total = sum(v.get("value", 0) for v in item.get("values", []) if isinstance(v.get("value"), (int, float)))
+            result[item["name"]] = total
+    except Exception:
+        pass
+
+    try:
+        posts_data = _get(f"/{page_id}/posts", token, {
+            "fields": "id", "since": start, "until": end, "limit": 100,
+        })
+        result["posts_published"] = len(posts_data.get("data", []))
+    except Exception:
+        result["posts_published"] = 0
+
+    try:
+        vids = _get(f"/{page_id}/videos", token, {
+            "fields": "id", "since": start, "until": end, "limit": 100, "type": "uploaded",
+        })
+        result["reels_stories"] = len(vids.get("data", []))
+    except Exception:
+        result["reels_stories"] = 0
+
+    reach = result.get("page_impressions", 0)
+    eng = result.get("page_post_engagements", 0)
+    result["engagement_rate"] = round((eng / reach * 100), 2) if reach > 0 else 0
+    result["new_followers"] = result.get("page_fan_adds", 0)
+    result["reach"] = reach
+    result["engagements"] = eng
+    result["views"] = result.get("page_views_total", 0)
+    result["video_views"] = result.get("page_video_views", 0)
+    result["link_clicks"] = result.get("page_consumptions", 0)
+    result["profile_visits"] = result.get("page_views_total", 0)
+    result["saves_shares"] = 0
+
     return result
 
 
@@ -76,27 +132,75 @@ def get_ig_account(token: str, page_id: str) -> str | None:
     return ig["id"] if ig else None
 
 
-def get_ig_profile(token: str, ig_id: str) -> dict:
-    return _get(
-        f"/{ig_id}", token,
-        {"fields": "username,name,followers_count,follows_count,media_count"},
-    )
+def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
+    profile = _get(f"/{ig_id}", token, {
+        "fields": "username,name,followers_count,follows_count,media_count",
+    })
+    result = {
+        "username": profile.get("username", ""),
+        "name": profile.get("name", ""),
+        "followers": profile.get("followers_count", 0),
+        "follows": profile.get("follows_count", 0),
+        "total_media": profile.get("media_count", 0),
+    }
 
-
-def get_ig_insights(token: str, ig_id: str, start: str, end: str) -> dict:
-    data = _get(
-        f"/{ig_id}/insights", token,
-        {
+    try:
+        data = _get(f"/{ig_id}/insights", token, {
             "metric": "impressions,reach,accounts_engaged",
-            "period": "day",
-            "metric_type": "total_value",
+            "period": "day", "metric_type": "total_value",
             "since": start, "until": end,
-        },
-    )
-    result = {}
-    for item in data.get("data", []):
-        val = item.get("total_value", {}).get("value", 0)
-        result[item["name"]] = val
+        })
+        for item in data.get("data", []):
+            result[item["name"]] = item.get("total_value", {}).get("value", 0)
+    except Exception:
+        result.update({"impressions": 0, "reach": 0, "accounts_engaged": 0})
+
+    try:
+        data = _get(f"/{ig_id}/insights", token, {
+            "metric": "follows_and_unfollows",
+            "period": "day", "metric_type": "total_value",
+            "since": start, "until": end,
+        })
+        for item in data.get("data", []):
+            val = item.get("total_value", {}).get("value", 0)
+            if isinstance(val, dict):
+                result["new_followers"] = val.get("follows", 0) - val.get("unfollows", 0)
+            else:
+                result["new_followers"] = val
+    except Exception:
+        result["new_followers"] = 0
+
+    try:
+        data = _get(f"/{ig_id}/insights", token, {
+            "metric": "profile_views,website_clicks",
+            "period": "day", "metric_type": "total_value",
+            "since": start, "until": end,
+        })
+        for item in data.get("data", []):
+            result[item["name"]] = item.get("total_value", {}).get("value", 0)
+    except Exception:
+        result.setdefault("profile_views", 0)
+        result.setdefault("website_clicks", 0)
+
+    media = _safe(lambda: _get(f"/{ig_id}/media", token, {
+        "fields": "id,timestamp,media_type,like_count,comments_count",
+        "since": start, "until": end, "limit": 100,
+    }).get("data", []), [])
+
+    result["posts_published"] = len(media)
+    result["reels_stories"] = sum(1 for m in media if m.get("media_type") in ("VIDEO", "REELS"))
+    total_likes = sum(m.get("like_count", 0) for m in media)
+    total_comments = sum(m.get("comments_count", 0) for m in media)
+    result["engagements"] = result.get("accounts_engaged", 0) or (total_likes + total_comments)
+    result["video_views"] = result.get("impressions", 0)
+    result["link_clicks"] = result.get("website_clicks", 0)
+    result["saves_shares"] = 0
+
+    reach = result.get("reach", 0)
+    eng = result.get("engagements", 0)
+    result["engagement_rate"] = round((eng / reach * 100), 2) if reach > 0 else 0
+    result["views"] = result.get("impressions", 0)
+
     return result
 
 

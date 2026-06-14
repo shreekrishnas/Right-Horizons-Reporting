@@ -48,6 +48,10 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
                 <span class="sidebar-tooltip">Meta Ads</span>
             </button>
+            <button class="sidebar-item" data-view="seo" onclick="switchView('seo')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                <span class="sidebar-tooltip">SEO Weekly</span>
+            </button>
             <button class="sidebar-item" data-view="social" onclick="switchView('social')">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
                 <span class="sidebar-tooltip">Social</span>
@@ -280,43 +284,34 @@
                 </div>
             </div>
 
+            <!-- ═══ SEO Weekly view ═══ -->
+            <div id="view-seo" style="display:none">
+                <div class="section page-enter">
+                    <div class="section-label">SEO Weekly Performance — 5 Week Trend</div>
+                    <div class="table-card" id="seo-weekly-table">
+                        <div class="empty-state"><p>Loading SEO data...</p></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- ═══ Social view ═══ -->
             <div id="view-social" style="display:none">
                 <div class="section page-enter">
-                    <div class="section-label">Facebook & Instagram</div>
-                    <div class="metrics-grid" id="social-fb-metrics">
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#1877F2"></div>
-                            <div class="metric-label">Page Impressions</div>
-                            <div class="metric-value" id="fb-impressions">-</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#1877F2"></div>
-                            <div class="metric-label">Engaged Users</div>
-                            <div class="metric-value" id="fb-engaged">-</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#E4405F"></div>
-                            <div class="metric-label">IG Reach</div>
-                            <div class="metric-value" id="ig-reach">-</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#E4405F"></div>
-                            <div class="metric-label">IG Followers</div>
-                            <div class="metric-value" id="ig-followers">-</div>
-                        </div>
+                    <div class="section-label">Social Media Performance</div>
+                    <div class="table-card" id="social-metrics-table">
+                        <div class="empty-state"><p>Loading social media data...</p></div>
                     </div>
                     <div class="two-col" style="margin-top:1.5rem;">
                         <div>
                             <div class="table-title">Facebook Posts</div>
                             <div class="table-card" id="fb-posts-table">
-                                <div class="empty-state"><p>Connect Meta Social token to view data</p></div>
+                                <div class="empty-state"><p>Loading...</p></div>
                             </div>
                         </div>
                         <div>
                             <div class="table-title">Instagram Media</div>
                             <div class="table-card" id="ig-media-table">
-                                <div class="empty-state"><p>Connect Meta Social token to view data</p></div>
+                                <div class="empty-state"><p>Loading...</p></div>
                             </div>
                         </div>
                     </div>

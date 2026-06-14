@@ -225,13 +225,35 @@ def social_pages():
         raise HTTPException(502, f"Social API error: {e}")
 
 
-@app.get("/api/social/page-insights")
-def social_page_insights(page_id: str, start: str = "", end: str = ""):
+@app.get("/api/social/fb-comprehensive")
+def social_fb_comprehensive(start: str = "", end: str = ""):
     if not META_SOCIAL_TOKEN:
         raise HTTPException(400, "Meta Social token not configured")
+    page_id = META_PAGE_ID
+    if not page_id:
+        raise HTTPException(400, "META_PAGE_ID not configured")
     start, end = _dates(start, end)
     try:
-        return social.get_page_insights(META_SOCIAL_TOKEN, page_id, start, end)
+        return social.get_fb_comprehensive(META_SOCIAL_TOKEN, page_id, start, end)
+    except Exception as e:
+        raise HTTPException(502, f"Social API error: {e}")
+
+
+@app.get("/api/social/ig-comprehensive")
+def social_ig_comprehensive(start: str = "", end: str = ""):
+    if not META_SOCIAL_TOKEN:
+        raise HTTPException(400, "Meta Social token not configured")
+    page_id = META_PAGE_ID
+    if not page_id:
+        raise HTTPException(400, "META_PAGE_ID not configured")
+    start, end = _dates(start, end)
+    try:
+        ig_id = social.get_ig_account(META_SOCIAL_TOKEN, page_id)
+        if not ig_id:
+            raise HTTPException(404, "No Instagram business account linked")
+        return social.get_ig_comprehensive(META_SOCIAL_TOKEN, ig_id, start, end)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(502, f"Social API error: {e}")
 
@@ -291,6 +313,57 @@ def social_ig_media(ig_id: str, limit: int = 10):
         return social.get_ig_media(META_SOCIAL_TOKEN, ig_id, limit)
     except Exception as e:
         raise HTTPException(502, f"Social API error: {e}")
+
+
+# ── SEO Weekly ───────────────────────────────────────────────────────────────
+
+@app.get("/api/seo/weekly")
+def seo_weekly(domain: str = "rh", weeks: int = 5):
+    d = _domain(domain)
+    try:
+        creds = get_credentials()
+    except Exception as e:
+        raise HTTPException(502, f"Auth error: {e}")
+
+    from datetime import datetime
+    today = date.today()
+    results = []
+    for i in range(weeks):
+        week_end = today - timedelta(days=i * 7)
+        week_start = week_end - timedelta(days=6)
+        ws = week_start.isoformat()
+        we = week_end.isoformat()
+        week_label = f"{week_start.strftime('%b %d')} - {week_end.strftime('%b %d')}"
+
+        row = {"week": week_label, "start": ws, "end": we}
+
+        try:
+            gs = gsc.get_summary(creds, d["gsc_site"], ws, we)
+            row.update({
+                "gsc_clicks": gs.get("clicks", 0),
+                "gsc_impressions": gs.get("impressions", 0),
+                "gsc_position": gs.get("position", 0),
+            })
+        except Exception:
+            row.update({"gsc_clicks": 0, "gsc_impressions": 0, "gsc_position": 0})
+
+        prop = d.get("ga4_property")
+        if prop:
+            try:
+                org = ga4.get_organic_summary(creds, prop, ws, we)
+                row.update({
+                    "organic_sessions": org.get("organic_sessions", 0),
+                    "organic_users": org.get("organic_users", 0),
+                    "bounce_rate": org.get("bounce_rate", 0),
+                    "avg_session_duration": org.get("avg_session_duration", 0),
+                    "leads": org.get("leads", 0),
+                })
+            except Exception:
+                row.update({"organic_sessions": 0, "organic_users": 0, "bounce_rate": 0, "avg_session_duration": 0, "leads": 0})
+        results.append(row)
+
+    results.reverse()
+    return results
 
 
 # ── YouTube ──────────────────────────────────────────────────────────────────
