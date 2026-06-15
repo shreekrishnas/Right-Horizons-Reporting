@@ -366,36 +366,28 @@ async function loadSocial() {
     }
 
     try {
-        const pages = await api('/api/social/pages');
-        const pageId = pages && pages.length > 0 ? pages[0].id : '';
-        if (pageId) {
-            const posts = await api(`/api/social/page-posts?page_id=${pageId}&start=${dateStart}&end=${dateEnd}`);
-            renderTable('fb-posts-table', [
-                { label: 'Post', key: 'message' },
-                { label: 'Impressions', key: 'post_impressions' },
-                { label: 'Engaged', key: 'post_engaged_users' },
-                { label: 'Clicks', key: 'post_clicks' },
-                { label: 'Shares', key: 'shares' },
-            ], posts);
-        }
+        const posts = await api(`/api/social/page-posts?start=${dateStart}&end=${dateEnd}`);
+        renderTable('fb-posts-table', [
+            { label: 'Post', key: 'message' },
+            { label: 'Impressions', key: 'post_impressions' },
+            { label: 'Engaged', key: 'post_engaged_users' },
+            { label: 'Clicks', key: 'post_clicks' },
+            { label: 'Shares', key: 'shares' },
+        ], posts);
     } catch (e) {
         showError('fb-posts-table', e.message);
     }
 
     try {
-        const pages = await api('/api/social/pages');
-        const pageId = pages && pages.length > 0 ? pages[0].id : '';
-        if (pageId) {
-            const igResp = await api(`/api/social/ig-account?page_id=${pageId}`);
-            if (igResp.ig_id) {
-                const igMedia = await api(`/api/social/ig-media?ig_id=${igResp.ig_id}`);
-                renderTable('ig-media-table', [
-                    { label: 'Caption', key: 'caption' },
-                    { label: 'Type', key: 'media_type' },
-                    { label: 'Likes', key: 'like_count' },
-                    { label: 'Comments', key: 'comments_count' },
-                ], (igMedia || []).map(m => ({ ...m, caption: (m.caption || '').slice(0, 80) })));
-            }
+        const igResp = await api('/api/social/ig-account');
+        if (igResp.ig_id) {
+            const igMedia = await api(`/api/social/ig-media?ig_id=${igResp.ig_id}`);
+            renderTable('ig-media-table', [
+                { label: 'Caption', key: 'caption' },
+                { label: 'Type', key: 'media_type' },
+                { label: 'Likes', key: 'like_count' },
+                { label: 'Comments', key: 'comments_count' },
+            ], (igMedia || []).map(m => ({ ...m, caption: (m.caption || '').slice(0, 80) })));
         }
     } catch (e) {
         showError('ig-media-table', e.message);

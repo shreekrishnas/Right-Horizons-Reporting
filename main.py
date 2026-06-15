@@ -216,10 +216,15 @@ def meta_accounts():
 def social_pages():
     if not META_SOCIAL_TOKEN:
         raise HTTPException(400, "Meta Social token not configured")
+    if META_PAGE_ID:
+        try:
+            from social import _get
+            page = _get(f"/{META_PAGE_ID}", META_SOCIAL_TOKEN, {"fields": "id,name,fan_count,followers_count"})
+            return [page]
+        except Exception as e:
+            return [{"id": META_PAGE_ID, "name": "Right Horizons Wealth"}]
     try:
         pages = social.get_pages(META_SOCIAL_TOKEN)
-        if META_PAGE_ID:
-            pages = [p for p in pages if p["id"] == META_PAGE_ID]
         return pages
     except Exception as e:
         raise HTTPException(502, f"Social API error: {e}")
@@ -308,9 +313,13 @@ def social_ig_comprehensive(start: str = "", end: str = ""):
 
 
 @app.get("/api/social/page-posts")
-def social_page_posts(page_id: str, start: str = "", end: str = "", limit: int = 10):
+def social_page_posts(page_id: str = "", start: str = "", end: str = "", limit: int = 10):
     if not META_SOCIAL_TOKEN:
         raise HTTPException(400, "Meta Social token not configured")
+    if not page_id:
+        page_id = META_PAGE_ID
+    if not page_id:
+        raise HTTPException(400, "page_id required")
     start, end = _dates(start, end)
     try:
         return social.get_page_posts(META_SOCIAL_TOKEN, page_id, start, end, limit)
@@ -319,9 +328,13 @@ def social_page_posts(page_id: str, start: str = "", end: str = "", limit: int =
 
 
 @app.get("/api/social/ig-account")
-def social_ig_account(page_id: str):
+def social_ig_account(page_id: str = ""):
     if not META_SOCIAL_TOKEN:
         raise HTTPException(400, "Meta Social token not configured")
+    if not page_id:
+        page_id = META_PAGE_ID
+    if not page_id:
+        raise HTTPException(400, "page_id required")
     try:
         ig_id = social.get_ig_account(META_SOCIAL_TOKEN, page_id)
         if not ig_id:
