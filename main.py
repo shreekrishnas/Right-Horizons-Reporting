@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN, META_PAGE_ID, META_AD_ACCOUNT
+from config import DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN, META_PAGE_ID, META_AD_ACCOUNT, META_APP_ID, META_APP_SECRET
 from google_auth import get_credentials
 import gsc
 import ga4
@@ -501,6 +501,53 @@ def export_report(domain: str = "rh", start: str = "", end: str = ""):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ── Meta Token Exchange ─────────────────────────────────────────────────
+
+@app.get("/api/meta/exchange-token")
+def meta_exchange_token(token: str = ""):
+    """Exchange a short-lived token for a 60-day long-lived token."""
+    if not token:
+        raise HTTPException(400, "token parameter required")
+    if not META_APP_ID or not META_APP_SECRET:
+        raise HTTPException(400, "META_APP_ID and META_APP_SECRET must be set in environment variables")
+    import requests
+    resp = requests.get("https://graph.facebook.com/v21.0/oauth/access_token", params={
+        "grant_type": "fb_exchange_token",
+        "client_id": META_APP_ID,
+        "client_secret": META_APP_SECRET,
+        "fb_exchange_token": token,
+    }, timeout=30)
+    if not resp.ok:
+        raise HTTPException(502, f"Facebook error: {resp.text}")
+    data = resp.json()
+    long_token = data.get("access_token", "")
+    expires_in = data.get("expires_in", 0)
+
+    page_token = ""
+    if long_token:
+        try:
+            pr = requests.get(f"https://graph.facebook.com/v21.0/me/accounts", params={
+                "access_token": long_token,
+                "fields": "id,name,access_token",
+            }, timeout=30)
+            if pr.ok:
+                for page in pr.json().get("data", []):
+                    if page["id"] == META_PAGE_ID:
+                        page_token = page.get("access_token", "")
+                        break
+        except Exception:
+            pass
+
+    return {
+        "long_lived_token": long_token,
+        "expires_in_seconds": expires_in,
+        "expires_in_days": round(expires_in / 86400, 1) if expires_in else "unknown",
+        "page_token": page_token,
+        "page_token_note": "This page token never expires. Use it as META_SOCIAL_TOKEN." if page_token else "Could not get page token.",
+        "instructions": "Update these in Vercel: META_MARKETING_TOKEN = long_lived_token, META_SOCIAL_TOKEN = page_token (or long_lived_token if no page_token)",
+    }
 
 
 # ── Frontend ─────────────────────────────────────────────────────────────────

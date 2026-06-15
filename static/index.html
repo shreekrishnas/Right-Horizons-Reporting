@@ -64,6 +64,10 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-4 0v7h-4v-7a6 6 0 016-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
                 <span class="sidebar-tooltip">LinkedIn</span>
             </button>
+            <button class="sidebar-item" data-view="settings" onclick="switchView('settings')" style="margin-top:auto;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                <span class="sidebar-tooltip">Settings</span>
+            </button>
         </div>
     </nav>
 
@@ -392,6 +396,40 @@
                     <div id="li-table-wrap" style="display:none;">
                         <div class="table-title">Data</div>
                         <div class="table-card" id="li-data-table"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ Settings view ═══ -->
+            <div id="view-settings" style="display:none">
+                <div class="section page-enter">
+                    <div class="section-label">Meta Token Exchange</div>
+                    <div class="glass-card-static" style="padding:2rem; margin-bottom:1.5rem;">
+                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">
+                            Paste a short-lived Meta token to exchange it for a 60-day long-lived token and a never-expiring page token.
+                            Requires <code>META_APP_ID</code> and <code>META_APP_SECRET</code> set in Vercel env vars.
+                        </p>
+                        <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+                            <input type="text" id="token-input" class="date-input" style="flex:1; min-width:300px; height:40px; font-size:0.85rem;" placeholder="Paste short-lived token here...">
+                            <button class="btn-export" onclick="exchangeToken()">Exchange Token</button>
+                        </div>
+                    </div>
+                    <div id="token-result" style="display:none;">
+                        <div class="glass-card-static" style="padding:2rem;">
+                            <div class="section-label" style="color:var(--accent);">Token Exchange Result</div>
+                            <div id="token-result-content" style="font-size:0.85rem; line-height:1.8;"></div>
+                        </div>
+                    </div>
+                    <div class="glass-card-static" style="padding:2rem; margin-top:1.5rem;">
+                        <div class="section-label">How to Get Tokens (Manual Steps)</div>
+                        <ol style="color:var(--text-muted); font-size:0.85rem; line-height:2; padding-left:1.5rem;">
+                            <li>Go to <a href="https://developers.facebook.com/tools/explorer/" target="_blank" style="color:var(--accent);">Graph API Explorer</a></li>
+                            <li>Select your app, click <strong>Generate Access Token</strong></li>
+                            <li>Grant permissions: <code>pages_show_list, pages_read_engagement, pages_read_user_content, instagram_basic, instagram_manage_insights, read_insights, ads_read</code></li>
+                            <li>Paste the token above and click <strong>Exchange Token</strong></li>
+                            <li>Copy the <strong>Page Token</strong> (never expires) and set it as <code>META_SOCIAL_TOKEN</code> in Vercel</li>
+                            <li>Copy the <strong>Long-Lived Token</strong> (60 days) and set it as <code>META_MARKETING_TOKEN</code> in Vercel</li>
+                        </ol>
                     </div>
                 </div>
             </div>

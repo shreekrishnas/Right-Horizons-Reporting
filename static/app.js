@@ -596,6 +596,36 @@ async function checkHealth() {
     }
 }
 
+// ── Token Exchange ──
+
+async function exchangeToken() {
+    const input = document.getElementById('token-input');
+    const token = input.value.trim();
+    if (!token) return alert('Please paste a token first');
+
+    const resultDiv = document.getElementById('token-result');
+    const content = document.getElementById('token-result-content');
+    content.innerHTML = '<p>Exchanging token...</p>';
+    resultDiv.style.display = 'block';
+
+    try {
+        const data = await api(`/api/meta/exchange-token?token=${encodeURIComponent(token)}`);
+        let html = '';
+        if (data.long_lived_token) {
+            html += `<p><strong>Long-Lived Token</strong> (expires in ~${data.expires_in_days} days):</p>`;
+            html += `<textarea style="width:100%; height:60px; font-size:0.75rem; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:0.5rem; margin-bottom:1rem;" readonly onclick="this.select()">${data.long_lived_token}</textarea>`;
+        }
+        if (data.page_token) {
+            html += `<p><strong>Page Token</strong> (never expires — use this as META_SOCIAL_TOKEN):</p>`;
+            html += `<textarea style="width:100%; height:60px; font-size:0.75rem; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:0.5rem; margin-bottom:1rem;" readonly onclick="this.select()">${data.page_token}</textarea>`;
+        }
+        html += `<p style="color:var(--text-muted);">${data.instructions}</p>`;
+        content.innerHTML = html;
+    } catch (e) {
+        content.innerHTML = `<p style="color:#ef4444;">Error: ${e.message}</p>`;
+    }
+}
+
 // ── Init ──
 
 document.addEventListener('DOMContentLoaded', async () => {
