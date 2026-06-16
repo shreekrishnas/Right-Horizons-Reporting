@@ -1,15 +1,18 @@
 const API = '';
 let currentDomain = 'rh';
-let currentView = 'overview';
+let currentView = 'dashboard';
+let currentDashTab = 'overview';
 let domains = {};
 let dateStart = '';
 let dateEnd = '';
 let activePreset = '28d';
 let socialPeriod = 'weekly';
 let seoPeriod = 'weekly';
+let ideaCat = 'all';
+let repPeriod = 'weekly';
 
-async function api(path) {
-    const resp = await fetch(`${API}${path}`);
+async function api(path, opts) {
+    const resp = await fetch(`${API}${path}`, opts);
     if (!resp.ok) {
         const text = await resp.text();
         throw new Error(`${resp.status}: ${text}`);
@@ -27,6 +30,10 @@ function formatNum(n) {
     return n;
 }
 
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
 function setDates(preset) {
     const today = new Date();
     const end = new Date(today - 86400000);
@@ -41,10 +48,10 @@ function setDates(preset) {
     }
     dateStart = startDate.toISOString().split('T')[0];
     dateEnd = endStr;
-    document.getElementById('date-start').value = dateStart;
-    document.getElementById('date-end').value = dateEnd;
+    const ds = document.getElementById('date-start'); if (ds) ds.value = dateStart;
+    const de = document.getElementById('date-end'); if (de) de.value = dateEnd;
     activePreset = preset;
-    document.querySelectorAll('.dr-btn').forEach(b => {
+    document.querySelectorAll('[data-preset]').forEach(b => {
         b.classList.toggle('active', b.dataset.preset === preset);
     });
 }
@@ -56,7 +63,7 @@ function showLoading(id) {
 
 function showError(id, msg) {
     const el = document.getElementById(id);
-    if (el) el.innerHTML = `<div class="error-msg">${msg}</div>`;
+    if (el) el.innerHTML = `<div class="error-msg">${esc(msg)}</div>`;
 }
 
 function renderMetric(id, value) {
@@ -72,7 +79,7 @@ function renderTable(id, headers, rows) {
         return;
     }
     let html = '<table><thead><tr>';
-    headers.forEach(h => html += `<th>${h.label}</th>`);
+    headers.forEach(h => html += `<th>${esc(h.label)}</th>`);
     html += '</tr></thead><tbody>';
     rows.forEach(r => {
         html += '<tr>';
@@ -88,13 +95,10 @@ function renderTable(id, headers, rows) {
 }
 
 // ── Theme ──
-
 function initTheme() {
     const saved = localStorage.getItem('rh-theme');
-    if (saved === 'dark') applyTheme('dark');
-    else applyTheme('light');
+    applyTheme(saved === 'dark' ? 'dark' : 'light');
 }
-
 function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('rh-theme', theme);
@@ -105,17 +109,15 @@ function applyTheme(theme) {
         moon.style.display = theme === 'dark' ? 'block' : 'none';
     }
 }
-
 function toggleTheme() {
     const current = document.documentElement.getAttribute('data-theme');
     applyTheme(current === 'dark' ? 'light' : 'dark');
 }
 
 // ── Views ──
-
 function switchView(view) {
     currentView = view;
-    ['overview', 'gsc', 'ga4', 'meta', 'seo', 'social', 'youtube', 'linkedin'].forEach(v => {
+    ['dashboard', 'calendar', 'ideas', 'validator', 'reports', 'settings'].forEach(v => {
         const el = document.getElementById('view-' + v);
         if (el) el.style.display = v === view ? 'block' : 'none';
     });
@@ -123,60 +125,56 @@ function switchView(view) {
         b.classList.toggle('active', b.dataset.view === view);
     });
     const subtitles = {
-        overview: 'Reporting Dashboard', gsc: 'Search Console', ga4: 'Google Analytics',
-        meta: 'Meta Ads', seo: 'SEO Weekly', social: 'Social Media', youtube: 'YouTube', linkedin: 'LinkedIn',
+        dashboard: 'Dashboard', calendar: 'Content Calendar', ideas: 'Creative Ideas',
+        validator: 'Content Validator', reports: 'Reports & Analytics', settings: 'Settings'
     };
     const sub = document.getElementById('topbar-sub');
     if (sub) sub.textContent = subtitles[view] || 'Dashboard';
+    if (view === 'ideas') markIdeasSeen();
+}
 
-    if (view === 'social') loadSocial();
-    if (view === 'youtube') loadYouTube();
-    if (view === 'seo') loadSEOWeekly();
+function switchDashTab(tab) {
+    currentDashTab = tab;
+    document.querySelectorAll('[data-dash]').forEach(b => b.classList.toggle('active', b.dataset.dash === tab));
+    document.querySelectorAll('.dash-section').forEach(s => s.style.display = 'none');
+    const el = document.getElementById('dash-' + tab);
+    if (el) el.style.display = 'block';
+    if (tab === 'social') loadSocial();
+    if (tab === 'youtube') loadYouTube();
+    if (tab === 'seo') loadSEOWeekly();
+    if (tab === 'meta') loadMeta();
 }
 
 // ── Data loading ──
-
 async function loadGSC() {
     const qs = `?domain=${currentDomain}&start=${dateStart}&end=${dateEnd}`;
     const overviewIds = ['gsc-clicks', 'gsc-impressions', 'gsc-ctr', 'gsc-position'];
     const detailIds = ['gsc-clicks-d', 'gsc-impressions-d', 'gsc-ctr-d', 'gsc-position-d'];
     [...overviewIds, ...detailIds].forEach(id => showLoading(id));
-
     try {
         const summary = await api(`/api/gsc/summary${qs}`);
         const vals = [summary.clicks, summary.impressions, summary.ctr + '%', summary.position];
         overviewIds.forEach((id, i) => renderMetric(id, vals[i]));
         detailIds.forEach((id, i) => renderMetric(id, vals[i]));
     } catch (e) {
-        showError('gsc-metrics', e.message);
-        showError('gsc-metrics-detail', e.message);
+        [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
     }
-
     try {
         const queries = await api(`/api/gsc/queries${qs}&limit=15`);
         renderTable('gsc-queries-table', [
-            { label: 'Query', key: 'query' },
-            { label: 'Clicks', key: 'clicks' },
-            { label: 'Impressions', key: 'impressions' },
-            { label: 'CTR %', key: 'ctr' },
+            { label: 'Query', key: 'query' }, { label: 'Clicks', key: 'clicks' },
+            { label: 'Impressions', key: 'impressions' }, { label: 'CTR %', key: 'ctr' },
             { label: 'Position', key: 'position' },
         ], queries);
-    } catch (e) {
-        showError('gsc-queries-table', e.message);
-    }
-
+    } catch (e) { showError('gsc-queries-table', e.message); }
     try {
         const pages = await api(`/api/gsc/pages${qs}&limit=15`);
         renderTable('gsc-pages-table', [
-            { label: 'Page', key: 'page' },
-            { label: 'Clicks', key: 'clicks' },
-            { label: 'Impressions', key: 'impressions' },
-            { label: 'CTR %', key: 'ctr' },
+            { label: 'Page', key: 'page' }, { label: 'Clicks', key: 'clicks' },
+            { label: 'Impressions', key: 'impressions' }, { label: 'CTR %', key: 'ctr' },
             { label: 'Position', key: 'position' },
         ], pages);
-    } catch (e) {
-        showError('gsc-pages-table', e.message);
-    }
+    } catch (e) { showError('gsc-pages-table', e.message); }
 }
 
 async function loadGA4() {
@@ -184,80 +182,49 @@ async function loadGA4() {
     const overviewIds = ['ga4-sessions', 'ga4-users', 'ga4-pageviews', 'ga4-bounce'];
     const detailIds = ['ga4-sessions-d', 'ga4-users-d', 'ga4-pageviews-d', 'ga4-bounce-d'];
     [...overviewIds, ...detailIds].forEach(id => showLoading(id));
-
     try {
         const summary = await api(`/api/ga4/summary${qs}`);
         const vals = [summary.sessions, summary.users, summary.pageviews, summary.bounce_rate + '%'];
         overviewIds.forEach((id, i) => renderMetric(id, vals[i]));
         detailIds.forEach((id, i) => renderMetric(id, vals[i]));
     } catch (e) {
-        const msg = '<div class="empty-state"><p>GA4 not configured for this domain</p></div>';
-        const m1 = document.getElementById('ga4-metrics');
-        const m2 = document.getElementById('ga4-metrics-detail');
-        if (m1) m1.innerHTML = msg;
-        if (m2) m2.innerHTML = msg;
+        [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
     }
-
     try {
         const sources = await api(`/api/ga4/sources${qs}`);
         renderTable('ga4-sources-table', [
-            { label: 'Channel', key: 'channel' },
-            { label: 'Sessions', key: 'sessions' },
-            { label: 'Users', key: 'users' },
+            { label: 'Channel', key: 'channel' }, { label: 'Sessions', key: 'sessions' }, { label: 'Users', key: 'users' },
         ], sources);
-    } catch (e) {
-        showError('ga4-sources-table', e.message);
-    }
-
+    } catch (e) { showError('ga4-sources-table', e.message); }
     try {
         const pages = await api(`/api/ga4/pages${qs}&limit=15`);
         renderTable('ga4-pages-table', [
-            { label: 'Page', key: 'page' },
-            { label: 'Views', key: 'views' },
-            { label: 'Sessions', key: 'sessions' },
-            { label: 'Avg Duration', key: 'avg_dur' },
+            { label: 'Page', key: 'page' }, { label: 'Views', key: 'views' },
+            { label: 'Sessions', key: 'sessions' }, { label: 'Avg Duration', key: 'avg_dur' },
         ], pages);
-    } catch (e) {
-        showError('ga4-pages-table', e.message);
-    }
+    } catch (e) { showError('ga4-pages-table', e.message); }
 }
 
 async function loadMeta() {
     try {
         const status = await api('/api/meta/status');
         if (!status.marketing) {
-            const targets = ['meta-overview', 'meta-section'];
-            targets.forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.innerHTML = '<div class="empty-state"><p>Meta Marketing API not connected</p></div>';
-            });
+            const el = document.getElementById('meta-overview');
+            if (el) el.innerHTML = '<div class="empty-state"><p>Meta Marketing API not connected</p></div>';
+            const t = document.getElementById('meta-campaigns-table');
+            if (t) t.innerHTML = '<div class="empty-state"><p>Meta Marketing API not connected</p></div>';
             return;
         }
-
         const accounts = await api('/api/meta/accounts');
-        if (!accounts || accounts.length === 0) {
-            const targets = ['meta-overview', 'meta-section'];
-            targets.forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.innerHTML = '<div class="empty-state"><p>No Meta ad accounts found</p></div>';
-            });
-            return;
-        }
-
+        if (!accounts || accounts.length === 0) return;
         const acctId = accounts[0].id;
         const qs = `?ad_account=${acctId}&start=${dateStart}&end=${dateEnd}`;
         const campaigns = await api(`/api/meta/campaigns${qs}`);
-
         renderTable('meta-campaigns-table', [
-            { label: 'Campaign', key: 'name' },
-            { label: 'Status', key: 'status' },
-            { label: 'Spend', key: 'spend' },
-            { label: 'Impressions', key: 'impressions' },
-            { label: 'Reach', key: 'reach' },
-            { label: 'Clicks', key: 'clicks' },
-            { label: 'CTR %', key: 'ctr' },
+            { label: 'Campaign', key: 'name' }, { label: 'Status', key: 'status' },
+            { label: 'Spend', key: 'spend' }, { label: 'Impressions', key: 'impressions' },
+            { label: 'Reach', key: 'reach' }, { label: 'Clicks', key: 'clicks' }, { label: 'CTR %', key: 'ctr' },
         ], campaigns);
-
         const overview = document.getElementById('meta-overview');
         if (overview && campaigns && campaigns.length > 0) {
             const totalSpend = campaigns.reduce((s, c) => s + (parseFloat(c.spend) || 0), 0);
@@ -265,45 +232,26 @@ async function loadMeta() {
             const totalImpressions = campaigns.reduce((s, c) => s + (parseInt(c.impressions) || 0), 0);
             overview.innerHTML = `
                 <div class="metrics-grid">
-                    <div class="metric-card">
-                        <div class="accent-strip" style="background:#7C3AED"></div>
-                        <div class="metric-label">Total Spend</div>
-                        <div class="metric-value">$${totalSpend.toFixed(2)}</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="accent-strip" style="background:#0EA5E9"></div>
-                        <div class="metric-label">Clicks</div>
-                        <div class="metric-value">${formatNum(totalClicks)}</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="accent-strip" style="background:#10B981"></div>
-                        <div class="metric-label">Impressions</div>
-                        <div class="metric-value">${formatNum(totalImpressions)}</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="accent-strip" style="background:#F59E0B"></div>
-                        <div class="metric-label">Campaigns</div>
-                        <div class="metric-value">${campaigns.length}</div>
-                    </div>
+                    <div class="metric-card"><div class="accent-strip" style="background:#7C3AED"></div><div class="metric-label">Total Spend</div><div class="metric-value">$${totalSpend.toFixed(2)}</div></div>
+                    <div class="metric-card"><div class="accent-strip" style="background:#0EA5E9"></div><div class="metric-label">Clicks</div><div class="metric-value">${formatNum(totalClicks)}</div></div>
+                    <div class="metric-card"><div class="accent-strip" style="background:#10B981"></div><div class="metric-label">Impressions</div><div class="metric-value">${formatNum(totalImpressions)}</div></div>
+                    <div class="metric-card"><div class="accent-strip" style="background:#F59E0B"></div><div class="metric-label">Campaigns</div><div class="metric-value">${campaigns.length}</div></div>
                 </div>`;
         }
     } catch (e) {
         showError('meta-overview', e.message);
-        showError('meta-section', e.message);
     }
 }
 
 function switchSocialPeriod(period) {
     socialPeriod = period;
-    document.querySelectorAll('[data-social-period]').forEach(b =>
-        b.classList.toggle('active', b.dataset.socialPeriod === period));
+    document.querySelectorAll('[data-social-period]').forEach(b => b.classList.toggle('active', b.dataset.socialPeriod === period));
     loadSocial();
 }
 
 function switchSEOPeriod(period) {
     seoPeriod = period;
-    document.querySelectorAll('[data-seo-period]').forEach(b =>
-        b.classList.toggle('active', b.dataset.seoPeriod === period));
+    document.querySelectorAll('[data-seo-period]').forEach(b => b.classList.toggle('active', b.dataset.seoPeriod === period));
     const title = document.getElementById('seo-title');
     if (title) title.textContent = `SEO ${period === 'weekly' ? 'Weekly' : 'Monthly'} Performance — ${period === 'weekly' ? '5 Week' : '5 Month'} Trend`;
     loadSEOWeekly();
@@ -326,20 +274,18 @@ const socialMetricsDef = [
 
 async function loadSocial() {
     const tableEl = document.getElementById('social-metrics-table');
+    if (!tableEl) return;
     tableEl.innerHTML = '<div class="empty-state"><p>Loading social media data...</p></div>';
-
     try {
         const data = await api(`/api/social/trend?period=${socialPeriod}&periods=5`);
         if (!data || data.length === 0) {
             tableEl.innerHTML = '<div class="empty-state"><p>No social data available</p></div>';
             return;
         }
-
         let html = '<table><thead><tr><th style="width:30%">Metric</th>';
-        data.forEach(p => html += `<th style="text-align:center; font-size:0.7rem;">${p.period}</th>`);
+        data.forEach(p => html += `<th style="text-align:center; font-size:0.7rem;">${esc(p.period)}</th>`);
         html += '</tr></thead><tbody>';
-
-        html += `<tr><td colspan="${data.length + 1}" style="background:rgba(232,64,95,0.08); font-weight:800; font-size:0.7rem; letter-spacing:0.08em; color:#E4405F; padding:0.5rem 1rem;">📷 INSTAGRAM</td></tr>`;
+        html += `<tr><td colspan="${data.length + 1}" style="background:rgba(232,64,95,0.08); font-weight:800; font-size:0.7rem; letter-spacing:0.08em; color:#E4405F; padding:0.5rem 1rem;">INSTAGRAM</td></tr>`;
         socialMetricsDef.forEach(m => {
             html += `<tr><td style="font-weight:600;">${m.label}</td>`;
             data.forEach(p => {
@@ -348,8 +294,7 @@ async function loadSocial() {
             });
             html += '</tr>';
         });
-
-        html += `<tr><td colspan="${data.length + 1}" style="background:rgba(24,119,242,0.08); font-weight:800; font-size:0.7rem; letter-spacing:0.08em; color:#1877F2; padding:0.5rem 1rem;">👥 FACEBOOK</td></tr>`;
+        html += `<tr><td colspan="${data.length + 1}" style="background:rgba(24,119,242,0.08); font-weight:800; font-size:0.7rem; letter-spacing:0.08em; color:#1877F2; padding:0.5rem 1rem;">FACEBOOK</td></tr>`;
         socialMetricsDef.forEach(m => {
             html += `<tr><td style="font-weight:600;">${m.label}</td>`;
             data.forEach(p => {
@@ -358,53 +303,40 @@ async function loadSocial() {
             });
             html += '</tr>';
         });
-
         html += '</tbody></table>';
         tableEl.innerHTML = html;
     } catch (e) {
-        tableEl.innerHTML = `<div class="error-msg">${e.message}</div>`;
+        tableEl.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
     }
-
     try {
         const posts = await api(`/api/social/page-posts?start=${dateStart}&end=${dateEnd}`);
         renderTable('fb-posts-table', [
-            { label: 'Post', key: 'message' },
-            { label: 'Impressions', key: 'post_impressions' },
-            { label: 'Engaged', key: 'post_engaged_users' },
-            { label: 'Clicks', key: 'post_clicks' },
-            { label: 'Shares', key: 'shares' },
+            { label: 'Post', key: 'message' }, { label: 'Impressions', key: 'post_impressions' },
+            { label: 'Engaged', key: 'post_engaged_users' }, { label: 'Clicks', key: 'post_clicks' }, { label: 'Shares', key: 'shares' },
         ], posts);
-    } catch (e) {
-        showError('fb-posts-table', e.message);
-    }
-
+    } catch (e) { showError('fb-posts-table', e.message); }
     try {
         const igResp = await api('/api/social/ig-account');
         if (igResp.ig_id) {
             const igMedia = await api(`/api/social/ig-media?ig_id=${igResp.ig_id}`);
             renderTable('ig-media-table', [
-                { label: 'Caption', key: 'caption' },
-                { label: 'Type', key: 'media_type' },
-                { label: 'Likes', key: 'like_count' },
-                { label: 'Comments', key: 'comments_count' },
+                { label: 'Caption', key: 'caption' }, { label: 'Type', key: 'media_type' },
+                { label: 'Likes', key: 'like_count' }, { label: 'Comments', key: 'comments_count' },
             ], (igMedia || []).map(m => ({ ...m, caption: (m.caption || '').slice(0, 80) })));
         }
-    } catch (e) {
-        showError('ig-media-table', e.message);
-    }
+    } catch (e) { showError('ig-media-table', e.message); }
 }
 
 async function loadSEOWeekly() {
     const tableEl = document.getElementById('seo-weekly-table');
+    if (!tableEl) return;
     tableEl.innerHTML = '<div class="empty-state"><p>Loading SEO data...</p></div>';
-
     try {
         const data = await api(`/api/seo/trend?domain=${currentDomain}&period=${seoPeriod}&periods=5`);
         if (!data || data.length === 0) {
             tableEl.innerHTML = '<div class="empty-state"><p>No SEO data available</p></div>';
             return;
         }
-
         const sections = [
             { header: 'TRAFFIC', metrics: [
                 { label: 'Organic Sessions', key: 'organic_sessions' },
@@ -421,11 +353,9 @@ async function loadSEOWeekly() {
                 { label: 'Avg. Position', key: 'gsc_position' },
             ]},
         ];
-
         let html = '<table><thead><tr><th style="width:35%">Metric</th>';
-        data.forEach(w => html += `<th style="text-align:center; font-size:0.7rem;">${w.period}</th>`);
+        data.forEach(w => html += `<th style="text-align:center; font-size:0.7rem;">${esc(w.period)}</th>`);
         html += '</tr></thead><tbody>';
-
         sections.forEach(section => {
             html += `<tr><td colspan="${data.length + 1}" style="background:var(--accent-primary-soft); font-weight:800; font-size:0.7rem; letter-spacing:0.08em; color:var(--accent-primary); padding:0.5rem 1rem;">${section.header}</td></tr>`;
             section.metrics.forEach(m => {
@@ -437,11 +367,10 @@ async function loadSEOWeekly() {
                 html += '</tr>';
             });
         });
-
         html += '</tbody></table>';
         tableEl.innerHTML = html;
     } catch (e) {
-        tableEl.innerHTML = `<div class="error-msg">${e.message}</div>`;
+        tableEl.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
     }
 }
 
@@ -452,27 +381,18 @@ async function loadYouTube() {
             renderMetric('yt-subscribers', ch.subscribers);
             renderMetric('yt-views', ch.views);
             renderMetric('yt-videos', ch.videos);
-        } else {
-            document.getElementById('yt-metrics').innerHTML =
-                '<div class="empty-state"><p>No YouTube channel found</p></div>';
         }
     } catch (e) {
-        document.getElementById('yt-metrics').innerHTML =
-            `<div class="empty-state"><p>YouTube API error: ${e.message}</p></div>`;
+        const el = document.getElementById('yt-metrics');
+        if (el) el.innerHTML = `<div class="empty-state"><p>YouTube API error: ${esc(e.message)}</p></div>`;
     }
-
     try {
         const videos = await api('/api/youtube/videos?limit=10');
         renderTable('yt-videos-table', [
-            { label: 'Title', key: 'title' },
-            { label: 'Published', key: 'published' },
-            { label: 'Views', key: 'views' },
-            { label: 'Likes', key: 'likes' },
-            { label: 'Comments', key: 'comments' },
+            { label: 'Title', key: 'title' }, { label: 'Published', key: 'published' },
+            { label: 'Views', key: 'views' }, { label: 'Likes', key: 'likes' }, { label: 'Comments', key: 'comments' },
         ], videos);
-    } catch (e) {
-        showError('yt-videos-table', e.message);
-    }
+    } catch (e) { showError('yt-videos-table', e.message); }
 }
 
 async function generateSEO() {
@@ -483,44 +403,33 @@ async function generateSEO() {
     try {
         const seo = await api(`/api/youtube/seo?topic=${encodeURIComponent(topic)}`);
         let html = '<div class="glass-card-static" style="padding:1.5rem;">';
-        html += '<div class="table-title">Suggested Titles</div>';
-        html += '<ul style="list-style:none; margin-bottom:1rem;">';
-        seo.suggested_titles.forEach(t => html += `<li style="padding:0.3rem 0; font-size:0.85rem; color:var(--text-primary);">${t}</li>`);
-        html += '</ul>';
-        html += '<div class="table-title">Description</div>';
-        html += `<pre style="white-space:pre-wrap; font-size:0.8rem; color:var(--text-secondary); background:var(--surface-input); padding:1rem; border-radius:0.75rem; margin-bottom:1rem; font-family:Inter,sans-serif;">${seo.description}</pre>`;
-        html += '<div class="table-title">Hashtags</div>';
-        html += '<div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:1rem;">';
-        seo.hashtags.forEach(h => html += `<span style="background:var(--accent-primary-soft); color:var(--accent-primary); padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.75rem; font-weight:600;">${h}</span>`);
-        html += '</div>';
-        html += '<div class="table-title">Tags</div>';
-        html += '<div style="display:flex; flex-wrap:wrap; gap:0.4rem;">';
-        seo.tags.forEach(t => html += `<span style="background:var(--surface-hover); color:var(--text-secondary); padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.75rem;">${t}</span>`);
+        html += '<div class="table-title">Suggested Titles</div><ul style="list-style:none; margin-bottom:1rem;">';
+        seo.suggested_titles.forEach(t => html += `<li style="padding:0.3rem 0; font-size:0.85rem;">${esc(t)}</li>`);
+        html += '</ul><div class="table-title">Description</div>';
+        html += `<pre style="white-space:pre-wrap; font-size:0.8rem; background:var(--surface-input); padding:1rem; border-radius:0.75rem; margin-bottom:1rem; font-family:Inter,sans-serif;">${esc(seo.description)}</pre>`;
+        html += '<div class="table-title">Hashtags</div><div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:1rem;">';
+        seo.hashtags.forEach(h => html += `<span style="background:var(--accent-primary-soft); color:var(--accent-primary); padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.75rem; font-weight:600;">${esc(h)}</span>`);
+        html += '</div><div class="table-title">Tags</div><div style="display:flex; flex-wrap:wrap; gap:0.4rem;">';
+        seo.tags.forEach(t => html += `<span style="background:var(--surface-hover); padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.75rem;">${esc(t)}</span>`);
         html += '</div></div>';
         resultEl.innerHTML = html;
-    } catch (e) {
-        resultEl.innerHTML = `<div class="error-msg">${e.message}</div>`;
-    }
+    } catch (e) { resultEl.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`; }
 }
 
 async function uploadLinkedIn() {
     const fileInput = document.getElementById('li-file-input');
     const file = fileInput.files[0];
     if (!file) return;
-
     const type = document.getElementById('li-upload-type').value;
     const formData = new FormData();
     formData.append('file', file);
-
     try {
         const resp = await fetch(`/api/linkedin/upload?type=${type}`, { method: 'POST', body: formData });
         if (!resp.ok) throw new Error(await resp.text());
         const data = await resp.json();
-
         const summaryEl = document.getElementById('li-summary');
         const metricsEl = document.getElementById('li-metrics');
         const tableWrap = document.getElementById('li-table-wrap');
-
         if (data.summary) {
             summaryEl.style.display = 'block';
             let metricsHtml = '';
@@ -530,18 +439,14 @@ async function uploadLinkedIn() {
                 if (key === 'total_rows') {
                     metricsHtml += `<div class="metric-card"><div class="accent-strip" style="background:${colors[ci++ % 4]}"></div><div class="metric-label">Total Rows</div><div class="metric-value">${val}</div></div>`;
                 } else if (typeof val === 'object' && val.sum !== undefined) {
-                    metricsHtml += `<div class="metric-card"><div class="accent-strip" style="background:${colors[ci++ % 4]}"></div><div class="metric-label">${key}</div><div class="metric-value">${formatNum(val.sum)}</div></div>`;
+                    metricsHtml += `<div class="metric-card"><div class="accent-strip" style="background:${colors[ci++ % 4]}"></div><div class="metric-label">${esc(key)}</div><div class="metric-value">${formatNum(val.sum)}</div></div>`;
                 }
             }
             metricsEl.innerHTML = metricsHtml;
         }
-
         if (data.headers && data.rows) {
             tableWrap.style.display = 'block';
-            renderTable('li-data-table',
-                data.headers.map(h => ({ label: h, key: h })),
-                data.rows.slice(0, 50),
-            );
+            renderTable('li-data-table', data.headers.map(h => ({ label: h, key: h })), data.rows.slice(0, 50));
         }
     } catch (e) {
         document.getElementById('li-table-wrap').style.display = 'block';
@@ -553,17 +458,11 @@ async function loadAll() {
     await Promise.allSettled([loadGSC(), loadGA4(), loadMeta()]);
 }
 
-// ── Domain switching ──
-
 function switchDomain(key) {
     currentDomain = key;
-    document.querySelectorAll('.domain-tab').forEach(t => {
-        t.classList.toggle('active', t.dataset.domain === key);
-    });
+    document.querySelectorAll('.domain-tab[data-domain]').forEach(t => t.classList.toggle('active', t.dataset.domain === key));
     const d = domains[key];
-    if (d) {
-        document.getElementById('topbar-title').textContent = d.label;
-    }
+    if (d) document.getElementById('topbar-title').textContent = d.label;
     loadAll();
 }
 
@@ -576,55 +475,297 @@ async function checkHealth() {
         const h = await api('/api/health');
         const bar = document.getElementById('status-bar');
         if (h.status === 'ok') {
-            bar.innerHTML = `<span class="status-dot green"></span>
-                <span class="status-text">Google connected · Meta: ${h.meta_marketing ? 'connected' : 'not configured'}</span>`;
+            bar.innerHTML = `<span class="status-dot green"></span><span class="status-text">Google connected · Meta: ${h.meta_marketing ? 'connected' : 'not configured'}</span>`;
         } else {
-            bar.innerHTML = `<span class="status-dot red"></span>
-                <span class="status-text">Google auth error: ${h.error || 'unknown'}</span>`;
+            bar.innerHTML = `<span class="status-dot red"></span><span class="status-text">Google auth error: ${h.error || 'unknown'}</span>`;
         }
     } catch (e) {
-        document.getElementById('status-bar').innerHTML =
-            `<span class="status-dot red"></span><span class="status-text">API unreachable</span>`;
+        document.getElementById('status-bar').innerHTML = `<span class="status-dot red"></span><span class="status-text">API unreachable</span>`;
     }
 }
-
-// ── Token Exchange ──
 
 async function exchangeToken() {
     const input = document.getElementById('token-input');
     const token = input.value.trim();
     if (!token) return alert('Please paste a token first');
-
     const resultDiv = document.getElementById('token-result');
     const content = document.getElementById('token-result-content');
     content.innerHTML = '<p>Exchanging token...</p>';
     resultDiv.style.display = 'block';
-
     try {
         const data = await api(`/api/meta/exchange-token?token=${encodeURIComponent(token)}`);
         let html = '';
         if (data.long_lived_token) {
             html += `<p><strong>Long-Lived Token</strong> (expires in ~${data.expires_in_days} days):</p>`;
-            html += `<textarea style="width:100%; height:60px; font-size:0.75rem; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:0.5rem; margin-bottom:1rem;" readonly onclick="this.select()">${data.long_lived_token}</textarea>`;
+            html += `<textarea style="width:100%; height:60px; font-size:0.75rem;" readonly onclick="this.select()">${esc(data.long_lived_token)}</textarea>`;
         }
         if (data.page_token) {
-            html += `<p><strong>Page Token</strong> (never expires — use this as META_SOCIAL_TOKEN):</p>`;
-            html += `<textarea style="width:100%; height:60px; font-size:0.75rem; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:0.5rem; margin-bottom:1rem;" readonly onclick="this.select()">${data.page_token}</textarea>`;
+            html += `<p><strong>Page Token</strong>:</p><textarea style="width:100%; height:60px; font-size:0.75rem;" readonly onclick="this.select()">${esc(data.page_token)}</textarea>`;
         }
-        html += `<p style="color:var(--text-muted);">${data.instructions}</p>`;
+        html += `<p style="color:var(--text-muted);">${esc(data.instructions)}</p>`;
         content.innerHTML = html;
     } catch (e) {
-        content.innerHTML = `<p style="color:#ef4444;">Error: ${e.message}</p>`;
+        content.innerHTML = `<p style="color:#ef4444;">Error: ${esc(e.message)}</p>`;
     }
 }
 
-// ── Init ──
+// ── Calendar ──
+async function generateCalendar() {
+    const month = document.getElementById('cal-month').value;
+    const context = document.getElementById('cal-context').value;
+    if (!month) return alert('Pick a month');
+    const tbl = document.getElementById('cal-table');
+    tbl.innerHTML = '<div class="empty-state"><p>Generating with AI… this may take 30–60s.</p></div>';
+    try {
+        const data = await api('/api/calendar/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain: currentDomain, month, context }),
+        });
+        renderCalendarTable(data.items || []);
+    } catch (e) {
+        tbl.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
+    }
+}
 
+async function uploadCalendar() {
+    const fi = document.getElementById('cal-file');
+    const file = fi.files[0];
+    if (!file) return;
+    const month = document.getElementById('cal-month').value;
+    if (!month) return alert('Pick a month first');
+    const tbl = document.getElementById('cal-table');
+    tbl.innerHTML = '<div class="empty-state"><p>Processing document with AI…</p></div>';
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+        const resp = await fetch(`/api/calendar/upload?domain=${currentDomain}&month=${month}`, { method: 'POST', body: fd });
+        if (!resp.ok) throw new Error(await resp.text());
+        const data = await resp.json();
+        renderCalendarTable(data.items || []);
+    } catch (e) {
+        tbl.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
+    }
+}
+
+let calendarItems = [];
+function renderCalendarTable(items) {
+    calendarItems = items;
+    const tbl = document.getElementById('cal-table');
+    if (!items.length) { tbl.innerHTML = '<div class="empty-state"><p>No items.</p></div>'; return; }
+    let html = '<table><thead><tr><th>Date</th><th>Platform</th><th>Type</th><th>Title</th><th>Description</th></tr></thead><tbody>';
+    items.forEach((it, i) => {
+        html += `<tr data-idx="${i}">
+            <td contenteditable="true" data-k="date">${esc(it.date || '')}</td>
+            <td contenteditable="true" data-k="platform">${esc(it.platform || '')}</td>
+            <td contenteditable="true" data-k="type">${esc(it.type || '')}</td>
+            <td contenteditable="true" data-k="title">${esc(it.title || '')}</td>
+            <td contenteditable="true" data-k="description">${esc(it.description || '')}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    tbl.innerHTML = html;
+    tbl.querySelectorAll('td[contenteditable]').forEach(td => {
+        td.addEventListener('blur', () => {
+            const tr = td.closest('tr');
+            const idx = parseInt(tr.dataset.idx);
+            calendarItems[idx][td.dataset.k] = td.textContent.trim();
+        });
+    });
+}
+
+// ── Ideas ──
+function setIdeaCat(c) {
+    ideaCat = c;
+    document.querySelectorAll('[data-ideacat]').forEach(b => b.classList.toggle('active', b.dataset.ideacat === c));
+}
+
+async function generateIdeas() {
+    const grid = document.getElementById('ideas-grid');
+    grid.innerHTML = '<div class="empty-state"><p>Generating ideas…</p></div>';
+    try {
+        const data = await api(`/api/ideas/generate?domain=${currentDomain}&category=${ideaCat}`);
+        const items = data.items || [];
+        if (!items.length) { grid.innerHTML = '<div class="empty-state"><p>No ideas.</p></div>'; return; }
+        grid.innerHTML = items.map(it => `
+            <div class="glass-card-static" style="padding:1.25rem; display:flex; flex-direction:column; gap:0.5rem;">
+                <div style="font-size:0.7rem; font-weight:800; color:var(--accent-primary); letter-spacing:0.08em;">${esc((it.type || '').toUpperCase())}</div>
+                <div style="font-weight:700; font-size:0.95rem;">${esc(it.title || '')}</div>
+                <div style="color:var(--text-muted); font-size:0.8rem; line-height:1.5;">${esc(it.description || '')}</div>
+                <div style="display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:0.25rem;">
+                    ${(it.hashtags || []).map(h => `<span style="background:var(--accent-primary-soft); color:var(--accent-primary); padding:0.15rem 0.5rem; border-radius:9999px; font-size:0.7rem;">${esc(h)}</span>`).join('')}
+                </div>
+                <div style="margin-top:0.25rem; font-size:0.75rem; color:var(--text-muted);">Best on: <strong>${esc(it.best_platform || '-')}</strong></div>
+            </div>
+        `).join('');
+        checkIdeasNotifications();
+    } catch (e) {
+        grid.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
+    }
+}
+
+async function checkIdeasNotifications() {
+    try {
+        const d = await api('/api/ideas/notifications');
+        const badge = document.getElementById('ideas-badge');
+        if (d.new && d.new > 0) {
+            badge.style.display = 'inline-block';
+            badge.textContent = d.new;
+        } else {
+            badge.style.display = 'none';
+        }
+    } catch (e) {}
+}
+
+async function markIdeasSeen() {
+    try { await fetch('/api/ideas/seen', { method: 'POST' }); } catch (e) {}
+    const badge = document.getElementById('ideas-badge');
+    if (badge) badge.style.display = 'none';
+}
+
+// ── Validator ──
+function switchValTab(t) {
+    document.querySelectorAll('[data-vtab]').forEach(b => b.classList.toggle('active', b.dataset.vtab === t));
+    ['text', 'image', 'video'].forEach(v => {
+        const el = document.getElementById('val-' + v);
+        if (el) el.style.display = v === t ? 'block' : 'none';
+    });
+}
+
+function renderValResult(r) {
+    const el = document.getElementById('val-result');
+    if (!r || typeof r !== 'object') { el.innerHTML = `<div class="error-msg">Invalid response</div>`; return; }
+    const score = r.score || 0;
+    const color = score >= 80 ? '#10B981' : score >= 60 ? '#F59E0B' : '#ef4444';
+    const ready = r.publish_ready;
+    let html = `<div class="glass-card-static" style="padding:1.5rem;">
+        <div style="display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap;">
+            <div style="font-size:3rem; font-weight:800; color:${color};">${score}<span style="font-size:1rem; color:var(--text-muted);">/100</span></div>
+            <div>
+                <div style="font-weight:700; margin-bottom:0.25rem;">${esc(r.summary || '')}</div>
+                <span style="background:${ready ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'}; color:${ready ? '#10B981' : '#ef4444'}; padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.7rem; font-weight:700;">${ready ? 'PUBLISH READY' : 'NEEDS WORK'}</span>
+            </div>
+        </div>
+    </div>`;
+    const sections = [
+        { title: 'Strengths', items: r.strengths || [], color: '#10B981' },
+        { title: 'Weaknesses', items: r.weaknesses || [], color: '#F59E0B' },
+        { title: 'Recommendations', items: r.recommendations || [], color: '#0EA5E9' },
+        { title: 'Missing Info', items: r.missing_info || [], color: '#7C3AED' },
+    ];
+    sections.forEach(s => {
+        if (!s.items.length) return;
+        html += `<div class="glass-card-static" style="padding:1.25rem; margin-top:1rem; border-left:4px solid ${s.color};">
+            <div class="section-label" style="color:${s.color};">${s.title}</div>
+            <ul style="margin:0.5rem 0 0 1.25rem; font-size:0.85rem; line-height:1.6;">
+                ${s.items.map(x => `<li>${esc(typeof x === 'string' ? x : JSON.stringify(x))}</li>`).join('')}
+            </ul>
+        </div>`;
+    });
+    if (r.grammar_issues && r.grammar_issues.length) {
+        html += `<div class="glass-card-static" style="padding:1.25rem; margin-top:1rem;">
+            <div class="section-label">Grammar Issues</div>
+            <ul style="margin:0.5rem 0 0 1.25rem; font-size:0.85rem; line-height:1.6;">
+                ${r.grammar_issues.map(g => `<li><strong>${esc(g.issue || '')}</strong> → ${esc(g.suggestion || '')}</li>`).join('')}
+            </ul>
+        </div>`;
+    }
+    el.innerHTML = html;
+}
+
+async function validateText() {
+    const content = document.getElementById('val-content').value.trim();
+    if (!content) return;
+    const el = document.getElementById('val-result');
+    el.innerHTML = '<div class="empty-state"><p>Validating…</p></div>';
+    try {
+        const r = await api('/api/validator/text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content }),
+        });
+        renderValResult(r);
+    } catch (e) { el.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`; }
+}
+
+async function validateImage() {
+    const f = document.getElementById('val-img-file').files[0];
+    if (!f) return alert('Choose an image first');
+    const el = document.getElementById('val-result');
+    el.innerHTML = '<div class="empty-state"><p>Analyzing image…</p></div>';
+    const fd = new FormData();
+    fd.append('file', f);
+    try {
+        const resp = await fetch('/api/validator/image', { method: 'POST', body: fd });
+        if (!resp.ok) throw new Error(await resp.text());
+        renderValResult(await resp.json());
+    } catch (e) { el.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`; }
+}
+
+async function validateVideo() {
+    const f = document.getElementById('val-vid-file').files[0];
+    if (!f) return alert('Choose a video first');
+    const el = document.getElementById('val-result');
+    const fd = new FormData();
+    fd.append('file', f);
+    try {
+        const resp = await fetch('/api/validator/video', { method: 'POST', body: fd });
+        const r = await resp.json();
+        el.innerHTML = `<div class="glass-card-static" style="padding:1.5rem;">${esc(r.message || '')}</div>`;
+    } catch (e) { el.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`; }
+}
+
+// ── Reports ──
+function setRepPeriod(p) {
+    repPeriod = p;
+    document.querySelectorAll('[data-rep-period]').forEach(b => b.classList.toggle('active', b.dataset.repPeriod === p));
+}
+
+async function generateReport() {
+    const start = document.getElementById('rep-start').value;
+    const end = document.getElementById('rep-end').value;
+    const el = document.getElementById('rep-result');
+    el.innerHTML = '<div class="empty-state"><p>Generating…</p></div>';
+    try {
+        const qs = `?period=${repPeriod}&domain=${currentDomain}&start=${start}&end=${end}`;
+        const r = await api(`/api/reports/generate${qs}`);
+        let html = `<div class="section-label">${esc(r.label)} — ${esc(r.period)} (${esc(r.start)} to ${esc(r.end)})</div>`;
+        const sections = [
+            { key: 'gsc', title: 'Search Console', color: '#7C3AED' },
+            { key: 'ga4', title: 'Google Analytics', color: '#0EA5E9' },
+            { key: 'meta', title: 'Meta Ads', color: '#10B981' },
+            { key: 'social_fb', title: 'Facebook', color: '#1877F2' },
+            { key: 'social_ig', title: 'Instagram', color: '#E4405F' },
+        ];
+        sections.forEach(s => {
+            const v = r[s.key];
+            if (!v || typeof v !== 'object' || v.error) return;
+            html += `<div class="section"><div class="section-label" style="color:${s.color};">${s.title}</div><div class="metrics-grid">`;
+            Object.entries(v).slice(0, 8).forEach(([k, val]) => {
+                if (typeof val === 'object') return;
+                html += `<div class="metric-card"><div class="accent-strip" style="background:${s.color}"></div><div class="metric-label">${esc(k)}</div><div class="metric-value">${formatNum(val)}</div></div>`;
+            });
+            html += '</div></div>';
+        });
+        el.innerHTML = html;
+    } catch (e) {
+        el.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
+    }
+}
+
+function exportReportFmt(fmt) {
+    const start = document.getElementById('rep-start').value;
+    const end = document.getElementById('rep-end').value;
+    window.location.href = `/api/reports/export?period=${repPeriod}&domain=${currentDomain}&start=${start}&end=${end}&format=${fmt}`;
+}
+
+// ── Init ──
 document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     setDates('28d');
-
     checkHealth();
+    checkIdeasNotifications();
+    setInterval(checkIdeasNotifications, 60000);
 
     try {
         domains = await api('/api/domains');
@@ -638,36 +779,51 @@ document.addEventListener('DOMContentLoaded', async () => {
             btn.onclick = () => switchDomain(key);
             tabs.appendChild(btn);
         });
-    } catch (e) {
-        console.error('Failed to load domains', e);
-    }
+    } catch (e) { console.error('Failed to load domains', e); }
 
-    document.querySelectorAll('.dr-btn').forEach(btn => {
+    document.querySelectorAll('#date-range-group .dr-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             setDates(btn.dataset.preset);
             loadAll();
         });
     });
-
     document.getElementById('date-start').addEventListener('change', (e) => {
         dateStart = e.target.value;
         activePreset = '';
-        document.querySelectorAll('.dr-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('#date-range-group .dr-btn').forEach(b => b.classList.remove('active'));
         loadAll();
     });
-
     document.getElementById('date-end').addEventListener('change', (e) => {
         dateEnd = e.target.value;
         activePreset = '';
-        document.querySelectorAll('.dr-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('#date-range-group .dr-btn').forEach(b => b.classList.remove('active'));
         loadAll();
     });
 
     document.getElementById('btn-export').addEventListener('click', exportReport);
     document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
-    document.getElementById('btn-seo-generate').addEventListener('click', generateSEO);
-    document.getElementById('li-file-input').addEventListener('change', uploadLinkedIn);
-    document.getElementById('yt-seo-topic').addEventListener('keydown', (e) => { if (e.key === 'Enter') generateSEO(); });
+    const btnSeo = document.getElementById('btn-seo-generate');
+    if (btnSeo) btnSeo.addEventListener('click', generateSEO);
+    const liInput = document.getElementById('li-file-input');
+    if (liInput) liInput.addEventListener('change', uploadLinkedIn);
+    const seoTopic = document.getElementById('yt-seo-topic');
+    if (seoTopic) seoTopic.addEventListener('keydown', e => { if (e.key === 'Enter') generateSEO(); });
+
+    const calFile = document.getElementById('cal-file');
+    if (calFile) calFile.addEventListener('change', uploadCalendar);
+    const valImg = document.getElementById('val-img-file');
+    if (valImg) valImg.addEventListener('change', () => {
+        const el = document.getElementById('val-img-name');
+        if (el) el.textContent = valImg.files[0]?.name || '';
+    });
+
+    // Default report dates
+    const today = new Date();
+    const monthAgo = new Date(today - 30 * 86400000);
+    document.getElementById('rep-end').value = today.toISOString().split('T')[0];
+    document.getElementById('rep-start').value = monthAgo.toISOString().split('T')[0];
+    // Default calendar month
+    document.getElementById('cal-month').value = today.toISOString().slice(0, 7);
 
     const loader = document.getElementById('page-loader');
     if (loader) { loader.classList.add('fade'); setTimeout(() => loader.remove(), 400); }

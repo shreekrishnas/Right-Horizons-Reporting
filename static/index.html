@@ -12,7 +12,6 @@
 </head>
 <body>
 
-<!-- Page loader -->
 <div id="page-loader">
     <div style="text-align:center; display:flex; flex-direction:column; align-items:center; gap:1rem;">
         <div class="pl-ring"></div>
@@ -20,49 +19,36 @@
     </div>
 </div>
 
-<!-- Atmosphere background -->
 <div class="atmosphere"></div>
 
 <div class="app-outer">
 <div class="app-shell glass-panel">
 
-    <!-- Sidebar -->
     <nav class="sidebar">
         <div class="sidebar-logo">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         </div>
         <div class="sidebar-nav">
-            <button class="sidebar-item active" data-view="overview" onclick="switchView('overview')">
+            <button class="sidebar-item active" data-view="dashboard" onclick="switchView('dashboard')">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                <span class="sidebar-tooltip">Overview</span>
+                <span class="sidebar-tooltip">Dashboard</span>
             </button>
-            <button class="sidebar-item" data-view="gsc" onclick="switchView('gsc')">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <span class="sidebar-tooltip">Search Console</span>
+            <button class="sidebar-item" data-view="calendar" onclick="switchView('calendar')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <span class="sidebar-tooltip">Content Calendar</span>
             </button>
-            <button class="sidebar-item" data-view="ga4" onclick="switchView('ga4')">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                <span class="sidebar-tooltip">Analytics</span>
+            <button class="sidebar-item" data-view="ideas" onclick="switchView('ideas')" style="position:relative;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 00-4 12.7c.6.5 1 1.2 1 2v.3h6V17c0-.8.4-1.5 1-2A7 7 0 0012 2z"/></svg>
+                <span class="sidebar-tooltip">Creative Ideas</span>
+                <span id="ideas-badge" style="display:none; position:absolute; top:6px; right:6px; background:#ef4444; color:#fff; font-size:0.6rem; font-weight:800; padding:2px 5px; border-radius:9999px; min-width:14px; text-align:center;"></span>
             </button>
-            <button class="sidebar-item" data-view="meta" onclick="switchView('meta')">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-                <span class="sidebar-tooltip">Meta Ads</span>
+            <button class="sidebar-item" data-view="validator" onclick="switchView('validator')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <span class="sidebar-tooltip">Content Validator</span>
             </button>
-            <button class="sidebar-item" data-view="seo" onclick="switchView('seo')">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                <span class="sidebar-tooltip">SEO Weekly</span>
-            </button>
-            <button class="sidebar-item" data-view="social" onclick="switchView('social')">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-                <span class="sidebar-tooltip">Social</span>
-            </button>
-            <button class="sidebar-item" data-view="youtube" onclick="switchView('youtube')">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                <span class="sidebar-tooltip">YouTube</span>
-            </button>
-            <button class="sidebar-item" data-view="linkedin" onclick="switchView('linkedin')">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-4 0v7h-4v-7a6 6 0 016-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
-                <span class="sidebar-tooltip">LinkedIn</span>
+            <button class="sidebar-item" data-view="reports" onclick="switchView('reports')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                <span class="sidebar-tooltip">Reports & Analytics</span>
             </button>
             <button class="sidebar-item" data-view="settings" onclick="switchView('settings')" style="margin-top:auto;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
@@ -71,19 +57,17 @@
         </div>
     </nav>
 
-    <!-- Main content area -->
     <div class="app-content">
 
-        <!-- Topbar -->
         <header class="topbar">
             <div class="topbar-left">
                 <div>
                     <div class="topbar-title" id="topbar-title">Right Horizons</div>
-                    <div class="topbar-sub" id="topbar-sub">Reporting Dashboard</div>
+                    <div class="topbar-sub" id="topbar-sub">Dashboard</div>
                 </div>
             </div>
             <div class="topbar-right">
-                <div class="date-range-group">
+                <div class="date-range-group" id="date-range-group">
                     <button class="dr-btn" data-preset="7d">7D</button>
                     <button class="dr-btn active" data-preset="28d">28D</button>
                     <button class="dr-btn" data-preset="3m">3M</button>
@@ -102,10 +86,8 @@
             </div>
         </header>
 
-        <!-- Scrollable main -->
         <div class="app-main">
 
-            <!-- Domain tabs -->
             <div class="domain-tabs" id="domain-tabs">
                 <button class="domain-tab active" data-domain="rh">
                     <span class="domain-dot" style="background:#7C3AED"></span> Right Horizons
@@ -118,285 +100,257 @@
                 </button>
             </div>
 
-            <!-- Status bar -->
             <div class="status-bar" id="status-bar">
                 <span class="status-dot orange"></span>
                 <span class="status-text">Checking connections...</span>
             </div>
 
-            <!-- ═══ Overview view ═══ -->
-            <div id="view-overview" class="page-enter">
+            <!-- ═══ Dashboard view (consolidated) ═══ -->
+            <div id="view-dashboard" class="page-enter">
 
-                <!-- GSC summary metrics -->
-                <div class="section">
-                    <div class="section-label">Search Console</div>
-                    <div class="metrics-grid" id="gsc-metrics">
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#7C3AED"></div>
-                            <div class="metric-label">Total Clicks</div>
-                            <div class="metric-value loading" id="gsc-clicks"></div>
+                <div class="domain-tabs" style="margin-bottom:1.25rem;">
+                    <button class="domain-tab active" data-dash="overview" onclick="switchDashTab('overview')">Overview</button>
+                    <button class="domain-tab" data-dash="gsc" onclick="switchDashTab('gsc')">Search Console</button>
+                    <button class="domain-tab" data-dash="ga4" onclick="switchDashTab('ga4')">Analytics</button>
+                    <button class="domain-tab" data-dash="meta" onclick="switchDashTab('meta')">Meta Ads</button>
+                    <button class="domain-tab" data-dash="seo" onclick="switchDashTab('seo')">SEO Trend</button>
+                    <button class="domain-tab" data-dash="social" onclick="switchDashTab('social')">Social</button>
+                    <button class="domain-tab" data-dash="youtube" onclick="switchDashTab('youtube')">YouTube</button>
+                    <button class="domain-tab" data-dash="linkedin" onclick="switchDashTab('linkedin')">LinkedIn</button>
+                </div>
+
+                <div id="dash-overview" class="dash-section">
+                    <div class="section">
+                        <div class="section-label">Search Console</div>
+                        <div class="metrics-grid">
+                            <div class="metric-card"><div class="accent-strip" style="background:#7C3AED"></div><div class="metric-label">Total Clicks</div><div class="metric-value loading" id="gsc-clicks"></div></div>
+                            <div class="metric-card"><div class="accent-strip" style="background:#0EA5E9"></div><div class="metric-label">Impressions</div><div class="metric-value loading" id="gsc-impressions"></div></div>
+                            <div class="metric-card"><div class="accent-strip" style="background:#10B981"></div><div class="metric-label">Avg CTR</div><div class="metric-value loading" id="gsc-ctr"></div></div>
+                            <div class="metric-card"><div class="accent-strip" style="background:#F59E0B"></div><div class="metric-label">Avg Position</div><div class="metric-value loading" id="gsc-position"></div></div>
                         </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#0EA5E9"></div>
-                            <div class="metric-label">Impressions</div>
-                            <div class="metric-value loading" id="gsc-impressions"></div>
+                    </div>
+                    <div class="section">
+                        <div class="section-label">Google Analytics</div>
+                        <div class="metrics-grid" id="ga4-metrics">
+                            <div class="metric-card"><div class="accent-strip" style="background:#7C3AED"></div><div class="metric-label">Sessions</div><div class="metric-value loading" id="ga4-sessions"></div></div>
+                            <div class="metric-card"><div class="accent-strip" style="background:#0EA5E9"></div><div class="metric-label">Users</div><div class="metric-value loading" id="ga4-users"></div></div>
+                            <div class="metric-card"><div class="accent-strip" style="background:#10B981"></div><div class="metric-label">Pageviews</div><div class="metric-value loading" id="ga4-pageviews"></div></div>
+                            <div class="metric-card"><div class="accent-strip" style="background:#F59E0B"></div><div class="metric-label">Bounce Rate</div><div class="metric-value loading" id="ga4-bounce"></div></div>
                         </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#10B981"></div>
-                            <div class="metric-label">Avg CTR</div>
-                            <div class="metric-value loading" id="gsc-ctr"></div>
+                    </div>
+                    <div class="section">
+                        <div class="section-label">Meta Ads</div>
+                        <div id="meta-overview"><div class="empty-state"><p>Loading...</p></div></div>
+                    </div>
+                </div>
+
+                <div id="dash-gsc" class="dash-section" style="display:none;">
+                    <div class="section">
+                        <div class="section-label">Search Console — Detail</div>
+                        <div class="metrics-grid">
+                            <div class="metric-card"><div class="accent-strip" style="background:#7C3AED"></div><div class="metric-label">Total Clicks</div><div class="metric-value loading" id="gsc-clicks-d"></div></div>
+                            <div class="metric-card"><div class="accent-strip" style="background:#0EA5E9"></div><div class="metric-label">Impressions</div><div class="metric-value loading" id="gsc-impressions-d"></div></div>
+                            <div class="metric-card"><div class="accent-strip" style="background:#10B981"></div><div class="metric-label">Avg CTR</div><div class="metric-value loading" id="gsc-ctr-d"></div></div>
+                            <div class="metric-card"><div class="accent-strip" style="background:#F59E0B"></div><div class="metric-label">Avg Position</div><div class="metric-value loading" id="gsc-position-d"></div></div>
                         </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#F59E0B"></div>
-                            <div class="metric-label">Avg Position</div>
-                            <div class="metric-value loading" id="gsc-position"></div>
+                        <div class="two-col" style="margin-top:1.5rem;">
+                            <div><div class="table-title">Top Queries</div><div class="table-card" id="gsc-queries-table"><div class="empty-state"><p>Loading...</p></div></div></div>
+                            <div><div class="table-title">Top Pages</div><div class="table-card" id="gsc-pages-table"><div class="empty-state"><p>Loading...</p></div></div></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- GA4 summary metrics -->
-                <div class="section">
-                    <div class="section-label">Google Analytics</div>
-                    <div class="metrics-grid" id="ga4-metrics">
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#7C3AED"></div>
-                            <div class="metric-label">Sessions</div>
-                            <div class="metric-value loading" id="ga4-sessions"></div>
+                <div id="dash-ga4" class="dash-section" style="display:none;">
+                    <div class="section">
+                        <div class="section-label">Google Analytics — Detail</div>
+                        <div class="metrics-grid" id="ga4-metrics-detail">
+                            <div class="metric-card"><div class="accent-strip" style="background:#7C3AED"></div><div class="metric-label">Sessions</div><div class="metric-value loading" id="ga4-sessions-d"></div></div>
+                            <div class="metric-card"><div class="accent-strip" style="background:#0EA5E9"></div><div class="metric-label">Users</div><div class="metric-value loading" id="ga4-users-d"></div></div>
+                            <div class="metric-card"><div class="accent-strip" style="background:#10B981"></div><div class="metric-label">Pageviews</div><div class="metric-value loading" id="ga4-pageviews-d"></div></div>
+                            <div class="metric-card"><div class="accent-strip" style="background:#F59E0B"></div><div class="metric-label">Bounce Rate</div><div class="metric-value loading" id="ga4-bounce-d"></div></div>
                         </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#0EA5E9"></div>
-                            <div class="metric-label">Users</div>
-                            <div class="metric-value loading" id="ga4-users"></div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#10B981"></div>
-                            <div class="metric-label">Pageviews</div>
-                            <div class="metric-value loading" id="ga4-pageviews"></div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#F59E0B"></div>
-                            <div class="metric-label">Bounce Rate</div>
-                            <div class="metric-value loading" id="ga4-bounce"></div>
+                        <div class="two-col" style="margin-top:1.5rem;">
+                            <div><div class="table-title">Traffic Sources</div><div class="table-card" id="ga4-sources-table"><div class="empty-state"><p>Loading...</p></div></div></div>
+                            <div><div class="table-title">Top Pages</div><div class="table-card" id="ga4-pages-table"><div class="empty-state"><p>Loading...</p></div></div></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Meta summary -->
-                <div class="section">
-                    <div class="section-label">Meta Ads</div>
-                    <div id="meta-overview">
-                        <div class="empty-state"><p>Loading...</p></div>
+                <div id="dash-meta" class="dash-section" style="display:none;">
+                    <div class="section">
+                        <div class="section-label">Meta Ads — Detail</div>
+                        <div class="table-card" id="meta-campaigns-table"><div class="empty-state"><p>Loading...</p></div></div>
                     </div>
                 </div>
-            </div>
 
-            <!-- ═══ GSC detail view ═══ -->
-            <div id="view-gsc" style="display:none">
-                <div class="section page-enter">
-                    <div class="section-label">Search Console — Detail</div>
-                    <div class="metrics-grid" id="gsc-metrics-detail">
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#7C3AED"></div>
-                            <div class="metric-label">Total Clicks</div>
-                            <div class="metric-value loading" id="gsc-clicks-d"></div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#0EA5E9"></div>
-                            <div class="metric-label">Impressions</div>
-                            <div class="metric-value loading" id="gsc-impressions-d"></div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#10B981"></div>
-                            <div class="metric-label">Avg CTR</div>
-                            <div class="metric-value loading" id="gsc-ctr-d"></div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#F59E0B"></div>
-                            <div class="metric-label">Avg Position</div>
-                            <div class="metric-value loading" id="gsc-position-d"></div>
-                        </div>
-                    </div>
-                    <div class="two-col" style="margin-top:1.5rem;">
-                        <div>
-                            <div class="table-title">Top Queries</div>
-                            <div class="table-card" id="gsc-queries-table">
-                                <div class="empty-state"><p>Loading...</p></div>
+                <div id="dash-seo" class="dash-section" style="display:none;">
+                    <div class="section">
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+                            <div class="section-label" id="seo-title" style="margin-bottom:0">SEO Weekly Performance — 5 Week Trend</div>
+                            <div class="date-range-group">
+                                <button class="dr-btn active" data-seo-period="weekly" onclick="switchSEOPeriod('weekly')">Weekly</button>
+                                <button class="dr-btn" data-seo-period="monthly" onclick="switchSEOPeriod('monthly')">Monthly</button>
                             </div>
                         </div>
-                        <div>
-                            <div class="table-title">Top Pages</div>
-                            <div class="table-card" id="gsc-pages-table">
-                                <div class="empty-state"><p>Loading...</p></div>
+                        <div class="table-card" id="seo-weekly-table"><div class="empty-state"><p>Loading SEO data...</p></div></div>
+                    </div>
+                </div>
+
+                <div id="dash-social" class="dash-section" style="display:none;">
+                    <div class="section">
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+                            <div class="section-label" style="margin-bottom:0">Social Media Performance</div>
+                            <div class="date-range-group">
+                                <button class="dr-btn active" data-social-period="weekly" onclick="switchSocialPeriod('weekly')">Weekly</button>
+                                <button class="dr-btn" data-social-period="monthly" onclick="switchSocialPeriod('monthly')">Monthly</button>
                             </div>
                         </div>
+                        <div class="table-card" id="social-metrics-table"><div class="empty-state"><p>Loading social media data...</p></div></div>
+                        <div class="two-col" style="margin-top:1.5rem;">
+                            <div><div class="table-title">Facebook Posts</div><div class="table-card" id="fb-posts-table"><div class="empty-state"><p>Loading...</p></div></div></div>
+                            <div><div class="table-title">Instagram Media</div><div class="table-card" id="ig-media-table"><div class="empty-state"><p>Loading...</p></div></div></div>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- ═══ GA4 detail view ═══ -->
-            <div id="view-ga4" style="display:none">
-                <div class="section page-enter">
-                    <div class="section-label">Google Analytics — Detail</div>
-                    <div class="metrics-grid" id="ga4-metrics-detail">
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#7C3AED"></div>
-                            <div class="metric-label">Sessions</div>
-                            <div class="metric-value loading" id="ga4-sessions-d"></div>
+                <div id="dash-youtube" class="dash-section" style="display:none;">
+                    <div class="section">
+                        <div class="section-label">YouTube Channel</div>
+                        <div class="metrics-grid" id="yt-metrics">
+                            <div class="metric-card"><div class="accent-strip" style="background:#FF0000"></div><div class="metric-label">Subscribers</div><div class="metric-value" id="yt-subscribers">-</div></div>
+                            <div class="metric-card"><div class="accent-strip" style="background:#FF0000"></div><div class="metric-label">Total Views</div><div class="metric-value" id="yt-views">-</div></div>
+                            <div class="metric-card"><div class="accent-strip" style="background:#FF0000"></div><div class="metric-label">Videos</div><div class="metric-value" id="yt-videos">-</div></div>
                         </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#0EA5E9"></div>
-                            <div class="metric-label">Users</div>
-                            <div class="metric-value loading" id="ga4-users-d"></div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#10B981"></div>
-                            <div class="metric-label">Pageviews</div>
-                            <div class="metric-value loading" id="ga4-pageviews-d"></div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#F59E0B"></div>
-                            <div class="metric-label">Bounce Rate</div>
-                            <div class="metric-value loading" id="ga4-bounce-d"></div>
+                        <div class="table-title" style="margin-top:1.5rem;">Recent Videos</div>
+                        <div class="table-card" id="yt-videos-table"><div class="empty-state"><p>Loading...</p></div></div>
+                        <div class="section" style="margin-top:2rem;">
+                            <div class="section-label">YouTube SEO Generator</div>
+                            <div style="display:flex; gap:0.75rem; margin-bottom:1rem;">
+                                <input type="text" class="date-input" id="yt-seo-topic" placeholder="Enter video topic..." style="flex:1; height:40px; font-size:0.85rem;">
+                                <button class="btn-export" id="btn-seo-generate" style="white-space:nowrap;">Generate SEO</button>
+                            </div>
+                            <div id="yt-seo-result"></div>
                         </div>
                     </div>
-                    <div class="two-col" style="margin-top:1.5rem;">
-                        <div>
-                            <div class="table-title">Traffic Sources</div>
-                            <div class="table-card" id="ga4-sources-table">
-                                <div class="empty-state"><p>Loading...</p></div>
+                </div>
+
+                <div id="dash-linkedin" class="dash-section" style="display:none;">
+                    <div class="section">
+                        <div class="section-label">LinkedIn Analytics (Excel Import)</div>
+                        <div class="glass-card-static" style="padding:2rem; text-align:center; margin-bottom:1.5rem;">
+                            <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">Upload your LinkedIn analytics export (Excel or CSV)</p>
+                            <div style="display:flex; gap:0.75rem; justify-content:center; align-items:center; flex-wrap:wrap;">
+                                <select id="li-upload-type" class="date-input" style="height:40px; font-size:0.85rem;">
+                                    <option value="analytics">Page Analytics</option>
+                                    <option value="followers">Follower Demographics</option>
+                                </select>
+                                <label class="btn-export" style="cursor:pointer;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                    Upload File
+                                    <input type="file" id="li-file-input" accept=".xlsx,.csv" style="display:none;">
+                                </label>
                             </div>
                         </div>
-                        <div>
-                            <div class="table-title">Top Pages</div>
-                            <div class="table-card" id="ga4-pages-table">
-                                <div class="empty-state"><p>Loading...</p></div>
-                            </div>
-                        </div>
+                        <div id="li-summary" style="display:none;"><div class="section-label">Summary</div><div class="metrics-grid" id="li-metrics"></div></div>
+                        <div id="li-table-wrap" style="display:none;"><div class="table-title">Data</div><div class="table-card" id="li-data-table"></div></div>
                     </div>
                 </div>
+
             </div>
 
-            <!-- ═══ Meta detail view ═══ -->
-            <div id="view-meta" style="display:none">
+            <!-- ═══ Content Calendar view ═══ -->
+            <div id="view-calendar" style="display:none">
                 <div class="section page-enter">
-                    <div class="section-label">Meta Ads — Detail</div>
-                    <div id="meta-section">
-                        <div class="table-card" id="meta-campaigns-table">
-                            <div class="empty-state"><p>Loading...</p></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ═══ SEO view ═══ -->
-            <div id="view-seo" style="display:none">
-                <div class="section page-enter">
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
-                        <div class="section-label" id="seo-title" style="margin-bottom:0">SEO Weekly Performance — 5 Week Trend</div>
-                        <div class="date-range-group">
-                            <button class="dr-btn active" data-seo-period="weekly" onclick="switchSEOPeriod('weekly')">Weekly</button>
-                            <button class="dr-btn" data-seo-period="monthly" onclick="switchSEOPeriod('monthly')">Monthly</button>
-                        </div>
-                    </div>
-                    <div class="table-card" id="seo-weekly-table">
-                        <div class="empty-state"><p>Loading SEO data...</p></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ═══ Social view ═══ -->
-            <div id="view-social" style="display:none">
-                <div class="section page-enter">
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
-                        <div class="section-label" style="margin-bottom:0">Social Media Performance</div>
-                        <div class="date-range-group">
-                            <button class="dr-btn active" data-social-period="weekly" onclick="switchSocialPeriod('weekly')">Weekly</button>
-                            <button class="dr-btn" data-social-period="monthly" onclick="switchSocialPeriod('monthly')">Monthly</button>
-                        </div>
-                    </div>
-                    <div class="table-card" id="social-metrics-table">
-                        <div class="empty-state"><p>Loading social media data...</p></div>
-                    </div>
-                    <div class="two-col" style="margin-top:1.5rem;">
-                        <div>
-                            <div class="table-title">Facebook Posts</div>
-                            <div class="table-card" id="fb-posts-table">
-                                <div class="empty-state"><p>Loading...</p></div>
-                            </div>
-                        </div>
-                        <div>
-                            <div class="table-title">Instagram Media</div>
-                            <div class="table-card" id="ig-media-table">
-                                <div class="empty-state"><p>Loading...</p></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ═══ YouTube view ═══ -->
-            <div id="view-youtube" style="display:none">
-                <div class="section page-enter">
-                    <div class="section-label">YouTube Channel</div>
-                    <div class="metrics-grid" id="yt-metrics">
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#FF0000"></div>
-                            <div class="metric-label">Subscribers</div>
-                            <div class="metric-value" id="yt-subscribers">-</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#FF0000"></div>
-                            <div class="metric-label">Total Views</div>
-                            <div class="metric-value" id="yt-views">-</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="accent-strip" style="background:#FF0000"></div>
-                            <div class="metric-label">Videos</div>
-                            <div class="metric-value" id="yt-videos">-</div>
-                        </div>
-                    </div>
-                    <div class="table-title" style="margin-top:1.5rem;">Recent Videos</div>
-                    <div class="table-card" id="yt-videos-table">
-                        <div class="empty-state"><p>Loading...</p></div>
-                    </div>
-
-                    <div class="section" style="margin-top:2rem;">
-                        <div class="section-label">YouTube SEO Generator</div>
-                        <div style="display:flex; gap:0.75rem; margin-bottom:1rem;">
-                            <input type="text" class="date-input" id="yt-seo-topic" placeholder="Enter video topic..." style="flex:1; height:40px; font-size:0.85rem;">
-                            <button class="btn-export" id="btn-seo-generate" style="white-space:nowrap;">Generate SEO</button>
-                        </div>
-                        <div id="yt-seo-result"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ═══ LinkedIn view ═══ -->
-            <div id="view-linkedin" style="display:none">
-                <div class="section page-enter">
-                    <div class="section-label">LinkedIn Analytics (Excel Import)</div>
-                    <div class="glass-card-static" style="padding:2rem; text-align:center; margin-bottom:1.5rem;">
-                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">Upload your LinkedIn analytics export (Excel or CSV)</p>
-                        <div style="display:flex; gap:0.75rem; justify-content:center; align-items:center; flex-wrap:wrap;">
-                            <select id="li-upload-type" class="date-input" style="height:40px; font-size:0.85rem;">
-                                <option value="analytics">Page Analytics</option>
-                                <option value="followers">Follower Demographics</option>
-                            </select>
+                    <div class="section-label">Content Calendar</div>
+                    <div class="glass-card-static" style="padding:1.5rem; margin-bottom:1.5rem;">
+                        <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
+                            <input type="month" class="date-input" id="cal-month" style="height:40px; font-size:0.85rem;">
+                            <button class="btn-export" onclick="generateCalendar()">Generate with AI</button>
                             <label class="btn-export" style="cursor:pointer;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                                Upload File
-                                <input type="file" id="li-file-input" accept=".xlsx,.csv" style="display:none;">
+                                Upload PDF/DOCX/TXT
+                                <input type="file" id="cal-file" accept=".pdf,.docx,.txt" style="display:none;">
                             </label>
+                            <input type="text" class="date-input" id="cal-context" placeholder="Optional context notes..." style="flex:1; min-width:240px; height:40px; font-size:0.85rem;">
                         </div>
                     </div>
-                    <div id="li-summary" style="display:none;">
-                        <div class="section-label">Summary</div>
-                        <div class="metrics-grid" id="li-metrics"></div>
+                    <div class="table-card" id="cal-table"><div class="empty-state"><p>Select a month and generate a calendar.</p></div></div>
+                </div>
+            </div>
+
+            <!-- ═══ Creative Ideas view ═══ -->
+            <div id="view-ideas" style="display:none">
+                <div class="section page-enter">
+                    <div class="section-label">Creative Ideas</div>
+                    <div class="glass-card-static" style="padding:1.5rem; margin-bottom:1.5rem;">
+                        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
+                            <button class="dr-btn active" data-ideacat="all" onclick="setIdeaCat('all')">All</button>
+                            <button class="dr-btn" data-ideacat="social" onclick="setIdeaCat('social')">Social</button>
+                            <button class="dr-btn" data-ideacat="video" onclick="setIdeaCat('video')">Video</button>
+                            <button class="dr-btn" data-ideacat="blog" onclick="setIdeaCat('blog')">Blog</button>
+                            <button class="dr-btn" data-ideacat="seasonal" onclick="setIdeaCat('seasonal')">Seasonal</button>
+                            <button class="btn-export" style="margin-left:auto;" onclick="generateIdeas()">Generate Ideas</button>
+                        </div>
                     </div>
-                    <div id="li-table-wrap" style="display:none;">
-                        <div class="table-title">Data</div>
-                        <div class="table-card" id="li-data-table"></div>
+                    <div id="ideas-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:1rem;">
+                        <div class="empty-state"><p>Click "Generate Ideas" to get fresh content ideas.</p></div>
                     </div>
+                </div>
+            </div>
+
+            <!-- ═══ Content Validator view ═══ -->
+            <div id="view-validator" style="display:none">
+                <div class="section page-enter">
+                    <div class="section-label">Content Validator</div>
+                    <div class="glass-card-static" style="padding:1.5rem; margin-bottom:1.5rem;">
+                        <div class="domain-tabs" style="margin-bottom:1rem;">
+                            <button class="domain-tab active" data-vtab="text" onclick="switchValTab('text')">Text</button>
+                            <button class="domain-tab" data-vtab="image" onclick="switchValTab('image')">Image</button>
+                            <button class="domain-tab" data-vtab="video" onclick="switchValTab('video')">Video</button>
+                        </div>
+                        <div id="val-text">
+                            <textarea id="val-content" placeholder="Paste your content here..." style="width:100%; min-height:160px; padding:1rem; background:var(--surface-input); color:var(--text-primary); border:1px solid var(--border); border-radius:0.75rem; font-family:Inter,sans-serif; font-size:0.9rem;"></textarea>
+                            <button class="btn-export" style="margin-top:1rem;" onclick="validateText()">Validate</button>
+                        </div>
+                        <div id="val-image" style="display:none;">
+                            <label class="btn-export" style="cursor:pointer;">
+                                Choose Image
+                                <input type="file" id="val-img-file" accept="image/*" style="display:none;">
+                            </label>
+                            <span id="val-img-name" style="margin-left:0.75rem; color:var(--text-muted); font-size:0.85rem;"></span>
+                            <button class="btn-export" style="margin-left:1rem;" onclick="validateImage()">Validate</button>
+                        </div>
+                        <div id="val-video" style="display:none;">
+                            <label class="btn-export" style="cursor:pointer;">
+                                Choose Video
+                                <input type="file" id="val-vid-file" accept="video/*" style="display:none;">
+                            </label>
+                            <button class="btn-export" style="margin-left:1rem;" onclick="validateVideo()">Validate</button>
+                        </div>
+                    </div>
+                    <div id="val-result"></div>
+                </div>
+            </div>
+
+            <!-- ═══ Reports view ═══ -->
+            <div id="view-reports" style="display:none">
+                <div class="section page-enter">
+                    <div class="section-label">Reports & Analytics</div>
+                    <div class="glass-card-static" style="padding:1.5rem; margin-bottom:1.5rem;">
+                        <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
+                            <div class="date-range-group">
+                                <button class="dr-btn active" data-rep-period="weekly" onclick="setRepPeriod('weekly')">Weekly</button>
+                                <button class="dr-btn" data-rep-period="monthly" onclick="setRepPeriod('monthly')">Monthly</button>
+                            </div>
+                            <input type="date" class="date-input" id="rep-start">
+                            <input type="date" class="date-input" id="rep-end">
+                            <button class="btn-export" onclick="generateReport()">Generate</button>
+                            <span style="margin-left:auto;"></span>
+                            <button class="btn-export" onclick="exportReportFmt('excel')">Excel</button>
+                            <button class="btn-export" onclick="exportReportFmt('csv')">CSV</button>
+                            <button class="btn-export" onclick="exportReportFmt('pdf')">PDF</button>
+                        </div>
+                    </div>
+                    <div id="rep-result"><div class="empty-state"><p>Choose a period and generate a report.</p></div></div>
                 </div>
             </div>
 
@@ -421,23 +375,18 @@
                         </div>
                     </div>
                     <div class="glass-card-static" style="padding:2rem; margin-top:1.5rem;">
-                        <div class="section-label">How to Get Tokens (Manual Steps)</div>
-                        <ol style="color:var(--text-muted); font-size:0.85rem; line-height:2; padding-left:1.5rem;">
-                            <li>Go to <a href="https://developers.facebook.com/tools/explorer/" target="_blank" style="color:var(--accent);">Graph API Explorer</a></li>
-                            <li>Select your app, click <strong>Generate Access Token</strong></li>
-                            <li>Grant permissions: <code>pages_show_list, pages_read_engagement, pages_read_user_content, instagram_basic, instagram_manage_insights, read_insights, ads_read</code></li>
-                            <li>Paste the token above and click <strong>Exchange Token</strong></li>
-                            <li>Copy the <strong>Page Token</strong> (never expires) and set it as <code>META_SOCIAL_TOKEN</code> in Vercel</li>
-                            <li>Copy the <strong>Long-Lived Token</strong> (60 days) and set it as <code>META_MARKETING_TOKEN</code> in Vercel</li>
-                        </ol>
+                        <div class="section-label">Environment Variables</div>
+                        <p style="color:var(--text-muted); font-size:0.85rem; line-height:1.8;">
+                            Set <code>OPENROUTER_API_KEY</code> in Vercel for AI features (Calendar, Ideas, Validator).
+                        </p>
                     </div>
                 </div>
             </div>
 
-        </div><!-- /app-main -->
-    </div><!-- /app-content -->
-</div><!-- /app-shell -->
-</div><!-- /app-outer -->
+        </div>
+    </div>
+</div>
+</div>
 
 <script src="/static/app.js"></script>
 </body>
