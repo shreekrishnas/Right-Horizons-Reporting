@@ -94,6 +94,44 @@ function renderTable(id, headers, rows) {
     el.innerHTML = html;
 }
 
+// ── Charts ──
+const charts = {};
+
+function getThemeColors() {
+    const s = getComputedStyle(document.documentElement);
+    return {
+        text: s.getPropertyValue('--text').trim() || '#1a1a2e',
+        muted: s.getPropertyValue('--text-muted').trim() || '#666',
+        border: s.getPropertyValue('--border').trim() || '#e2e8f0',
+        accent: s.getPropertyValue('--accent').trim() || '#7C3AED',
+        surface: s.getPropertyValue('--surface').trim() || '#fff',
+    };
+}
+
+function makeChart(id, config) {
+    if (charts[id]) { charts[id].destroy(); }
+    const ctx = document.getElementById(id);
+    if (!ctx) return null;
+    const c = getThemeColors();
+    config.options = config.options || {};
+    config.options.responsive = true;
+    config.options.maintainAspectRatio = false;
+    config.options.plugins = config.options.plugins || {};
+    config.options.plugins.legend = config.options.plugins.legend || {};
+    config.options.plugins.legend.labels = { color: c.text, font: { family: 'Inter' } };
+    if (config.options.scales) {
+        Object.values(config.options.scales).forEach(s => {
+            s.ticks = s.ticks || {};
+            s.ticks.color = c.muted;
+            s.ticks.font = { family: 'Inter', size: 11 };
+            s.grid = s.grid || {};
+            s.grid.color = c.border + '40';
+        });
+    }
+    charts[id] = new Chart(ctx, config);
+    return charts[id];
+}
+
 // ── Theme ──
 function initTheme() {
     const saved = localStorage.getItem('rh-theme');
@@ -112,6 +150,7 @@ function applyTheme(theme) {
 function toggleTheme() {
     const current = document.documentElement.getAttribute('data-theme');
     applyTheme(current === 'dark' ? 'light' : 'dark');
+    Object.keys(charts).forEach(id => { if (charts[id]) charts[id].destroy(); delete charts[id]; });
 }
 
 // ── Views ──
@@ -175,6 +214,36 @@ async function loadGSC() {
             { label: 'Position', key: 'position' },
         ], pages);
     } catch (e) { showError('gsc-pages-table', e.message); }
+    // Daily chart
+    try {
+        const daily = await api(`/api/gsc/daily${qs}`);
+        makeChart('chart-gsc-daily', {
+            type: 'line',
+            data: {
+                labels: daily.map(d => d.date),
+                datasets: [
+                    { label: 'Clicks', data: daily.map(d => d.clicks), borderColor: '#7C3AED', backgroundColor: '#7C3AED20', fill: true, tension: 0.3, yAxisID: 'y' },
+                    { label: 'Impressions', data: daily.map(d => d.impressions), borderColor: '#0EA5E9', backgroundColor: '#0EA5E920', fill: true, tension: 0.3, yAxisID: 'y1' },
+                ]
+            },
+            options: { scales: { y: { position: 'left' }, y1: { position: 'right', grid: { drawOnChartArea: false } } } }
+        });
+    } catch(e) {}
+    // Queries bar chart
+    try {
+        const queries = await api(`/api/gsc/queries${qs}&limit=10`);
+        makeChart('chart-gsc-queries', {
+            type: 'bar',
+            data: {
+                labels: queries.map(q => q.query.length > 30 ? q.query.slice(0,27)+'...' : q.query),
+                datasets: [
+                    { label: 'Clicks', data: queries.map(q => q.clicks), backgroundColor: '#7C3AED90' },
+                    { label: 'Impressions', data: queries.map(q => q.impressions), backgroundColor: '#0EA5E990' },
+                ]
+            },
+            options: { indexAxis: 'y', scales: { x: {}, y: {} } }
+        });
+    } catch(e) {}
 }
 
 async function loadGA4() {
@@ -203,6 +272,34 @@ async function loadGA4() {
             { label: 'Sessions', key: 'sessions' }, { label: 'Avg Duration', key: 'avg_dur' },
         ], pages);
     } catch (e) { showError('ga4-pages-table', e.message); }
+    // Daily chart
+    try {
+        const daily = await api(`/api/ga4/daily${qs}`);
+        makeChart('chart-ga4-daily', {
+            type: 'line',
+            data: {
+                labels: daily.map(d => d.date),
+                datasets: [
+                    { label: 'Sessions', data: daily.map(d => d.sessions), borderColor: '#7C3AED', backgroundColor: '#7C3AED20', fill: true, tension: 0.3 },
+                    { label: 'Users', data: daily.map(d => d.users), borderColor: '#10B981', backgroundColor: '#10B98120', fill: true, tension: 0.3 },
+                ]
+            },
+            options: { scales: { x: {}, y: {} } }
+        });
+    } catch(e) {}
+    // Sources doughnut
+    try {
+        const sources = await api(`/api/ga4/sources${qs}`);
+        const colors = ['#7C3AED','#0EA5E9','#10B981','#F59E0B','#EF4444','#EC4899','#8B5CF6','#06B6D4','#84CC16','#F97316'];
+        makeChart('chart-ga4-sources', {
+            type: 'doughnut',
+            data: {
+                labels: sources.map(s => s.channel),
+                datasets: [{ data: sources.map(s => s.sessions), backgroundColor: colors.slice(0, sources.length) }]
+            },
+            options: { plugins: { legend: { position: 'right' } } }
+        });
+    } catch(e) {}
 }
 
 async function loadMeta() {
@@ -238,6 +335,22 @@ async function loadMeta() {
                     <div class="metric-card"><div class="accent-strip" style="background:#F59E0B"></div><div class="metric-label">Campaigns</div><div class="metric-value">${campaigns.length}</div></div>
                 </div>`;
         }
+        // Campaign performance chart
+        try {
+            if (campaigns && campaigns.length) {
+                makeChart('chart-meta-campaigns', {
+                    type: 'bar',
+                    data: {
+                        labels: campaigns.map(c => (c.name||'').slice(0,25)),
+                        datasets: [
+                            { label: 'Spend', data: campaigns.map(c => parseFloat(c.spend) || 0), backgroundColor: '#7C3AED90' },
+                            { label: 'Clicks', data: campaigns.map(c => parseInt(c.clicks) || 0), backgroundColor: '#0EA5E990' },
+                        ]
+                    },
+                    options: { scales: { x: {}, y: {} } }
+                });
+            }
+        } catch(e) {}
     } catch (e) {
         showError('meta-overview', e.message);
     }
@@ -305,6 +418,36 @@ async function loadSocial() {
         });
         html += '</tbody></table>';
         tableEl.innerHTML = html;
+        // FB trend chart
+        try {
+            makeChart('chart-fb-trend', {
+                type: 'bar',
+                data: {
+                    labels: data.map(p => p.period),
+                    datasets: [
+                        { label: 'Reach', data: data.map(p => (p.fb && p.fb.reach) || 0), backgroundColor: '#1877F290' },
+                        { label: 'Engagements', data: data.map(p => (p.fb && p.fb.engagements) || 0), backgroundColor: '#0EA5E990' },
+                        { label: 'Views', data: data.map(p => (p.fb && p.fb.views) || 0), backgroundColor: '#10B98190' },
+                    ]
+                },
+                options: { scales: { x: {}, y: {} } }
+            });
+        } catch(e) {}
+        // IG trend chart
+        try {
+            makeChart('chart-ig-trend', {
+                type: 'bar',
+                data: {
+                    labels: data.map(p => p.period),
+                    datasets: [
+                        { label: 'Reach', data: data.map(p => (p.ig && p.ig.reach) || 0), backgroundColor: '#E4405F90' },
+                        { label: 'Engagements', data: data.map(p => (p.ig && p.ig.engagements) || 0), backgroundColor: '#7C3AED90' },
+                        { label: 'Views', data: data.map(p => (p.ig && p.ig.views) || 0), backgroundColor: '#F59E0B90' },
+                    ]
+                },
+                options: { scales: { x: {}, y: {} } }
+            });
+        } catch(e) {}
     } catch (e) {
         tableEl.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
     }
@@ -369,6 +512,20 @@ async function loadSEOWeekly() {
         });
         html += '</tbody></table>';
         tableEl.innerHTML = html;
+        // SEO trend chart
+        try {
+            makeChart('chart-seo-trend', {
+                type: 'line',
+                data: {
+                    labels: data.map(d => d.period),
+                    datasets: [
+                        { label: 'GSC Clicks', data: data.map(d => d.gsc_clicks || 0), borderColor: '#7C3AED', backgroundColor: '#7C3AED20', fill: true, tension: 0.3 },
+                        { label: 'Organic Sessions', data: data.map(d => d.organic_sessions || 0), borderColor: '#10B981', backgroundColor: '#10B98120', fill: true, tension: 0.3 },
+                    ]
+                },
+                options: { scales: { x: {}, y: {} } }
+            });
+        } catch(e) {}
     } catch (e) {
         tableEl.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
     }
@@ -456,6 +613,28 @@ async function uploadLinkedIn() {
 
 async function loadAll() {
     await Promise.allSettled([loadGSC(), loadGA4(), loadMeta()]);
+    // Overview combined chart
+    try {
+        const qs = `?domain=${currentDomain}&start=${dateStart}&end=${dateEnd}`;
+        const [gscDaily, ga4Daily] = await Promise.allSettled([
+            api(`/api/gsc/daily${qs}`),
+            api(`/api/ga4/daily${qs}`)
+        ]);
+        const gscData = gscDaily.status === 'fulfilled' ? gscDaily.value : [];
+        const ga4Data = ga4Daily.status === 'fulfilled' ? ga4Daily.value : [];
+        const labels = (gscData.length >= ga4Data.length ? gscData : ga4Data).map(d => d.date);
+        makeChart('chart-overview-trend', {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    { label: 'GSC Clicks', data: gscData.map(d => d.clicks), borderColor: '#7C3AED', backgroundColor: '#7C3AED20', fill: true, tension: 0.3 },
+                    { label: 'GA4 Sessions', data: ga4Data.map(d => d.sessions), borderColor: '#10B981', backgroundColor: '#10B98120', fill: true, tension: 0.3 },
+                ]
+            },
+            options: { scales: { x: {}, y: {} } }
+        });
+    } catch(e) {}
 }
 
 function switchDomain(key) {
