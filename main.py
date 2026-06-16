@@ -563,6 +563,330 @@ def meta_exchange_token(token: str = ""):
     }
 
 
+# ── Reports & Analytics ─────────────────────────────────────────────────────
+
+@app.get("/api/reports/generate")
+def reports_generate(period: str = "weekly", domain: str = "rh", start: str = "", end: str = ""):
+    today = date.today()
+    if not end:
+        end = today.isoformat()
+    if not start:
+        days = 7 if period == "weekly" else 30
+        start = (today - timedelta(days=days - 1)).isoformat()
+    d = _domain(domain)
+    out = {"domain": domain, "label": d["label"], "period": period, "start": start, "end": end}
+    try:
+        creds = get_credentials()
+        try:
+            out["gsc"] = gsc.get_summary(creds, d["gsc_site"], start, end)
+        except Exception as e:
+            out["gsc"] = {"error": str(e)}
+        prop = d.get("ga4_property")
+        if prop:
+            try:
+                out["ga4"] = ga4.get_summary(creds, prop, start, end)
+            except Exception as e:
+                out["ga4"] = {"error": str(e)}
+    except Exception as e:
+        out["auth_error"] = str(e)
+    if META_MARKETING_TOKEN and META_AD_ACCOUNT:
+        try:
+            camps = meta.get_campaigns_summary(META_MARKETING_TOKEN, META_AD_ACCOUNT, start, end)
+            spend = sum(float(c.get("spend") or 0) for c in camps)
+            clicks = sum(int(c.get("clicks") or 0) for c in camps)
+            impressions = sum(int(c.get("impressions") or 0) for c in camps)
+            out["meta"] = {"campaigns": len(camps), "spend": round(spend, 2), "clicks": clicks, "impressions": impressions}
+        except Exception as e:
+            out["meta"] = {"error": str(e)}
+    if META_SOCIAL_TOKEN and META_PAGE_ID:
+        try:
+            out["social_fb"] = social.get_fb_comprehensive(META_SOCIAL_TOKEN, META_PAGE_ID, start, end)
+        except Exception as e:
+            out["social_fb"] = {"error": str(e)}
+        try:
+            ig_id = social.get_ig_account(META_SOCIAL_TOKEN, META_PAGE_ID)
+            if ig_id:
+                out["social_ig"] = social.get_ig_comprehensive(META_SOCIAL_TOKEN, ig_id, start, end)
+        except Exception as e:
+            out["social_ig"] = {"error": str(e)}
+    return out
+
+
+@app.get("/api/reports/export")
+def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", end: str = "", format: str = "excel"):
+    today = date.today()
+    if not end:
+        end = today.isoformat()
+    if not start:
+        days = 7 if period == "weekly" else 30
+        start = (today - timedelta(days=days - 1)).isoformat()
+    d = _domain(domain)
+    data = reports_generate(period, domain, start, end)
+    fmt = format.lower()
+    base = f"Report_{d['short']}_{period}_{start}_{end}"
+
+    if fmt == "csv":
+        import csv
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(["Section", "Metric", "Value"])
+        for section in ("gsc", "ga4", "meta", "social_fb", "social_ig"):
+            v = data.get(section)
+            if not isinstance(v, dict):
+                continue
+            for k, val in v.items():
+                w.writerow([section, k, val])
+        return StreamingResponse(io.BytesIO(buf.getvalue().encode()), media_type="text/csv",
+                                 headers={"Content-Disposition": f'attachment; filename="{base}.csv"'})
+
+    if fmt == "pdf":
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib import colors
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+            from reportlab.lib.styles import getSampleStyleSheet
+        except ImportError:
+            raise HTTPException(400, "PDF export requires reportlab. Use Excel or CSV instead.")
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4)
+        styles = getSampleStyleSheet()
+        story = [Paragraph(f"{d['label']} — {period.title()} Report", styles["Title"]),
+                 Paragraph(f"Period: {start} to {end}", styles["Italic"]), Spacer(1, 12)]
+        for section_key, label in [("gsc", "Search Console"), ("ga4", "Google Analytics"),
+                                    ("meta", "Meta Ads"), ("social_fb", "Facebook"), ("social_ig", "Instagram")]:
+            v = data.get(section_key)
+            if not isinstance(v, dict) or "error" in v:
+                continue
+            story.append(Paragraph(label, styles["Heading2"]))
+            rows = [["Metric", "Value"]] + [[str(k), str(val)] for k, val in v.items()]
+            t = Table(rows, hAlign="LEFT")
+            t.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ]))
+            story.append(t)
+            story.append(Spacer(1, 12))
+        doc.build(story)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf",
+                                 headers={"Content-Disposition": f'attachment; filename="{base}.pdf"'})
+
+    # excel default
+    try:
+        creds = get_credentials()
+        gsc_sum = gsc.get_summary(creds, d["gsc_site"], start, end)
+        gsc_q = gsc.get_top_queries(creds, d["gsc_site"], start, end, 20)
+        gsc_p = gsc.get_top_pages(creds, d["gsc_site"], start, end, 20)
+        ga4_sum, ga4_p, ga4_src = {}, [], []
+        prop = d.get("ga4_property")
+        if prop:
+            try:
+                ga4_sum = ga4.get_summary(creds, prop, start, end)
+                ga4_p = ga4.get_top_pages(creds, prop, start, end, 20)
+                ga4_src = ga4.get_traffic_sources(creds, prop, start, end)
+            except Exception:
+                pass
+        meta_camps = None
+        if META_MARKETING_TOKEN and META_AD_ACCOUNT:
+            try:
+                meta_camps = meta.get_campaigns_summary(META_MARKETING_TOKEN, META_AD_ACCOUNT, start, end)
+            except Exception:
+                pass
+        xlsx = build_report(domain, d["label"], start, end, gsc_sum, gsc_q, gsc_p, ga4_sum, ga4_p, ga4_src, meta_camps)
+        return StreamingResponse(io.BytesIO(xlsx),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{base}.xlsx"'})
+    except Exception as e:
+        raise HTTPException(502, f"Export error: {e}")
+
+
+# ── Content Calendar ─────────────────────────────────────────────────────────
+
+import ai as ai_mod
+from fastapi import Body
+from pydantic import BaseModel
+
+_calendars: dict = {}  # key: f"{domain}:{month}" -> list of items
+_ideas_state = {"last_check": 0, "available": 0}
+
+
+class CalendarRequest(BaseModel):
+    domain: str = "rh"
+    month: str = ""
+    context: str = ""
+
+
+CAL_SYSTEM = (
+    "You are a marketing content strategist for Right Horizons, an Indian financial services firm "
+    "focused on wealth management, PMS (Portfolio Management Services), and AIF (Alternative Investment Funds). "
+    "Generate a monthly content calendar for {domain} for {month}. Create 20 diverse content ideas across "
+    "Instagram, Facebook, LinkedIn, YouTube, and Blog. Mix educational, market commentary, client stories, "
+    "and seasonal content. Output ONLY valid JSON: an array of "
+    "{date: 'YYYY-MM-DD', platform, type, title, description}."
+)
+
+
+@app.post("/api/calendar/generate")
+def calendar_generate(req: CalendarRequest):
+    if not req.month:
+        raise HTTPException(400, "month required (YYYY-MM)")
+    domain_label = DOMAINS.get(req.domain, {}).get("label", req.domain)
+    sys = CAL_SYSTEM.format(domain=domain_label, month=req.month)
+    user = f"Generate the calendar for {domain_label}, month {req.month}."
+    if req.context:
+        user += f"\n\nAdditional context:\n{req.context}"
+    try:
+        items = ai_mod.chat_json(sys, user, max_tokens=4000)
+        if isinstance(items, dict) and "items" in items:
+            items = items["items"]
+        _calendars[f"{req.domain}:{req.month}"] = items
+        return {"items": items, "month": req.month, "domain": req.domain}
+    except Exception as e:
+        raise HTTPException(502, f"AI error: {e}")
+
+
+@app.get("/api/calendar/get")
+def calendar_get(domain: str = "rh", month: str = ""):
+    return {"items": _calendars.get(f"{domain}:{month}", []), "domain": domain, "month": month}
+
+
+@app.post("/api/calendar/save")
+def calendar_save(payload: dict = Body(...)):
+    domain = payload.get("domain", "rh")
+    month = payload.get("month", "")
+    items = payload.get("items", [])
+    if not month:
+        raise HTTPException(400, "month required")
+    _calendars[f"{domain}:{month}"] = items
+    return {"ok": True}
+
+
+@app.post("/api/calendar/upload")
+async def calendar_upload(file: UploadFile = File(...), domain: str = Query("rh"), month: str = Query("")):
+    if not month:
+        raise HTTPException(400, "month required")
+    content = await file.read()
+    if not content:
+        raise HTTPException(400, "Empty file")
+    name = (file.filename or "").lower()
+    text = ""
+    try:
+        if name.endswith(".pdf"):
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(content))
+            text = "\n".join((p.extract_text() or "") for p in reader.pages)
+        elif name.endswith(".docx"):
+            from docx import Document
+            doc = Document(io.BytesIO(content))
+            text = "\n".join(p.text for p in doc.paragraphs)
+        else:
+            text = content.decode("utf-8", errors="ignore")
+    except Exception as e:
+        raise HTTPException(422, f"Failed to parse file: {e}")
+    text = text[:8000]
+    domain_label = DOMAINS.get(domain, {}).get("label", domain)
+    sys = CAL_SYSTEM.format(domain=domain_label, month=month)
+    user = f"Generate the calendar for {domain_label}, month {month}, using the following source document as context:\n\n{text}"
+    try:
+        items = ai_mod.chat_json(sys, user, max_tokens=4000)
+        if isinstance(items, dict) and "items" in items:
+            items = items["items"]
+        _calendars[f"{domain}:{month}"] = items
+        return {"items": items, "month": month, "domain": domain}
+    except Exception as e:
+        raise HTTPException(502, f"AI error: {e}")
+
+
+# ── Creative Ideas ───────────────────────────────────────────────────────────
+
+IDEAS_SYSTEM = (
+    "You are a creative marketing strategist for Right Horizons (Indian wealth management/PMS/AIF). "
+    "Generate 10 fresh, trending content ideas for {category} content. Consider current Indian market "
+    "trends, festivals, financial events. Output ONLY valid JSON array of "
+    "{title, type, description, hashtags: [], best_platform}."
+)
+
+
+@app.get("/api/ideas/generate")
+def ideas_generate(domain: str = "rh", category: str = "all"):
+    domain_label = DOMAINS.get(domain, {}).get("label", domain)
+    sys = IDEAS_SYSTEM.format(category=category)
+    user = f"Generate 10 creative content ideas for {domain_label}, category: {category}."
+    try:
+        items = ai_mod.chat_json(sys, user, max_tokens=3000)
+        if isinstance(items, dict) and "items" in items:
+            items = items["items"]
+        _ideas_state["available"] = len(items) if isinstance(items, list) else 0
+        return {"items": items, "domain": domain, "category": category}
+    except Exception as e:
+        raise HTTPException(502, f"AI error: {e}")
+
+
+@app.get("/api/ideas/notifications")
+def ideas_notifications():
+    return {"new": _ideas_state.get("available", 0)}
+
+
+@app.post("/api/ideas/seen")
+def ideas_seen():
+    _ideas_state["available"] = 0
+    return {"ok": True}
+
+
+# ── Content Validator ────────────────────────────────────────────────────────
+
+VALIDATOR_TEXT_SYSTEM = (
+    "You are a senior content reviewer for a financial services brand. Review the content for grammar, "
+    "clarity, marketing effectiveness, brand alignment, CTA, missing info, compliance (SEBI guidelines "
+    "for Indian financial content). Output ONLY valid JSON: {score: 0-100, grammar_issues: "
+    "[{issue, suggestion}], strengths: [], weaknesses: [], recommendations: [], missing_info: [], "
+    "publish_ready: boolean, summary: string}."
+)
+
+VALIDATOR_IMAGE_SYSTEM = (
+    "You are a senior creative reviewer for a financial services brand. Review the visual creative for "
+    "design quality, text overlay readability, brand consistency, CTA visibility, and SEBI compliance "
+    "for Indian financial marketing. Output ONLY valid JSON: {score: 0-100, grammar_issues: "
+    "[{issue, suggestion}], strengths: [], weaknesses: [], recommendations: [], missing_info: [], "
+    "publish_ready: boolean, summary: string}."
+)
+
+
+@app.post("/api/validator/text")
+def validator_text(payload: dict = Body(...)):
+    content = (payload or {}).get("content", "").strip()
+    if not content:
+        raise HTTPException(400, "content required")
+    try:
+        return ai_mod.chat_json(VALIDATOR_TEXT_SYSTEM, f"Review this content:\n\n{content}", max_tokens=2500)
+    except Exception as e:
+        raise HTTPException(502, f"AI error: {e}")
+
+
+@app.post("/api/validator/image")
+async def validator_image(file: UploadFile = File(...)):
+    import base64
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "Empty file")
+    mime = file.content_type or "image/png"
+    b64 = base64.b64encode(raw).decode()
+    data_url = f"data:{mime};base64,{b64}"
+    try:
+        return ai_mod.chat_vision_json(VALIDATOR_IMAGE_SYSTEM,
+            "Review this visual creative for a financial services brand.", data_url, max_tokens=2500)
+    except Exception as e:
+        raise HTTPException(502, f"AI error: {e}")
+
+
+@app.post("/api/validator/video")
+async def validator_video(file: UploadFile = File(...)):
+    return {"message": "Video analysis: extract first frame and submit as image, or paste description"}
+
+
 # ── Frontend ─────────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)

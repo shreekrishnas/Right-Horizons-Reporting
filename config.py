@@ -14,6 +14,8 @@ META_APP_SECRET = os.getenv("META_APP_SECRET", "")
 META_PAGE_ID = os.getenv("META_PAGE_ID", "296408333709162")
 META_AD_ACCOUNT = os.getenv("META_AD_ACCOUNT", "act_267691143342137")
 
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+
 DOMAINS = {
     "rh": {
         "label": "Right Horizons",
