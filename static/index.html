@@ -33,6 +33,10 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                 <span class="sidebar-tooltip">Dashboard</span>
             </button>
+            <button class="sidebar-item" data-view="analytics" onclick="switchView('analytics')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                <span class="sidebar-tooltip">Analytics</span>
+            </button>
             <button class="sidebar-item" data-view="calendar" onclick="switchView('calendar')">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                 <span class="sidebar-tooltip">Content Calendar</span>
@@ -300,6 +304,114 @@
                     </div>
                 </div>
 
+            </div>
+
+            <!-- ═══ Analytics view ═══ -->
+            <div id="view-analytics" style="display:none">
+                <div class="section page-enter">
+                    <div class="glass-card-static" style="padding:1rem 1.5rem; margin-bottom:1.5rem; display:flex; align-items:center; gap:1rem;">
+                        <div style="font-weight:700; font-size:0.85rem; color:var(--text);">Data Source</div>
+                        <select id="analytics-source" onchange="loadAnalytics()" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:0.5rem 1rem; font-family:Inter; font-size:0.85rem; cursor:pointer;">
+                            <option value="gsc">Google Search Console</option>
+                            <option value="ga4">Google Analytics</option>
+                            <option value="meta">Meta Ads</option>
+                            <option value="social">Social Media</option>
+                        </select>
+                    </div>
+
+                    <!-- GSC Charts -->
+                    <div id="analytics-gsc">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem;">
+                            <div class="glass-card-static" style="padding:1.25rem;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Clicks & Impressions</div>
+                                <div style="position:relative; height:250px;"><canvas id="a-gsc-clicks"></canvas></div>
+                            </div>
+                            <div class="glass-card-static" style="padding:1.25rem;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Click-Through Rate</div>
+                                <div style="position:relative; height:250px;"><canvas id="a-gsc-ctr"></canvas></div>
+                            </div>
+                            <div class="glass-card-static" style="padding:1.25rem;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Top Queries</div>
+                                <div style="position:relative; height:250px;"><canvas id="a-gsc-queries"></canvas></div>
+                            </div>
+                            <div class="glass-card-static" style="padding:1.25rem;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Top Pages</div>
+                                <div style="position:relative; height:250px;"><canvas id="a-gsc-pages"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GA4 Charts -->
+                    <div id="analytics-ga4" style="display:none;">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem;">
+                            <div class="glass-card-static" style="padding:1.25rem;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Sessions & Users</div>
+                                <div style="position:relative; height:250px;"><canvas id="a-ga4-sessions"></canvas></div>
+                            </div>
+                            <div class="glass-card-static" style="padding:1.25rem; text-align:center;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.5rem;">Bounce Rate</div>
+                                <div style="font-size:2.5rem; font-weight:800; color:var(--accent);" id="a-ga4-bounce">—</div>
+                                <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">Average bounce rate for period</div>
+                            </div>
+                            <div class="glass-card-static" style="padding:1.25rem;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Traffic Sources</div>
+                                <div style="position:relative; height:250px;"><canvas id="a-ga4-sources"></canvas></div>
+                            </div>
+                            <div class="glass-card-static" style="padding:1.25rem;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Top Pages</div>
+                                <div style="position:relative; height:250px;"><canvas id="a-ga4-pages"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Meta Ads Charts -->
+                    <div id="analytics-meta" style="display:none;">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem;">
+                            <div class="glass-card-static" style="padding:1.25rem;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Campaign Spend</div>
+                                <div style="position:relative; height:250px;"><canvas id="a-meta-spend"></canvas></div>
+                            </div>
+                            <div class="glass-card-static" style="padding:1.25rem;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Campaign Clicks</div>
+                                <div style="position:relative; height:250px;"><canvas id="a-meta-clicks"></canvas></div>
+                            </div>
+                        </div>
+                        <div class="glass-card-static" style="padding:1.25rem; margin-top:1.25rem;">
+                            <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Daily Spend Trend</div>
+                            <div style="position:relative; height:250px;"><canvas id="a-meta-daily"></canvas></div>
+                        </div>
+                    </div>
+
+                    <!-- Social Media Charts -->
+                    <div id="analytics-social" style="display:none;">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem;">
+                            <div class="glass-card-static" style="padding:1.25rem;">
+                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                                    <div style="text-align:center; padding:1rem; border-radius:12px; background:linear-gradient(135deg, rgba(24,119,242,0.12), rgba(24,119,242,0.04));">
+                                        <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.5rem;">FB Followers</div>
+                                        <div style="font-size:2rem; font-weight:800; color:#1877F2;" id="a-social-fb-followers">—</div>
+                                    </div>
+                                    <div style="text-align:center; padding:1rem; border-radius:12px; background:linear-gradient(135deg, rgba(228,64,95,0.12), rgba(228,64,95,0.04));">
+                                        <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.5rem;">IG Followers</div>
+                                        <div style="font-size:2rem; font-weight:800; color:#E4405F;" id="a-social-ig-followers">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="glass-card-static" style="padding:1.25rem;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Engagement Trend</div>
+                                <div style="position:relative; height:250px;"><canvas id="a-social-engagement"></canvas></div>
+                            </div>
+                            <div class="glass-card-static" style="padding:1.25rem;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Reach Trend</div>
+                                <div style="position:relative; height:250px;"><canvas id="a-social-reach"></canvas></div>
+                            </div>
+                            <div class="glass-card-static" style="padding:1.25rem;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Posts Published</div>
+                                <div style="position:relative; height:250px;"><canvas id="a-social-posts"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- ═══ Content Calendar view ═══ -->

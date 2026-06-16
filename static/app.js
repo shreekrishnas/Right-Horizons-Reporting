@@ -220,7 +220,7 @@ function toggleTheme() {
 // ── Views ──
 function switchView(view) {
     currentView = view;
-    ['dashboard', 'calendar', 'ideas', 'validator', 'reports', 'settings'].forEach(v => {
+    ['dashboard', 'analytics', 'calendar', 'ideas', 'validator', 'reports', 'settings'].forEach(v => {
         const el = document.getElementById('view-' + v);
         if (el) el.style.display = v === view ? 'block' : 'none';
     });
@@ -228,12 +228,259 @@ function switchView(view) {
         b.classList.toggle('active', b.dataset.view === view);
     });
     const subtitles = {
-        dashboard: 'Dashboard', calendar: 'Content Calendar', ideas: 'Creative Ideas',
+        dashboard: 'Dashboard', analytics: 'Analytics', calendar: 'Content Calendar', ideas: 'Creative Ideas',
         validator: 'Content Validator', reports: 'Reports & Analytics', settings: 'Settings'
     };
     const sub = document.getElementById('topbar-sub');
     if (sub) sub.textContent = subtitles[view] || 'Dashboard';
     if (view === 'ideas') markIdeasSeen();
+    if (view === 'analytics') loadAnalytics();
+}
+
+// ── Analytics View ──
+function shortUrl(url) {
+    try {
+        const path = new URL(url, 'https://x.com').pathname;
+        return path.length > 35 ? '...' + path.slice(-32) : path || '/';
+    } catch { return url.slice(0, 35); }
+}
+
+function applyGradient(chart, datasetIdx, color) {
+    if (!chart) return;
+    const ctx = chart.canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, chart.height);
+    gradient.addColorStop(0, color + '35');
+    gradient.addColorStop(1, color + '03');
+    chart.data.datasets[datasetIdx].backgroundColor = gradient;
+    chart.update('none');
+}
+
+let analyticsLoaded = {};
+
+async function loadAnalytics() {
+    const src = document.getElementById('analytics-source').value;
+    ['gsc', 'ga4', 'meta', 'social'].forEach(s => {
+        const el = document.getElementById('analytics-' + s);
+        if (el) el.style.display = s === src ? 'block' : 'none';
+    });
+
+    if (analyticsLoaded[src + '_' + currentDomain + '_' + dateStart]) return;
+    analyticsLoaded[src + '_' + currentDomain + '_' + dateStart] = true;
+
+    const qs = `?domain=${currentDomain}&start=${dateStart}&end=${dateEnd}`;
+
+    if (src === 'gsc') {
+        try {
+            const daily = await api(`/api/gsc/daily${qs}`);
+            const labels = daily.map(d => shortDate(d.date));
+            // Clicks & Impressions dual axis area
+            const c1 = makeChart('a-gsc-clicks', {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Clicks', data: daily.map(d => d.clicks), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, pointRadius: 0, hoverRadius: 5, yAxisID: 'y' },
+                        { label: 'Impressions', data: daily.map(d => d.impressions), borderColor: CHART_COLORS.blue, backgroundColor: CHART_COLORS.blueLight, fill: true, tension: 0.4, pointRadius: 0, hoverRadius: 5, yAxisID: 'y1' },
+                    ]
+                },
+                options: { scales: { x: {}, y: { position: 'left' }, y1: { position: 'right', grid: { display: false } } } }
+            });
+            applyGradient(c1, 0, CHART_COLORS.purple);
+            applyGradient(c1, 1, CHART_COLORS.blue);
+
+            // CTR line
+            const ctrData = daily.map(d => d.impressions > 0 ? parseFloat(((d.clicks / d.impressions) * 100).toFixed(2)) : 0);
+            const avgCtr = ctrData.length ? (ctrData.reduce((a, b) => a + b, 0) / ctrData.length).toFixed(2) : 0;
+            const c2 = makeChart('a-gsc-ctr', {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{ label: 'CTR %', data: ctrData, borderColor: CHART_COLORS.teal, backgroundColor: 'transparent', fill: false, tension: 0.4, pointRadius: 0, hoverRadius: 5 }]
+                },
+                options: {
+                    scales: { x: {}, y: {} },
+                    plugins: {
+                        annotation: {
+                            annotations: { avgLine: { type: 'line', yMin: avgCtr, yMax: avgCtr, borderColor: CHART_COLORS.teal + '60', borderDash: [6, 3], borderWidth: 1, label: { display: true, content: 'Avg ' + avgCtr + '%', position: 'end', font: { size: 10 } } } }
+                        }
+                    }
+                }
+            });
+        } catch (e) {}
+        try {
+            const queries = await api(`/api/gsc/queries${qs}&limit=10`);
+            makeChart('a-gsc-queries', {
+                type: 'bar',
+                data: {
+                    labels: queries.map(q => q.query),
+                    datasets: [{ label: 'Clicks', data: queries.map(q => q.clicks), backgroundColor: CHART_COLORS.purple, borderRadius: 6 }]
+                },
+                options: { indexAxis: 'y', scales: { x: {}, y: { ticks: { font: { size: 10 } } } } }
+            });
+        } catch (e) {}
+        try {
+            const pages = await api(`/api/gsc/pages${qs}&limit=10`);
+            makeChart('a-gsc-pages', {
+                type: 'bar',
+                data: {
+                    labels: pages.map(p => shortUrl(p.page)),
+                    datasets: [{ label: 'Clicks', data: pages.map(p => p.clicks), backgroundColor: CHART_COLORS.blue, borderRadius: 6 }]
+                },
+                options: { indexAxis: 'y', scales: { x: {}, y: { ticks: { font: { size: 10 } } } } }
+            });
+        } catch (e) {}
+    }
+
+    if (src === 'ga4') {
+        try {
+            const daily = await api(`/api/ga4/daily${qs}`);
+            const labels = daily.map(d => shortDate(d.date));
+            const c1 = makeChart('a-ga4-sessions', {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Sessions', data: daily.map(d => d.sessions), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, pointRadius: 0, hoverRadius: 5 },
+                        { label: 'Users', data: daily.map(d => d.users || 0), borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.greenLight, fill: true, tension: 0.4, pointRadius: 0, hoverRadius: 5 },
+                    ]
+                },
+                options: { scales: { x: {}, y: {} } }
+            });
+            applyGradient(c1, 0, CHART_COLORS.purple);
+            applyGradient(c1, 1, CHART_COLORS.green);
+        } catch (e) {}
+        try {
+            const summary = await api(`/api/ga4/summary${qs}`);
+            const el = document.getElementById('a-ga4-bounce');
+            if (el) el.textContent = (summary.bounce_rate || 0) + '%';
+        } catch (e) {}
+        try {
+            const sources = await api(`/api/ga4/sources${qs}`);
+            if (sources && sources.length) {
+                const total = sources.reduce((s, r) => s + (r.sessions || 0), 0);
+                makeChart('a-ga4-sources', {
+                    type: 'doughnut',
+                    data: {
+                        labels: sources.map(s => s.channel),
+                        datasets: [{ data: sources.map(s => s.sessions), backgroundColor: CHART_COLORS.palette.slice(0, sources.length) }]
+                    },
+                    options: {
+                        cutout: '70%',
+                        plugins: {
+                            legend: { position: 'right', labels: { font: { size: 10 }, padding: 8, boxWidth: 10 } },
+                            tooltip: { callbacks: { label: function(ctx) {
+                                const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : 0;
+                                return ctx.label + ': ' + formatNum(ctx.parsed) + ' (' + pct + '%)';
+                            }}}
+                        }
+                    }
+                });
+            }
+        } catch (e) {}
+        try {
+            const pages = await api(`/api/ga4/pages${qs}&limit=10`);
+            makeChart('a-ga4-pages', {
+                type: 'bar',
+                data: {
+                    labels: pages.map(p => shortUrl(p.page)),
+                    datasets: [{ label: 'Views', data: pages.map(p => p.views), backgroundColor: CHART_COLORS.purple, borderRadius: 6 }]
+                },
+                options: { indexAxis: 'y', scales: { x: {}, y: { ticks: { font: { size: 10 } } } } }
+            });
+        } catch (e) {}
+    }
+
+    if (src === 'meta') {
+        try {
+            const status = await api('/api/meta/status');
+            if (!status.marketing) return;
+            const accounts = await api('/api/meta/accounts');
+            if (!accounts || !accounts.length) return;
+            const acctId = accounts[0].id;
+            const mqs = `?ad_account=${acctId}&start=${dateStart}&end=${dateEnd}`;
+            const campaigns = await api(`/api/meta/campaigns${mqs}`);
+            if (campaigns && campaigns.length) {
+                makeChart('a-meta-spend', {
+                    type: 'bar',
+                    data: {
+                        labels: campaigns.map(c => (c.name || '').slice(0, 20)),
+                        datasets: [{ label: 'Spend ($)', data: campaigns.map(c => parseFloat(c.spend) || 0), backgroundColor: CHART_COLORS.purple, borderRadius: 6 }]
+                    },
+                    options: { scales: { x: { ticks: { maxTicksLimit: 6 } }, y: {} } }
+                });
+                makeChart('a-meta-clicks', {
+                    type: 'bar',
+                    data: {
+                        labels: campaigns.map(c => (c.name || '').slice(0, 20)),
+                        datasets: [{ label: 'Clicks', data: campaigns.map(c => parseInt(c.clicks) || 0), backgroundColor: CHART_COLORS.blue, borderRadius: 6 }]
+                    },
+                    options: { scales: { x: { ticks: { maxTicksLimit: 6 } }, y: {} } }
+                });
+            }
+            try {
+                const daily = await api(`/api/meta/daily${mqs}`);
+                if (daily && daily.length) {
+                    const c = makeChart('a-meta-daily', {
+                        type: 'line',
+                        data: {
+                            labels: daily.map(d => shortDate(d.date)),
+                            datasets: [{ label: 'Spend ($)', data: daily.map(d => parseFloat(d.spend) || 0), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, pointRadius: 0, hoverRadius: 5 }]
+                        },
+                        options: { scales: { x: {}, y: {} } }
+                    });
+                    applyGradient(c, 0, CHART_COLORS.purple);
+                }
+            } catch (e) {}
+        } catch (e) {}
+    }
+
+    if (src === 'social') {
+        try {
+            const data = await api(`/api/social/trend?period=weekly&periods=5`);
+            if (data && data.length) {
+                const last = data[data.length - 1];
+                const fbF = document.getElementById('a-social-fb-followers');
+                const igF = document.getElementById('a-social-ig-followers');
+                if (fbF) fbF.textContent = formatNum((last.fb && last.fb.followers) || 0);
+                if (igF) igF.textContent = formatNum((last.ig && last.ig.followers) || 0);
+
+                const labels = data.map(p => p.period);
+                makeChart('a-social-engagement', {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: 'Facebook', data: data.map(p => (p.fb && p.fb.engagements) || 0), backgroundColor: '#1877F2', borderRadius: 6 },
+                            { label: 'Instagram', data: data.map(p => (p.ig && p.ig.engagements) || 0), backgroundColor: '#E4405F', borderRadius: 6 },
+                        ]
+                    },
+                    options: { scales: { x: {}, y: {} } }
+                });
+                const c3 = makeChart('a-social-reach', {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: 'Facebook', data: data.map(p => (p.fb && p.fb.reach) || 0), borderColor: '#1877F2', backgroundColor: 'rgba(24,119,242,0.08)', fill: true, tension: 0.4, pointRadius: 0, hoverRadius: 5 },
+                            { label: 'Instagram', data: data.map(p => (p.ig && p.ig.reach) || 0), borderColor: '#E4405F', backgroundColor: 'rgba(232,64,95,0.08)', fill: true, tension: 0.4, pointRadius: 0, hoverRadius: 5 },
+                        ]
+                    },
+                    options: { scales: { x: {}, y: {} } }
+                });
+                makeChart('a-social-posts', {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: 'Facebook', data: data.map(p => (p.fb && p.fb.posts_published) || 0), backgroundColor: '#1877F2', borderRadius: 6 },
+                            { label: 'Instagram', data: data.map(p => (p.ig && p.ig.posts_published) || 0), backgroundColor: '#E4405F', borderRadius: 6 },
+                        ]
+                    },
+                    options: { scales: { x: {}, y: {} } }
+                });
+            }
+        } catch (e) {}
+    }
 }
 
 function switchDashTab(tab) {
@@ -649,6 +896,7 @@ async function uploadLinkedIn() {
 }
 
 async function loadAll() {
+    analyticsLoaded = {};
     await Promise.allSettled([loadGSC(), loadGA4(), loadMeta()]);
     // Overview charts
     try {
