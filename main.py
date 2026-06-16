@@ -705,7 +705,10 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
 
 # ── Content Calendar ─────────────────────────────────────────────────────────
 
-import ai as ai_mod
+try:
+    import ai as ai_mod
+except Exception:
+    ai_mod = None
 from fastapi import Body
 from pydantic import BaseModel
 
@@ -731,15 +734,17 @@ CAL_SYSTEM = (
 
 @app.post("/api/calendar/generate")
 def calendar_generate(req: CalendarRequest):
+    if not ai_mod:
+        raise HTTPException(500, "AI module failed to load")
     if not req.month:
         raise HTTPException(400, "month required (YYYY-MM)")
     domain_label = DOMAINS.get(req.domain, {}).get("label", req.domain)
-    sys = CAL_SYSTEM.format(domain=domain_label, month=req.month)
+    sys_prompt = CAL_SYSTEM.format(domain=domain_label, month=req.month)
     user = f"Generate the calendar for {domain_label}, month {req.month}."
     if req.context:
         user += f"\n\nAdditional context:\n{req.context}"
     try:
-        items = ai_mod.chat_json(sys, user, max_tokens=4000)
+        items = ai_mod.chat_json(sys_prompt, user, max_tokens=4000)
         if isinstance(items, dict) and "items" in items:
             items = items["items"]
         _calendars[f"{req.domain}:{req.month}"] = items
@@ -788,10 +793,10 @@ async def calendar_upload(file: UploadFile = File(...), domain: str = Query("rh"
         raise HTTPException(422, f"Failed to parse file: {e}")
     text = text[:8000]
     domain_label = DOMAINS.get(domain, {}).get("label", domain)
-    sys = CAL_SYSTEM.format(domain=domain_label, month=month)
+    sys_prompt = CAL_SYSTEM.format(domain=domain_label, month=month)
     user = f"Generate the calendar for {domain_label}, month {month}, using the following source document as context:\n\n{text}"
     try:
-        items = ai_mod.chat_json(sys, user, max_tokens=4000)
+        items = ai_mod.chat_json(sys_prompt, user, max_tokens=4000)
         if isinstance(items, dict) and "items" in items:
             items = items["items"]
         _calendars[f"{domain}:{month}"] = items
@@ -812,11 +817,13 @@ IDEAS_SYSTEM = (
 
 @app.get("/api/ideas/generate")
 def ideas_generate(domain: str = "rh", category: str = "all"):
+    if not ai_mod:
+        raise HTTPException(500, "AI module failed to load")
     domain_label = DOMAINS.get(domain, {}).get("label", domain)
-    sys = IDEAS_SYSTEM.format(category=category)
+    sys_prompt = IDEAS_SYSTEM.format(category=category)
     user = f"Generate 10 creative content ideas for {domain_label}, category: {category}."
     try:
-        items = ai_mod.chat_json(sys, user, max_tokens=3000)
+        items = ai_mod.chat_json(sys_prompt, user, max_tokens=3000)
         if isinstance(items, dict) and "items" in items:
             items = items["items"]
         _ideas_state["available"] = len(items) if isinstance(items, list) else 0
