@@ -3,7 +3,7 @@ import requests
 from config import OPENROUTER_API_KEY
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "anthropic/claude-sonnet-4.5"
+MODEL = "anthropic/claude-sonnet-4-6"
 
 
 def _headers():
