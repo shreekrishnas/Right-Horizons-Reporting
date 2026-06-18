@@ -39,13 +39,15 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
         "page_likes": page.get("fan_count", 0),
     }
 
-    # v21.0 valid metrics — try total_over_range for aggregate metrics
+    # Try each metric individually with total_over_range
     _metrics_total = [
         "page_post_engagements",
         "page_views_total",
         "page_video_views",
         "page_impressions",
-        "page_reach",
+        "page_impressions_unique",   # unique reach (replaces deprecated page_reach)
+        "page_consumptions",          # link/content clicks
+        "page_consumptions_unique",
     ]
     for metric in _metrics_total:
         try:
@@ -59,7 +61,7 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
         except Exception:
             pass
 
-    # page_fan_adds: use day period and sum daily values (total_over_range deprecated)
+    # page_fan_adds: day period, sum daily values
     try:
         data = _get(f"/{page_id}/insights", token, {
             "metric": "page_fan_adds", "period": "day",
@@ -86,9 +88,19 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
     except Exception:
         result["reels_stories"] = 0
 
-    reach = result.get("page_reach") or result.get("page_impressions", 0)
+    # Reach: unique impressions is the closest v21.0 equivalent to reach
+    reach = (
+        result.get("page_impressions_unique") or
+        result.get("page_impressions") or
+        0
+    )
     eng = result.get("page_post_engagements", 0)
     new_followers = result.get("page_fan_adds", 0)
+    link_clicks = (
+        result.get("page_consumptions_unique") or
+        result.get("page_consumptions") or
+        0
+    )
 
     result["engagement_rate"] = round((eng / reach * 100), 2) if reach > 0 else 0
     result["new_followers"] = new_followers
@@ -96,7 +108,7 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
     result["engagements"] = eng
     result["views"] = result.get("page_views_total", 0)
     result["video_views"] = result.get("page_video_views", 0)
-    result["link_clicks"] = result.get("page_consumptions", 0)
+    result["link_clicks"] = link_clicks
     result["profile_visits"] = result.get("page_views_total", 0)
     result["saves_shares"] = 0
 
@@ -166,13 +178,27 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
                 "since": start, "until": end,
             })
             for item in data.get("data", []):
-                val = item.get("total_value", {}).get("value", 0)
-                if metric == "follows_and_unfollows" and isinstance(val, dict):
-                    result["new_followers"] = val.get("follows", 0) - val.get("unfollows", 0)
-                elif metric == "follows_and_unfollows":
-                    result["new_followers"] = val
+                tv = item.get("total_value", {})
+                val = tv.get("value", 0)
+                if metric == "follows_and_unfollows":
+                    # value may be net int, or breakdowns may contain follows/unfollows
+                    follows = unfollows = 0
+                    for bd in tv.get("breakdowns", []):
+                        for r in bd.get("results", []):
+                            dims = r.get("dimension_values", [])
+                            v = r.get("value", 0)
+                            if "FOLLOW" in dims:
+                                follows += v
+                            elif "UNFOLLOW" in dims:
+                                unfollows += v
+                    if follows or unfollows:
+                        result["new_followers"] = follows - unfollows
+                    elif isinstance(val, dict):
+                        result["new_followers"] = val.get("follows", 0) - val.get("unfollows", 0)
+                    else:
+                        result["new_followers"] = val
                 else:
-                    result[item["name"]] = val
+                    result[item["name"]] = val if not isinstance(val, dict) else 0
         except Exception:
             if metric == "follows_and_unfollows":
                 result.setdefault("new_followers", 0)
@@ -186,18 +212,25 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
     media = [m for m in all_media if start <= m.get("timestamp", "")[:10] <= end]
 
     result["posts_published"] = len(media)
-    result["reels_stories"] = sum(1 for m in media if m.get("media_type") in ("VIDEO", "REELS"))
+    video_media = [m for m in media if m.get("media_type") in ("VIDEO", "REELS", "REEL")]
+    result["reels_stories"] = len(video_media)
     total_likes = sum(m.get("like_count", 0) for m in media)
     total_comments = sum(m.get("comments_count", 0) for m in media)
     result["engagements"] = result.get("accounts_engaged", 0) or (total_likes + total_comments)
-    result["video_views"] = result.get("impressions", 0)
+
+    reach = result.get("reach", 0)
+    impressions = result.get("impressions", 0)
+
+    # views = impressions if available, otherwise reach (both measure content visibility)
+    result["views"] = impressions if impressions > 0 else reach
+    # video_views: use impressions proportional to video posts, or reels count as proxy
+    result["video_views"] = impressions if (impressions > 0 and len(video_media) > 0) else 0
     result["link_clicks"] = result.get("website_clicks", 0)
     result["saves_shares"] = 0
 
-    reach = result.get("reach", 0)
     eng = result.get("engagements", 0)
     result["engagement_rate"] = round((eng / reach * 100), 2) if reach > 0 else 0
-    result["views"] = result.get("impressions", 0)
+    result["reach"] = reach
 
     return result
 
