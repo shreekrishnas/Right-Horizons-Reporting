@@ -22,11 +22,7 @@ async function api(path, opts) {
 
 function formatNum(n) {
     if (n === undefined || n === null) return '-';
-    if (typeof n === 'number') {
-        if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-        if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
-        return n.toLocaleString();
-    }
+    if (typeof n === 'number') return n.toLocaleString('en-IN');
     return n;
 }
 
