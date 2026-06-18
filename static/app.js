@@ -639,10 +639,242 @@ async function loadMeta() {
     }
 }
 
+let socialView = 'table';
+let socialCalYear, socialCalMonth;
+let socialCalFbPosts = [], socialCalIgMedia = [];
+
+function switchSocialView(view) {
+    socialView = view;
+    document.querySelectorAll('[data-social-view]').forEach(b => b.classList.toggle('active', b.dataset.socialView === view));
+    document.getElementById('social-table-view').style.display = view === 'table' ? '' : 'none';
+    document.getElementById('social-calendar-view').style.display = view === 'calendar' ? '' : 'none';
+    document.getElementById('social-period-toggle').style.display = view === 'table' ? '' : 'none';
+    if (view === 'calendar') loadSocialCalendar();
+}
+
 function switchSocialPeriod(period) {
     socialPeriod = period;
     document.querySelectorAll('[data-social-period]').forEach(b => b.classList.toggle('active', b.dataset.socialPeriod === period));
     loadSocial();
+}
+
+async function loadSocialCalendar() {
+    // Default to the month of dateStart
+    if (!socialCalYear) {
+        const d = new Date(dateStart || new Date());
+        socialCalYear = d.getFullYear();
+        socialCalMonth = d.getMonth(); // 0-indexed
+    }
+    renderSocialCalendarShell();
+    await fetchAndRenderCalendar();
+}
+
+async function socialCalNav(dir) {
+    socialCalMonth += dir;
+    if (socialCalMonth > 11) { socialCalMonth = 0; socialCalYear++; }
+    if (socialCalMonth < 0) { socialCalMonth = 11; socialCalYear--; }
+    document.getElementById('social-cal-detail').style.display = 'none';
+    await fetchAndRenderCalendar();
+}
+
+async function fetchAndRenderCalendar() {
+    const firstDay = new Date(socialCalYear, socialCalMonth, 1);
+    const lastDay = new Date(socialCalYear, socialCalMonth + 1, 0);
+    const mStart = firstDay.toISOString().split('T')[0];
+    const mEnd = lastDay.toISOString().split('T')[0];
+
+    const label = firstDay.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    document.getElementById('social-cal-month-label').textContent = label;
+
+    // Fetch FB posts & IG media for this month
+    socialCalFbPosts = [];
+    socialCalIgMedia = [];
+    try {
+        const posts = await api(`/api/social/page-posts?start=${mStart}&end=${mEnd}&limit=100`);
+        socialCalFbPosts = posts || [];
+    } catch(e) {}
+    try {
+        const igResp = await api('/api/social/ig-account');
+        if (igResp && igResp.ig_id) {
+            const media = await api(`/api/social/ig-media?ig_id=${igResp.ig_id}&limit=100`);
+            socialCalIgMedia = (media || []).filter(m => {
+                const d = (m.timestamp || '').slice(0, 10);
+                return d >= mStart && d <= mEnd;
+            });
+        }
+    } catch(e) {}
+
+    renderCalendarGrid(mStart, mEnd);
+    renderCalendarSummary(mStart, mEnd);
+}
+
+function renderSocialCalendarShell() {
+    // already in HTML
+}
+
+function renderCalendarGrid(mStart, mEnd) {
+    const grid = document.getElementById('social-cal-grid');
+    if (!grid) return;
+
+    const year = socialCalYear, month = socialCalMonth;
+    const firstDow = new Date(year, month, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date().toISOString().split('T')[0];
+
+    // Map posts by date
+    const fbByDate = {};
+    socialCalFbPosts.forEach(p => {
+        const d = (p.created_time || '').slice(0, 10);
+        if (!fbByDate[d]) fbByDate[d] = [];
+        fbByDate[d].push(p);
+    });
+    const igByDate = {};
+    socialCalIgMedia.forEach(m => {
+        const d = (m.timestamp || '').slice(0, 10);
+        if (!igByDate[d]) igByDate[d] = [];
+        igByDate[d].push(m);
+    });
+
+    let html = '';
+    // Empty cells before first day
+    for (let i = 0; i < firstDow; i++) {
+        html += `<div style="min-height:80px; border-radius:8px; background:var(--glass-bg); opacity:0.3;"></div>`;
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const isToday = dateStr === today;
+        const fbPosts = fbByDate[dateStr] || [];
+        const igPosts = igByDate[dateStr] || [];
+        const hasPosts = fbPosts.length > 0 || igPosts.length > 0;
+
+        const todayBorder = isToday ? 'border:2px solid var(--accent);' : 'border:1px solid var(--border-color);';
+        const activeBg = hasPosts ? 'background:var(--glass-bg-hover,rgba(124,58,237,0.06));' : 'background:var(--glass-bg);';
+
+        html += `<div onclick="socialCalSelectDay('${dateStr}')"
+            style="min-height:80px; border-radius:8px; ${todayBorder} ${activeBg}
+            padding:0.45rem; cursor:${hasPosts ? 'pointer' : 'default'};
+            transition:all 0.15s; position:relative; overflow:hidden;"
+            onmouseenter="if(${hasPosts}) this.style.transform='translateY(-2px)'"
+            onmouseleave="this.style.transform=''">
+            <div style="font-size:0.75rem; font-weight:${isToday ? '800' : '600'};
+                color:${isToday ? 'var(--accent)' : 'var(--text-secondary)'};
+                margin-bottom:0.35rem;">${day}</div>`;
+
+        // FB badges
+        fbPosts.slice(0, 2).forEach(p => {
+            const snippet = (p.message || 'Post').slice(0, 22);
+            html += `<div title="${esc(p.message || '')}"
+                style="background:#1877F2; color:#fff; border-radius:4px;
+                font-size:0.6rem; font-weight:600; padding:2px 5px;
+                margin-bottom:2px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">
+                ${esc(snippet)}</div>`;
+        });
+        if (fbPosts.length > 2) {
+            html += `<div style="font-size:0.6rem; color:#1877F2; font-weight:700; margin-bottom:2px;">+${fbPosts.length - 2} more FB</div>`;
+        }
+
+        // IG badges
+        igPosts.slice(0, 2).forEach(m => {
+            const snippet = (m.caption || m.media_type || 'Post').slice(0, 22);
+            html += `<div title="${esc(m.caption || '')}"
+                style="background:#E4405F; color:#fff; border-radius:4px;
+                font-size:0.6rem; font-weight:600; padding:2px 5px;
+                margin-bottom:2px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">
+                ${esc(snippet)}</div>`;
+        });
+        if (igPosts.length > 2) {
+            html += `<div style="font-size:0.6rem; color:#E4405F; font-weight:700;">+${igPosts.length - 2} more IG</div>`;
+        }
+
+        html += `</div>`;
+    }
+    grid.innerHTML = html;
+}
+
+function socialCalSelectDay(dateStr) {
+    const panel = document.getElementById('social-cal-detail');
+    const dateLabel = document.getElementById('social-cal-detail-date');
+    const postsEl = document.getElementById('social-cal-detail-posts');
+    if (!panel) return;
+
+    const fbByDate = {};
+    socialCalFbPosts.forEach(p => {
+        const d = (p.created_time || '').slice(0, 10);
+        if (!fbByDate[d]) fbByDate[d] = [];
+        fbByDate[d].push(p);
+    });
+    const igByDate = {};
+    socialCalIgMedia.forEach(m => {
+        const d = (m.timestamp || '').slice(0, 10);
+        if (!igByDate[d]) igByDate[d] = [];
+        igByDate[d].push(m);
+    });
+
+    const fbPosts = fbByDate[dateStr] || [];
+    const igPosts = igByDate[dateStr] || [];
+    if (fbPosts.length === 0 && igPosts.length === 0) return;
+
+    const dt = new Date(dateStr + 'T00:00:00');
+    dateLabel.textContent = dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+    let html = '';
+    fbPosts.forEach(p => {
+        html += `<div style="border-left:3px solid #1877F2; padding:0.75rem; border-radius:0 8px 8px 0; background:rgba(24,119,242,0.06);">
+            <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.4rem;">
+                <span style="width:8px;height:8px;border-radius:50%;background:#1877F2;flex-shrink:0;"></span>
+                <span style="font-size:0.7rem; font-weight:700; color:#1877F2; letter-spacing:0.04em;">FACEBOOK</span>
+                ${p.permalink ? `<a href="${p.permalink}" target="_blank" style="margin-left:auto; font-size:0.68rem; color:var(--text-muted); text-decoration:none;">View →</a>` : ''}
+            </div>
+            <div style="font-size:0.82rem; color:var(--text-primary); line-height:1.5; margin-bottom:0.5rem;">${esc(p.message || '(no caption)')}</div>
+            <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                <span style="font-size:0.7rem; color:var(--text-muted);">👍 ${p.post_engaged_users || 0} engaged</span>
+                <span style="font-size:0.7rem; color:var(--text-muted);">🔁 ${p.shares || 0} shares</span>
+                <span style="font-size:0.7rem; color:var(--text-muted);">👁 ${p.post_impressions || 0} impressions</span>
+            </div>
+        </div>`;
+    });
+    igPosts.forEach(m => {
+        html += `<div style="border-left:3px solid #E4405F; padding:0.75rem; border-radius:0 8px 8px 0; background:rgba(228,64,95,0.06);">
+            <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.4rem;">
+                <span style="width:8px;height:8px;border-radius:50%;background:#E4405F;flex-shrink:0;"></span>
+                <span style="font-size:0.7rem; font-weight:700; color:#E4405F; letter-spacing:0.04em;">INSTAGRAM</span>
+                <span style="margin-left:auto; font-size:0.68rem; color:var(--text-muted);">${m.media_type || ''}</span>
+            </div>
+            <div style="font-size:0.82rem; color:var(--text-primary); line-height:1.5; margin-bottom:0.5rem;">${esc((m.caption || '(no caption)').slice(0, 300))}</div>
+            <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                <span style="font-size:0.7rem; color:var(--text-muted);">❤️ ${m.like_count || 0} likes</span>
+                <span style="font-size:0.7rem; color:var(--text-muted);">💬 ${m.comments_count || 0} comments</span>
+            </div>
+        </div>`;
+    });
+
+    postsEl.innerHTML = html;
+    panel.style.display = '';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderCalendarSummary(mStart, mEnd) {
+    const el = document.getElementById('social-cal-summary');
+    if (!el) return;
+    const fbTotal = socialCalFbPosts.length;
+    const igTotal = socialCalIgMedia.length;
+    const fbEng = socialCalFbPosts.reduce((s, p) => s + (p.post_engaged_users || 0), 0);
+    const igLikes = socialCalIgMedia.reduce((s, m) => s + (m.like_count || 0), 0);
+    const igComments = socialCalIgMedia.reduce((s, m) => s + (m.comments_count || 0), 0);
+
+    const stat = (label, val, color) => `
+        <div class="glass-card-static" style="padding:1rem; text-align:center;">
+            <div style="font-size:1.5rem; font-weight:800; color:${color};">${val}</div>
+            <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); margin-top:0.25rem; letter-spacing:0.04em;">${label}</div>
+        </div>`;
+
+    el.innerHTML =
+        stat('FB Posts', fbTotal, '#1877F2') +
+        stat('IG Posts', igTotal, '#E4405F') +
+        stat('FB Engagements', fbEng, '#1877F2') +
+        stat('IG Likes', igLikes, '#E4405F') +
+        stat('IG Comments', igComments, '#E4405F');
 }
 
 function switchSEOPeriod(period) {
@@ -1278,6 +1510,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         dateStart = e.target.value;
         activePreset = '';
         document.querySelectorAll('#date-range-group .dr-btn').forEach(b => b.classList.remove('active'));
+        // Reset calendar to new date's month
+        if (dateStart) { const d = new Date(dateStart); socialCalYear = d.getFullYear(); socialCalMonth = d.getMonth(); }
         loadAll();
     });
     document.getElementById('date-end').addEventListener('change', (e) => {

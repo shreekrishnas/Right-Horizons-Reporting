@@ -39,19 +39,18 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
         "page_likes": page.get("fan_count", 0),
     }
 
-    # v21.0 valid metrics — try each individually to get what works
+    # v21.0 valid metrics — try total_over_range for aggregate metrics
     _metrics_total = [
-        ("page_post_engagements", "total_over_range"),
-        ("page_views_total", "total_over_range"),
-        ("page_video_views", "total_over_range"),
-        ("page_fan_adds", "total_over_range"),
-        ("page_impressions", "total_over_range"),
-        ("page_reach", "total_over_range"),
+        "page_post_engagements",
+        "page_views_total",
+        "page_video_views",
+        "page_impressions",
+        "page_reach",
     ]
-    for metric, period in _metrics_total:
+    for metric in _metrics_total:
         try:
             data = _get(f"/{page_id}/insights", token, {
-                "metric": metric, "period": period,
+                "metric": metric, "period": "total_over_range",
                 "since": start, "until": end,
             })
             for item in data.get("data", []):
@@ -59,6 +58,17 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
                 result[item["name"]] = val if not isinstance(val, dict) else sum(val.values())
         except Exception:
             pass
+
+    # page_fan_adds: use day period and sum daily values (total_over_range deprecated)
+    try:
+        data = _get(f"/{page_id}/insights", token, {
+            "metric": "page_fan_adds", "period": "day",
+            "since": start, "until": end,
+        })
+        for item in data.get("data", []):
+            result["page_fan_adds"] = sum(v.get("value", 0) for v in item.get("values", []))
+    except Exception:
+        result.setdefault("page_fan_adds", 0)
 
     try:
         posts_data = _get(f"/{page_id}/posts", token, {
