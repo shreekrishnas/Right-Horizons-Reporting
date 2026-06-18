@@ -1,6 +1,9 @@
 import io
 import traceback
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
+_IST = timezone(timedelta(hours=5, minutes=30))
+def _today_ist() -> date:
+    return datetime.now(_IST).date()
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -21,7 +24,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 def _dates(start: str, end: str):
-    today = date.today()
+    today = _today_ist()
     if not end:
         end = today.isoformat()
     if not start:
@@ -254,7 +257,7 @@ def social_trend(period: str = "weekly", periods: int = 5):
     if not page_id:
         raise HTTPException(400, "META_PAGE_ID not configured")
 
-    today = date.today()
+    today = _today_ist()
     days_per = 7 if period == "weekly" else 30
     ig_id = None
     try:
@@ -387,7 +390,7 @@ def seo_trend(domain: str = "rh", period: str = "weekly", periods: int = 5):
     except Exception as e:
         raise HTTPException(502, f"Auth error: {e}")
 
-    today = date.today()
+    today = _today_ist()
     days_per = 7 if period == "weekly" else 30
     results = []
     for i in range(periods):
@@ -567,7 +570,7 @@ def meta_exchange_token(token: str = ""):
 
 @app.get("/api/reports/generate")
 def reports_generate(period: str = "weekly", domain: str = "rh", start: str = "", end: str = ""):
-    today = date.today()
+    today = _today_ist()
     if not end:
         end = today.isoformat()
     if not start:
@@ -614,7 +617,7 @@ def reports_generate(period: str = "weekly", domain: str = "rh", start: str = ""
 
 @app.get("/api/reports/export")
 def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", end: str = "", format: str = "excel"):
-    today = date.today()
+    today = _today_ist()
     if not end:
         end = today.isoformat()
     if not start:

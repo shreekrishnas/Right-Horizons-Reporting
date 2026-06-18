@@ -53,20 +53,31 @@ const CHART_COLORS = {
     palette: ['#7C3AED', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#8B5CF6', '#06B6D4']
 };
 
+// Return today's date string in IST (UTC+5:30)
+function todayIST() {
+    const now = new Date();
+    const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+    return ist.toISOString().split('T')[0];
+}
+function offsetIST(baseIST, days) {
+    const d = new Date(baseIST + 'T00:00:00+05:30');
+    d.setDate(d.getDate() + days);
+    const ist = new Date(d.getTime() + (5.5 * 60 * 60 * 1000));
+    return ist.toISOString().split('T')[0];
+}
+
 function setDates(preset) {
-    const today = new Date();
-    const end = new Date(today - 86400000);
-    const endStr = end.toISOString().split('T')[0];
+    const end = offsetIST(todayIST(), -1);
     let startDate;
     switch (preset) {
-        case '7d': startDate = new Date(end - 7 * 86400000); break;
-        case '28d': startDate = new Date(end - 28 * 86400000); break;
-        case '3m': startDate = new Date(end - 90 * 86400000); break;
-        case '6m': startDate = new Date(end - 180 * 86400000); break;
-        default: startDate = new Date(end - 28 * 86400000);
+        case '7d': startDate = offsetIST(end, -7); break;
+        case '28d': startDate = offsetIST(end, -28); break;
+        case '3m': startDate = offsetIST(end, -90); break;
+        case '6m': startDate = offsetIST(end, -180); break;
+        default: startDate = offsetIST(end, -28);
     }
-    dateStart = startDate.toISOString().split('T')[0];
-    dateEnd = endStr;
+    dateStart = startDate;
+    dateEnd = end;
     const ds = document.getElementById('date-start'); if (ds) ds.value = dateStart;
     const de = document.getElementById('date-end'); if (de) de.value = dateEnd;
     activePreset = preset;
@@ -657,9 +668,9 @@ function switchSocialPeriod(period) {
 async function loadSocialCalendar() {
     // Default to the month of dateStart
     if (!socialCalYear) {
-        const d = new Date(dateStart || new Date());
-        socialCalYear = d.getFullYear();
-        socialCalMonth = d.getMonth(); // 0-indexed
+        const ds = dateStart || todayIST();
+        socialCalYear = parseInt(ds.slice(0, 4));
+        socialCalMonth = parseInt(ds.slice(5, 7)) - 1;
     }
     renderSocialCalendarShell();
     await fetchAndRenderCalendar();
@@ -674,10 +685,10 @@ async function socialCalNav(dir) {
 }
 
 async function fetchAndRenderCalendar() {
-    const firstDay = new Date(socialCalYear, socialCalMonth, 1);
-    const lastDay = new Date(socialCalYear, socialCalMonth + 1, 0);
-    const mStart = firstDay.toISOString().split('T')[0];
-    const mEnd = lastDay.toISOString().split('T')[0];
+    const mm = String(socialCalMonth + 1).padStart(2, '0');
+    const mStart = `${socialCalYear}-${mm}-01`;
+    const lastDayNum = new Date(socialCalYear, socialCalMonth + 1, 0).getDate();
+    const mEnd = `${socialCalYear}-${mm}-${String(lastDayNum).padStart(2, '0')}`;
 
     const label = firstDay.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     document.getElementById('social-cal-month-label').textContent = label;
@@ -715,7 +726,7 @@ function renderCalendarGrid(mStart, mEnd) {
     const year = socialCalYear, month = socialCalMonth;
     const firstDow = new Date(year, month, 1).getDay(); // 0=Sun
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayIST();
 
     // Map posts by date
     const fbByDate = {};
@@ -1534,13 +1545,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (el) el.textContent = valImg.files[0]?.name || '';
     });
 
-    // Default report dates
-    const today = new Date();
-    const monthAgo = new Date(today - 30 * 86400000);
-    document.getElementById('rep-end').value = today.toISOString().split('T')[0];
-    document.getElementById('rep-start').value = monthAgo.toISOString().split('T')[0];
+    // Default report dates (IST)
+    const todayStr = todayIST();
+    document.getElementById('rep-end').value = todayStr;
+    document.getElementById('rep-start').value = offsetIST(todayStr, -30);
     // Default calendar month
-    document.getElementById('cal-month').value = today.toISOString().slice(0, 7);
+    document.getElementById('cal-month').value = todayStr.slice(0, 7);
 
     const loader = document.getElementById('page-loader');
     if (loader) { loader.classList.add('fade'); setTimeout(() => loader.remove(), 400); }
