@@ -97,29 +97,29 @@ def get_page_posts(token: str, page_id: str, start: str, end: str, limit: int = 
     data = _get(
         f"/{page_id}/posts", token,
         {
-            "fields": "id,message,created_time,shares,permalink_url",
+            "fields": "id,message,created_time,shares,permalink_url,"
+                       "likes.summary(true).limit(0),"
+                       "comments.summary(true).limit(0),"
+                       "reactions.summary(true).limit(0)",
             "since": start, "until": end, "limit": limit,
         },
     )
     posts = []
     for p in data.get("data", []):
+        likes = p.get("likes", {}).get("summary", {}).get("total_count", 0)
+        comments = p.get("comments", {}).get("summary", {}).get("total_count", 0)
+        reactions = p.get("reactions", {}).get("summary", {}).get("total_count", 0)
+        shares = p.get("shares", {}).get("count", 0)
         row = {
             "id": p["id"],
             "message": (p.get("message") or "")[:120],
             "created_time": p.get("created_time", ""),
             "permalink": p.get("permalink_url", ""),
-            "shares": p.get("shares", {}).get("count", 0),
+            "shares": shares,
+            "post_impressions": reactions + shares,
+            "post_engaged_users": likes + comments + shares,
+            "post_clicks": reactions,
         }
-        try:
-            ins = _get(
-                f"/{p['id']}/insights", token,
-                {"metric": "post_impressions,post_engaged_users,post_clicks"},
-            )
-            for item in ins.get("data", []):
-                val = item.get("values", [{}])[0].get("value", 0)
-                row[item["name"]] = val
-        except Exception:
-            row.update({"post_impressions": 0, "post_engaged_users": 0, "post_clicks": 0})
         posts.append(row)
     return posts
 
@@ -144,48 +144,36 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
         "total_media": profile.get("media_count", 0),
     }
 
-    try:
-        data = _get(f"/{ig_id}/insights", token, {
-            "metric": "impressions,reach,accounts_engaged",
-            "period": "day", "metric_type": "total_value",
-            "since": start, "until": end,
-        })
-        for item in data.get("data", []):
-            result[item["name"]] = item.get("total_value", {}).get("value", 0)
-    except Exception:
-        result.update({"impressions": 0, "reach": 0, "accounts_engaged": 0})
-
-    try:
-        data = _get(f"/{ig_id}/insights", token, {
-            "metric": "follows_and_unfollows",
-            "period": "day", "metric_type": "total_value",
-            "since": start, "until": end,
-        })
-        for item in data.get("data", []):
-            val = item.get("total_value", {}).get("value", 0)
-            if isinstance(val, dict):
-                result["new_followers"] = val.get("follows", 0) - val.get("unfollows", 0)
+    _ig_metrics = [
+        "impressions", "reach", "accounts_engaged",
+        "follows_and_unfollows", "profile_views", "website_clicks",
+    ]
+    for metric in _ig_metrics:
+        try:
+            data = _get(f"/{ig_id}/insights", token, {
+                "metric": metric, "period": "day",
+                "metric_type": "total_value",
+                "since": start, "until": end,
+            })
+            for item in data.get("data", []):
+                val = item.get("total_value", {}).get("value", 0)
+                if metric == "follows_and_unfollows" and isinstance(val, dict):
+                    result["new_followers"] = val.get("follows", 0) - val.get("unfollows", 0)
+                elif metric == "follows_and_unfollows":
+                    result["new_followers"] = val
+                else:
+                    result[item["name"]] = val
+        except Exception:
+            if metric == "follows_and_unfollows":
+                result.setdefault("new_followers", 0)
             else:
-                result["new_followers"] = val
-    except Exception:
-        result["new_followers"] = 0
+                result.setdefault(metric, 0)
 
-    try:
-        data = _get(f"/{ig_id}/insights", token, {
-            "metric": "profile_views,website_clicks",
-            "period": "day", "metric_type": "total_value",
-            "since": start, "until": end,
-        })
-        for item in data.get("data", []):
-            result[item["name"]] = item.get("total_value", {}).get("value", 0)
-    except Exception:
-        result.setdefault("profile_views", 0)
-        result.setdefault("website_clicks", 0)
-
-    media = _safe(lambda: _get(f"/{ig_id}/media", token, {
+    all_media = _safe(lambda: _get(f"/{ig_id}/media", token, {
         "fields": "id,timestamp,media_type,like_count,comments_count",
-        "since": start, "until": end, "limit": 100,
+        "limit": 100,
     }).get("data", []), [])
+    media = [m for m in all_media if start <= m.get("timestamp", "")[:10] <= end]
 
     result["posts_published"] = len(media)
     result["reels_stories"] = sum(1 for m in media if m.get("media_type") in ("VIDEO", "REELS"))
