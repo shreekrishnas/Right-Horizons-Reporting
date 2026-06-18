@@ -39,28 +39,38 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
         "page_likes": page.get("fan_count", 0),
     }
 
-    range_metrics = "page_impressions,page_post_engagements,page_views_total,page_video_views,page_consumptions"
-    try:
-        data = _get(f"/{page_id}/insights", token, {
-            "metric": range_metrics, "period": "total_over_range",
-            "since": start, "until": end,
-        })
-        for item in data.get("data", []):
-            result[item["name"]] = item.get("values", [{}])[0].get("value", 0)
-    except Exception:
-        pass
+    # Try current metrics first (v19+), fall back to legacy
+    for metrics_set in [
+        "page_impressions_unique,page_post_engagements,page_views_total",
+        "page_reach,page_engaged_users,page_views_total",
+        "page_impressions,page_post_engagements,page_views_total",
+    ]:
+        try:
+            data = _get(f"/{page_id}/insights", token, {
+                "metric": metrics_set, "period": "total_over_range",
+                "since": start, "until": end,
+            })
+            for item in data.get("data", []):
+                result[item["name"]] = item.get("values", [{}])[0].get("value", 0)
+            break
+        except Exception:
+            continue
 
-    day_metrics = "page_fan_adds,page_engaged_users"
-    try:
-        data = _get(f"/{page_id}/insights", token, {
-            "metric": day_metrics, "period": "day",
-            "since": start, "until": end,
-        })
-        for item in data.get("data", []):
-            total = sum(v.get("value", 0) for v in item.get("values", []) if isinstance(v.get("value"), (int, float)))
-            result[item["name"]] = total
-    except Exception:
-        pass
+    for metrics_set in [
+        "page_fan_adds_unique,page_video_views",
+        "page_fan_adds,page_video_views",
+    ]:
+        try:
+            data = _get(f"/{page_id}/insights", token, {
+                "metric": metrics_set, "period": "day",
+                "since": start, "until": end,
+            })
+            for item in data.get("data", []):
+                total = sum(v.get("value", 0) for v in item.get("values", []) if isinstance(v.get("value"), (int, float)))
+                result[item["name"]] = total
+            break
+        except Exception:
+            continue
 
     try:
         posts_data = _get(f"/{page_id}/posts", token, {
@@ -78,10 +88,12 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
     except Exception:
         result["reels_stories"] = 0
 
-    reach = result.get("page_impressions", 0)
-    eng = result.get("page_post_engagements", 0)
+    reach = result.get("page_impressions_unique") or result.get("page_reach") or result.get("page_impressions", 0)
+    eng = result.get("page_post_engagements") or result.get("page_engaged_users", 0)
+    new_followers = result.get("page_fan_adds_unique") or result.get("page_fan_adds", 0)
+
     result["engagement_rate"] = round((eng / reach * 100), 2) if reach > 0 else 0
-    result["new_followers"] = result.get("page_fan_adds", 0)
+    result["new_followers"] = new_followers
     result["reach"] = reach
     result["engagements"] = eng
     result["views"] = result.get("page_views_total", 0)
