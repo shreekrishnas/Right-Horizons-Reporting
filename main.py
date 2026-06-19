@@ -19,6 +19,14 @@ import youtube
 import linkedin
 from exporter import build_report
 
+
+def _meta_creds(domain: str = "rh"):
+    """Resolve per-domain Meta social token and page ID."""
+    d = DOMAINS.get(domain, DOMAINS["rh"])
+    token = d.get("meta_social_token") or META_SOCIAL_TOKEN
+    page_id = d.get("meta_page_id") or META_PAGE_ID
+    return token, page_id
+
 app = FastAPI(title="Right Horizons Reporting")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -216,33 +224,33 @@ def meta_accounts():
 # ── Social (Facebook + Instagram) ────────────────────────────────────────────
 
 @app.get("/api/social/pages")
-def social_pages():
-    if not META_SOCIAL_TOKEN:
+def social_pages(domain: str = "rh"):
+    token, page_id = _meta_creds(domain)
+    if not token:
         raise HTTPException(400, "Meta Social token not configured")
-    if META_PAGE_ID:
+    if page_id:
         try:
             from social import _get
-            page = _get(f"/{META_PAGE_ID}", META_SOCIAL_TOKEN, {"fields": "id,name,fan_count,followers_count"})
+            page = _get(f"/{page_id}", token, {"fields": "id,name,fan_count,followers_count"})
             return [page]
-        except Exception as e:
-            return [{"id": META_PAGE_ID, "name": "Right Horizons Wealth"}]
+        except Exception:
+            return [{"id": page_id, "name": DOMAINS.get(domain, DOMAINS["rh"])["label"]}]
     try:
-        pages = social.get_pages(META_SOCIAL_TOKEN)
-        return pages
+        return social.get_pages(token)
     except Exception as e:
         raise HTTPException(502, f"Social API error: {e}")
 
 
 @app.get("/api/social/fb-comprehensive")
-def social_fb_comprehensive(start: str = "", end: str = ""):
-    if not META_SOCIAL_TOKEN:
+def social_fb_comprehensive(start: str = "", end: str = "", domain: str = "rh"):
+    token, page_id = _meta_creds(domain)
+    if not token:
         raise HTTPException(400, "Meta Social token not configured")
-    page_id = META_PAGE_ID
     if not page_id:
         raise HTTPException(400, "META_PAGE_ID not configured")
     start, end = _dates(start, end)
     try:
-        result = social.get_fb_comprehensive(META_SOCIAL_TOKEN, page_id, start, end)
+        result = social.get_fb_comprehensive(token, page_id, start, end)
         result["page_id"] = page_id
         return result
     except Exception as e:
@@ -250,10 +258,10 @@ def social_fb_comprehensive(start: str = "", end: str = ""):
 
 
 @app.get("/api/social/trend")
-def social_trend(period: str = "weekly", periods: int = 5):
-    if not META_SOCIAL_TOKEN:
+def social_trend(period: str = "weekly", periods: int = 5, domain: str = "rh"):
+    token, page_id = _meta_creds(domain)
+    if not token:
         raise HTTPException(400, "Meta Social token not configured")
-    page_id = META_PAGE_ID
     if not page_id:
         raise HTTPException(400, "META_PAGE_ID not configured")
 
@@ -261,7 +269,7 @@ def social_trend(period: str = "weekly", periods: int = 5):
     days_per = 7 if period == "weekly" else 30
     ig_id = None
     try:
-        ig_id = social.get_ig_account(META_SOCIAL_TOKEN, page_id)
+        ig_id = social.get_ig_account(token, page_id)
     except Exception:
         pass
 
@@ -278,13 +286,13 @@ def social_trend(period: str = "weekly", periods: int = 5):
 
         row = {"period": label, "start": ps, "end": pe}
         try:
-            fb = social.get_fb_comprehensive(META_SOCIAL_TOKEN, page_id, ps, pe)
+            fb = social.get_fb_comprehensive(token, page_id, ps, pe)
             row["fb"] = fb
         except Exception:
             row["fb"] = {}
         if ig_id:
             try:
-                ig = social.get_ig_comprehensive(META_SOCIAL_TOKEN, ig_id, ps, pe)
+                ig = social.get_ig_comprehensive(token, ig_id, ps, pe)
                 row["ig"] = ig
             except Exception:
                 row["ig"] = {}
@@ -297,18 +305,18 @@ def social_trend(period: str = "weekly", periods: int = 5):
 
 
 @app.get("/api/social/ig-comprehensive")
-def social_ig_comprehensive(start: str = "", end: str = ""):
-    if not META_SOCIAL_TOKEN:
+def social_ig_comprehensive(start: str = "", end: str = "", domain: str = "rh"):
+    token, page_id = _meta_creds(domain)
+    if not token:
         raise HTTPException(400, "Meta Social token not configured")
-    page_id = META_PAGE_ID
     if not page_id:
         raise HTTPException(400, "META_PAGE_ID not configured")
     start, end = _dates(start, end)
     try:
-        ig_id = social.get_ig_account(META_SOCIAL_TOKEN, page_id)
+        ig_id = social.get_ig_account(token, page_id)
         if not ig_id:
             raise HTTPException(404, "No Instagram business account linked")
-        return social.get_ig_comprehensive(META_SOCIAL_TOKEN, ig_id, start, end)
+        return social.get_ig_comprehensive(token, ig_id, start, end)
     except HTTPException:
         raise
     except Exception as e:
@@ -316,30 +324,32 @@ def social_ig_comprehensive(start: str = "", end: str = ""):
 
 
 @app.get("/api/social/page-posts")
-def social_page_posts(page_id: str = "", start: str = "", end: str = "", limit: int = 10):
-    if not META_SOCIAL_TOKEN:
+def social_page_posts(page_id: str = "", start: str = "", end: str = "", limit: int = 10, domain: str = "rh"):
+    token, pid = _meta_creds(domain)
+    if not token:
         raise HTTPException(400, "Meta Social token not configured")
     if not page_id:
-        page_id = META_PAGE_ID
+        page_id = pid
     if not page_id:
         raise HTTPException(400, "page_id required")
     start, end = _dates(start, end)
     try:
-        return social.get_page_posts(META_SOCIAL_TOKEN, page_id, start, end, limit)
+        return social.get_page_posts(token, page_id, start, end, limit)
     except Exception as e:
         raise HTTPException(502, f"Social API error: {e}")
 
 
 @app.get("/api/social/ig-account")
-def social_ig_account(page_id: str = ""):
-    if not META_SOCIAL_TOKEN:
+def social_ig_account(page_id: str = "", domain: str = "rh"):
+    token, pid = _meta_creds(domain)
+    if not token:
         raise HTTPException(400, "Meta Social token not configured")
     if not page_id:
-        page_id = META_PAGE_ID
+        page_id = pid
     if not page_id:
         raise HTTPException(400, "page_id required")
     try:
-        ig_id = social.get_ig_account(META_SOCIAL_TOKEN, page_id)
+        ig_id = social.get_ig_account(token, page_id)
         if not ig_id:
             raise HTTPException(404, "No Instagram business account linked to this page")
         return {"ig_id": ig_id}
@@ -350,32 +360,35 @@ def social_ig_account(page_id: str = ""):
 
 
 @app.get("/api/social/ig-profile")
-def social_ig_profile(ig_id: str):
-    if not META_SOCIAL_TOKEN:
+def social_ig_profile(ig_id: str, domain: str = "rh"):
+    token, _ = _meta_creds(domain)
+    if not token:
         raise HTTPException(400, "Meta Social token not configured")
     try:
-        return social.get_ig_profile(META_SOCIAL_TOKEN, ig_id)
+        return social.get_ig_profile(token, ig_id)
     except Exception as e:
         raise HTTPException(502, f"Social API error: {e}")
 
 
 @app.get("/api/social/ig-insights")
-def social_ig_insights(ig_id: str, start: str = "", end: str = ""):
-    if not META_SOCIAL_TOKEN:
+def social_ig_insights(ig_id: str, start: str = "", end: str = "", domain: str = "rh"):
+    token, _ = _meta_creds(domain)
+    if not token:
         raise HTTPException(400, "Meta Social token not configured")
     start, end = _dates(start, end)
     try:
-        return social.get_ig_insights(META_SOCIAL_TOKEN, ig_id, start, end)
+        return social.get_ig_insights(token, ig_id, start, end)
     except Exception as e:
         raise HTTPException(502, f"Social API error: {e}")
 
 
 @app.get("/api/social/ig-media")
-def social_ig_media(ig_id: str, limit: int = 10):
-    if not META_SOCIAL_TOKEN:
+def social_ig_media(ig_id: str, limit: int = 10, domain: str = "rh"):
+    token, _ = _meta_creds(domain)
+    if not token:
         raise HTTPException(400, "Meta Social token not configured")
     try:
-        return social.get_ig_media(META_SOCIAL_TOKEN, ig_id, limit)
+        return social.get_ig_media(token, ig_id, limit)
     except Exception as e:
         raise HTTPException(502, f"Social API error: {e}")
 
@@ -601,15 +614,16 @@ def reports_generate(period: str = "weekly", domain: str = "rh", start: str = ""
             out["meta"] = {"campaigns": len(camps), "spend": round(spend, 2), "clicks": clicks, "impressions": impressions}
         except Exception as e:
             out["meta"] = {"error": str(e)}
-    if META_SOCIAL_TOKEN and META_PAGE_ID:
+    s_token, s_page_id = _meta_creds(domain)
+    if s_token and s_page_id:
         try:
-            out["social_fb"] = social.get_fb_comprehensive(META_SOCIAL_TOKEN, META_PAGE_ID, start, end)
+            out["social_fb"] = social.get_fb_comprehensive(s_token, s_page_id, start, end)
         except Exception as e:
             out["social_fb"] = {"error": str(e)}
         try:
-            ig_id = social.get_ig_account(META_SOCIAL_TOKEN, META_PAGE_ID)
+            ig_id = social.get_ig_account(s_token, s_page_id)
             if ig_id:
-                out["social_ig"] = social.get_ig_comprehensive(META_SOCIAL_TOKEN, ig_id, start, end)
+                out["social_ig"] = social.get_ig_comprehensive(s_token, ig_id, start, end)
         except Exception as e:
             out["social_ig"] = {"error": str(e)}
     return out
@@ -664,19 +678,20 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
                 html_data["meta_ads"] = meta.get_campaigns_summary(META_MARKETING_TOKEN, META_AD_ACCOUNT, start, end)
             except Exception:
                 pass
-        if META_SOCIAL_TOKEN and META_PAGE_ID:
+        h_token, h_page_id = _meta_creds(domain)
+        if h_token and h_page_id:
             try:
-                html_data["social_fb"] = social.get_fb_comprehensive(META_SOCIAL_TOKEN, META_PAGE_ID, start, end)
+                html_data["social_fb"] = social.get_fb_comprehensive(h_token, h_page_id, start, end)
             except Exception:
                 pass
             try:
-                ig_id = social.get_ig_account(META_SOCIAL_TOKEN, META_PAGE_ID)
+                ig_id = social.get_ig_account(h_token, h_page_id)
                 if ig_id:
-                    html_data["social_ig"] = social.get_ig_comprehensive(META_SOCIAL_TOKEN, ig_id, start, end)
+                    html_data["social_ig"] = social.get_ig_comprehensive(h_token, ig_id, start, end)
             except Exception:
                 pass
             try:
-                html_data["social_trend"] = social_trend(period, 5)
+                html_data["social_trend"] = social_trend(period, 5, domain)
             except Exception:
                 pass
 

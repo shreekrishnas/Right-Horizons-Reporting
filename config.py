@@ -24,6 +24,8 @@ DOMAINS = {
         "ga4_property": os.getenv("GA4_PROPERTY_RH", "6639050"),
         "color": "#7C3AED",
         "url": "https://www.righthorizons.com",
+        "meta_page_id": os.getenv("META_PAGE_ID", "296408333709162"),
+        "meta_social_token": os.getenv("META_SOCIAL_TOKEN", ""),
     },
     "pms": {
         "label": "Right Horizons PMS",
@@ -32,6 +34,8 @@ DOMAINS = {
         "ga4_property": os.getenv("GA4_PROPERTY_PMS", "424731774"),
         "color": "#0EA5E9",
         "url": "https://righthorizonspms.com",
+        "meta_page_id": os.getenv("META_PAGE_ID_PMS", "117532164550609"),
+        "meta_social_token": os.getenv("META_SOCIAL_TOKEN_PMS", ""),
     },
     "aif": {
         "label": "Right Horizons AIF",
@@ -40,5 +44,7 @@ DOMAINS = {
         "ga4_property": os.getenv("GA4_PROPERTY_AIF", "534353483"),
         "color": "#10B981",
         "url": "https://aif.righthorizonspms.com",
+        "meta_page_id": os.getenv("META_PAGE_ID_AIF", "1069286109601470"),
+        "meta_social_token": os.getenv("META_SOCIAL_TOKEN_AIF", ""),
     },
 }

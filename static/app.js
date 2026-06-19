@@ -443,7 +443,7 @@ async function loadAnalytics() {
 
     if (src === 'social') {
         try {
-            const data = await api(`/api/social/trend?period=weekly&periods=5`);
+            const data = await api(`/api/social/trend?period=weekly&periods=5&domain=${currentDomain}`);
             if (data && data.length) {
                 const last = data[data.length - 1];
                 const fbF = document.getElementById('a-social-fb-followers');
@@ -697,13 +697,13 @@ async function fetchAndRenderCalendar() {
     socialCalFbPosts = [];
     socialCalIgMedia = [];
     try {
-        const posts = await api(`/api/social/page-posts?start=${mStart}&end=${mEnd}&limit=100`);
+        const posts = await api(`/api/social/page-posts?start=${mStart}&end=${mEnd}&limit=100&domain=${currentDomain}`);
         socialCalFbPosts = posts || [];
     } catch(e) {}
     try {
-        const igResp = await api('/api/social/ig-account');
+        const igResp = await api(`/api/social/ig-account?domain=${currentDomain}`);
         if (igResp && igResp.ig_id) {
-            const media = await api(`/api/social/ig-media?ig_id=${igResp.ig_id}&limit=100`);
+            const media = await api(`/api/social/ig-media?ig_id=${igResp.ig_id}&limit=100&domain=${currentDomain}`);
             socialCalIgMedia = (media || []).filter(m => {
                 const d = (m.timestamp || '').slice(0, 10);
                 return d >= mStart && d <= mEnd;
@@ -912,7 +912,7 @@ async function loadSocial() {
     if (!tableEl) return;
     tableEl.innerHTML = '<div class="empty-state"><p>Loading social media data...</p></div>';
     try {
-        const data = await api(`/api/social/trend?period=${socialPeriod}&periods=5`);
+        const data = await api(`/api/social/trend?period=${socialPeriod}&periods=5&domain=${currentDomain}`);
         if (!data || data.length === 0) {
             tableEl.innerHTML = '<div class="empty-state"><p>No social data available</p></div>';
             return;
@@ -976,16 +976,16 @@ async function loadSocial() {
         tableEl.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
     }
     try {
-        const posts = await api(`/api/social/page-posts?start=${dateStart}&end=${dateEnd}`);
+        const posts = await api(`/api/social/page-posts?start=${dateStart}&end=${dateEnd}&domain=${currentDomain}`);
         renderTable('fb-posts-table', [
             { label: 'Post', key: 'message' }, { label: 'Impressions', key: 'post_impressions' },
             { label: 'Engaged', key: 'post_engaged_users' }, { label: 'Clicks', key: 'post_clicks' }, { label: 'Shares', key: 'shares' },
         ], posts);
     } catch (e) { showError('fb-posts-table', e.message); }
     try {
-        const igResp = await api('/api/social/ig-account');
+        const igResp = await api(`/api/social/ig-account?domain=${currentDomain}`);
         if (igResp.ig_id) {
-            const igMedia = await api(`/api/social/ig-media?ig_id=${igResp.ig_id}`);
+            const igMedia = await api(`/api/social/ig-media?ig_id=${igResp.ig_id}&domain=${currentDomain}`);
             renderTable('ig-media-table', [
                 { label: 'Caption', key: 'caption' }, { label: 'Type', key: 'media_type' },
                 { label: 'Likes', key: 'like_count' }, { label: 'Comments', key: 'comments_count' },
