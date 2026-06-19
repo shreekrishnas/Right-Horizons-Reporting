@@ -46,6 +46,29 @@ def _domain(key: str) -> dict:
     return DOMAINS[key]
 
 
+@app.get("/api/debug/ga4")
+def debug_ga4(domain: str = "rh"):
+    d = _domain(domain)
+    prop = d.get("ga4_property", "")
+    result = {"property_id": prop, "domain": domain}
+    if not prop:
+        result["error"] = "No GA4 property configured"
+        return result
+    try:
+        creds = get_credentials()
+        result["auth"] = "ok"
+    except Exception as e:
+        result["auth"] = f"FAILED: {e}"
+        return result
+    try:
+        summary = ga4.get_summary(creds, prop, "2026-06-01", "2026-06-18")
+        result["ga4_call"] = "ok"
+        result["data"] = summary
+    except Exception as e:
+        result["ga4_call"] = f"FAILED: {e}"
+    return result
+
+
 # ── Health & Config ──────────────────────────────────────────────────────────
 
 @app.get("/api/health")
@@ -130,7 +153,7 @@ def ga4_summary(domain: str = "rh", start: str = "", end: str = ""):
         creds = get_credentials()
         return ga4.get_summary(creds, prop, start, end)
     except Exception as e:
-        raise HTTPException(502, f"GA4 error: {e}")
+        raise HTTPException(502, f"GA4 error (property={prop}): {e}")
 
 
 @app.get("/api/ga4/pages")
