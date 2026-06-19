@@ -690,8 +690,8 @@ async function fetchAndRenderCalendar() {
     const lastDayNum = new Date(socialCalYear, socialCalMonth + 1, 0).getDate();
     const mEnd = `${socialCalYear}-${mm}-${String(lastDayNum).padStart(2, '0')}`;
 
-    const label = firstDay.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    document.getElementById('social-cal-month-label').textContent = label;
+    const labelDate = new Date(socialCalYear, socialCalMonth, 1);
+    document.getElementById('social-cal-month-label').textContent = labelDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
     // Fetch FB posts & IG media for this month
     socialCalFbPosts = [];
