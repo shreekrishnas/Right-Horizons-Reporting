@@ -1,86 +1,47 @@
 """
-Generate a premium, self-contained HTML marketing performance report
-for Right Horizons clients.
+Generate a premium HTML marketing report matching the Excel template structure:
+1. Performance Overview (This Week vs Last Week)
+2. SEO Trend (5-week)
+3. SMM Trend (5-week: Instagram, Facebook, LinkedIn)
+4. Ads (Meta + LinkedIn platform performance, Campaign details by ICP)
+5. Webinar performance
+6. Executive Summary
 """
 
 from datetime import datetime, timezone, timedelta
 
+_IST = timezone(timedelta(hours=5, minutes=30))
+
 
 def _fmt(val, is_pct=False, is_currency=False):
-    """Format a value for display in the report."""
     if val is None or val == '' or val == '-':
         return '—'
     if isinstance(val, str):
         return val
     if is_pct:
-        return f"{val:.2f}%" if val else '—'
+        if isinstance(val, (int, float)) and val > 0:
+            if val < 1:
+                return f"{val * 100:.2f}%"
+            return f"{val:.2f}%"
+        return '—'
     if is_currency:
         return f"₹{val:,.2f}" if val else '—'
     if isinstance(val, float):
-        return f"{val:,.2f}" if val else '—'
+        if val == int(val):
+            return f"{int(val):,}"
+        return f"{val:,.2f}"
     if isinstance(val, int):
-        return f"{val:,}" if val else '0'
+        return f"{val:,}"
     return str(val)
 
 
-def _safe(data, *keys, default=None):
-    """Safely traverse nested dicts."""
-    obj = data
-    for k in keys:
-        if not isinstance(obj, dict):
-            return default
-        obj = obj.get(k, default)
-    return obj
-
-
-def _metric_card(label, value, color="#7C3AED"):
-    """Render a single KPI card."""
-    return f'''
-    <div class="metric-card" style="border-top: 4px solid {color};">
-      <div class="metric-value">{value}</div>
-      <div class="metric-label">{label}</div>
-    </div>'''
-
-
-def _table(headers, rows, align=None):
-    """Render an HTML table. align is a list of 'l' or 'r' per column."""
-    if not rows:
-        return '<p class="empty">No data available for this section.</p>'
-    n = len(headers)
-    if align is None:
-        align = ['l'] + ['r'] * (n - 1)
-    head = ''.join(
-        f'<th style="text-align:{"left" if align[i] == "l" else "right"}">{h}</th>'
-        for i, h in enumerate(headers)
-    )
-    body = ''
-    for row in rows:
-        cells = ''.join(
-            f'<td style="text-align:{"left" if align[i] == "l" else "right"}">{row[i]}</td>'
-            for i in range(n)
-        )
-        body += f'<tr>{cells}</tr>\n'
-    return f'''
-    <table>
-      <thead><tr>{head}</tr></thead>
-      <tbody>{body}</tbody>
-    </table>'''
+def _v(data, key, default=None):
+    if not isinstance(data, dict):
+        return default
+    return data.get(key, default)
 
 
 def generate_html_report(data: dict, start: str, end: str, domain: str) -> str:
-    """
-    Generate a premium, self-contained HTML marketing performance report.
-
-    Args:
-        data: dict with optional keys: gsc, ga4, social_fb, social_ig,
-              meta_ads, social_trend
-        start: report start date string
-        end: report end date string
-        domain: website domain
-
-    Returns:
-        Complete HTML document as a string.
-    """
     if data is None:
         data = {}
 
@@ -90,437 +51,568 @@ def generate_html_report(data: dict, start: str, end: str, domain: str) -> str:
     social_ig = data.get('social_ig') or {}
     meta_ads = data.get('meta_ads') or []
     social_trend = data.get('social_trend') or []
+    seo_trend = data.get('seo_trend') or []
 
-    _IST = timezone(timedelta(hours=5, minutes=30))
     generated_at = datetime.now(_IST).strftime('%d %b %Y, %I:%M %p IST')
 
-    # ── Performance Summary cards ────────────────────────────────────
-    total_reach = 0
-    total_impressions = 0
-    total_engagements = 0
-    organic_sessions = _safe(ga4, 'organic_sessions')
-    ad_impressions = 0
-    ad_clicks = 0
+    # ── Build sections ──────────────────────────────────────────────
+    perf_overview = _build_performance_overview(gsc, ga4, social_fb, social_ig, meta_ads)
+    seo_section = _build_seo_trend(gsc, ga4, seo_trend)
+    smm_section = _build_smm_trend(social_trend)
+    ads_section = _build_ads(meta_ads)
+    exec_section = _build_executive_summary(gsc, ga4, social_fb, social_ig, meta_ads)
 
-    for ig_key in ['reach']:
-        v = _safe(social_ig, ig_key)
-        if isinstance(v, (int, float)):
-            total_reach += int(v)
-    for fb_key in ['reach']:
-        v = _safe(social_fb, fb_key)
-        if isinstance(v, (int, float)):
-            total_reach += int(v)
-
-    for src in [social_ig, social_fb]:
-        v = src.get('engagements')
-        if isinstance(v, (int, float)):
-            total_engagements += int(v)
-
-    gsc_impressions = _safe(gsc, 'impressions')
-    if isinstance(gsc_impressions, (int, float)):
-        total_impressions += int(gsc_impressions)
-    for src in [social_ig, social_fb]:
-        v = src.get('views')
-        if isinstance(v, (int, float)):
-            total_impressions += int(v)
-
-    for camp in meta_ads:
-        v = camp.get('impressions')
-        if isinstance(v, (int, float)):
-            ad_impressions += int(v)
-        v = camp.get('clicks')
-        if isinstance(v, (int, float)):
-            ad_clicks += int(v)
-
-    cards_html = '<div class="metrics-grid">'
-    card_data = [
-        ("Total Reach", _fmt(total_reach or None), "#7C3AED"),
-        ("Total Impressions", _fmt(total_impressions or None), "#0EA5E9"),
-        ("Total Engagements", _fmt(total_engagements or None), "#10B981"),
-        ("Organic Sessions", _fmt(organic_sessions), "#F59E0B"),
-        ("Ad Impressions", _fmt(ad_impressions or None), "#EF4444"),
-        ("Ad Clicks", _fmt(ad_clicks or None), "#7C3AED"),
-    ]
-    for label, value, color in card_data:
-        cards_html += _metric_card(label, value, color)
-    cards_html += '</div>'
-
-    # ── SEO Performance ──────────────────────────────────────────────
-    seo_traffic_rows = []
-    if ga4:
-        seo_traffic_rows.append((
-            'Organic Sessions', _fmt(_safe(ga4, 'organic_sessions')),
-        ))
-        seo_traffic_rows.append((
-            'Organic Users', _fmt(_safe(ga4, 'organic_users')),
-        ))
-        seo_traffic_rows.append((
-            'Leads', _fmt(_safe(ga4, 'leads')),
-        ))
-        seo_traffic_rows.append((
-            'Bounce Rate', _fmt(_safe(ga4, 'bounceRate'), is_pct=True),
-        ))
-        seo_traffic_rows.append((
-            'Avg Session Duration', _fmt(_safe(ga4, 'avgSessionDuration')),
-        ))
-    seo_traffic_table = _table(['Metric', 'Value'], seo_traffic_rows, ['l', 'r'])
-
-    gsc_summary_rows = []
-    if gsc:
-        gsc_summary_rows = [(
-            _fmt(_safe(gsc, 'clicks')),
-            _fmt(_safe(gsc, 'impressions')),
-            _fmt(_safe(gsc, 'ctr'), is_pct=True),
-            _fmt(_safe(gsc, 'position')),
-        )]
-    gsc_summary_table = _table(
-        ['Clicks', 'Impressions', 'CTR', 'Avg Position'],
-        gsc_summary_rows, ['r', 'r', 'r', 'r']
-    )
-
-    # Top queries
-    queries = _safe(gsc, 'queries') or []
-    query_rows = [
-        (q.get('query', ''), _fmt(q.get('clicks')), _fmt(q.get('impressions')),
-         _fmt(q.get('ctr'), is_pct=True), _fmt(q.get('position')))
-        for q in queries[:20]
-    ]
-    queries_table = _table(
-        ['Query', 'Clicks', 'Impressions', 'CTR', 'Avg Position'],
-        query_rows, ['l', 'r', 'r', 'r', 'r']
-    )
-
-    # Top pages
-    gsc_pages = _safe(gsc, 'pages') or []
-    ga4_pages = _safe(ga4, 'pages') or []
-    pages_list = gsc_pages or ga4_pages
-    page_rows = []
-    for p in pages_list[:20]:
-        if isinstance(p, dict):
-            page_rows.append((
-                p.get('page', p.get('pagePath', '')),
-                _fmt(p.get('clicks', p.get('sessions', ''))),
-                _fmt(p.get('impressions', p.get('users', ''))),
-                _fmt(p.get('ctr'), is_pct=True),
-                _fmt(p.get('position', '')),
-            ))
-        elif isinstance(p, str):
-            page_rows.append((p, '—', '—', '—', '—'))
-    pages_table = _table(
-        ['Page', 'Clicks', 'Impressions', 'CTR', 'Avg Position'],
-        page_rows, ['l', 'r', 'r', 'r', 'r']
-    )
-
-    # ── Social Media tables ──────────────────────────────────────────
-    social_metrics = [
-        ('Followers', 'followers'),
-        ('New Followers', 'new_followers'),
-        ('Reach', 'reach'),
-        ('Views', 'views'),
-        ('Engagements', 'engagements'),
-        ('Engagement Rate', 'engagement_rate'),
-        ('Posts Published', 'posts_published'),
-        ('Stories / Reels', 'reels_stories'),
-        ('Video Views', 'video_views'),
-        ('Link Clicks', 'link_clicks'),
-        ('Profile Visits', 'profile_visits', 'profile_views'),
-        ('Saves / Shares', 'saves_shares'),
-    ]
-
-    def _social_table(src):
-        if not src:
-            return '<p class="empty">No data available for this section.</p>'
-        rows = []
-        for item in social_metrics:
-            label = item[0]
-            keys = item[1:]
-            val = None
-            for k in keys:
-                val = src.get(k)
-                if val is not None:
-                    break
-            is_pct = 'rate' in label.lower()
-            rows.append((label, _fmt(val, is_pct=is_pct)))
-        return _table(['Metric', 'Value'], rows, ['l', 'r'])
-
-    ig_name = _safe(social_ig, 'username') or ''
-    ig_header = f' — @{ig_name}' if ig_name else ''
-    fb_name = _safe(social_fb, 'page_name') or ''
-    fb_header = f' — {fb_name}' if fb_name else ''
-
-    ig_table = _social_table(social_ig)
-    fb_table = _social_table(social_fb)
-
-    # ── Meta Ads ─────────────────────────────────────────────────────
-    ads_rows = []
-    for c in meta_ads:
-        ads_rows.append((
-            c.get('campaign_name', ''),
-            c.get('status', ''),
-            _fmt(c.get('impressions')),
-            _fmt(c.get('clicks')),
-            _fmt(c.get('ctr'), is_pct=True),
-            _fmt(c.get('spend'), is_currency=True),
-            _fmt(c.get('cpc'), is_currency=True),
-            _fmt(c.get('reach')),
-            _fmt(c.get('leads')),
-        ))
-    ads_table = _table(
-        ['Campaign', 'Status', 'Impressions', 'Clicks', 'CTR',
-         'Spend', 'CPC', 'Reach', 'Leads'],
-        ads_rows, ['l', 'l', 'r', 'r', 'r', 'r', 'r', 'r', 'r']
-    )
-
-    # ── Social Media Trend ───────────────────────────────────────────
-    trend_html = ''
-    if social_trend:
-        trend_metrics = [
-            ('Followers', 'followers'), ('New Followers', 'new_followers'),
-            ('Reach', 'reach'), ('Views', 'views'),
-            ('Engagements', 'engagements'), ('Engagement Rate', 'engagement_rate'),
-            ('Posts Published', 'posts_published'), ('Stories / Reels', 'reels_stories'),
-            ('Video Views', 'video_views'), ('Link Clicks', 'link_clicks'),
-            ('Profile Visits', 'profile_visits', 'profile_views'),
-            ('Saves / Shares', 'saves_shares'),
-        ]
-        periods = [t.get('period', '') for t in social_trend]
-        period_headers = ['Metric'] + periods
-        align = ['l'] + ['r'] * len(periods)
-
-        for platform, pkey in [('Instagram', 'ig'), ('Facebook', 'fb')]:
-            rows = []
-            for item in trend_metrics:
-                label = item[0]
-                keys = item[1:]
-                is_pct = 'rate' in label.lower()
-                row = [label]
-                for t in social_trend:
-                    plat_data = t.get(pkey) or {}
-                    val = None
-                    for k in keys:
-                        val = plat_data.get(k)
-                        if val is not None:
-                            break
-                    row.append(_fmt(val, is_pct=is_pct))
-                rows.append(tuple(row))
-            trend_html += f'''
-            <h4 class="trend-platform">{platform}</h4>
-            {_table(period_headers, rows, align)}
-            '''
-
-    # ── Assemble HTML ────────────────────────────────────────────────
-    html = f'''<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Right Horizons — Marketing Performance Report</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>{domain} — Marketing Performance Report</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    color: #1E293B;
-    background: #fff;
-    font-size: 14px;
-    line-height: 1.6;
-  }}
-  .container {{ max-width: 1100px; margin: 0 auto; padding: 40px 32px; }}
-
-  /* Header */
-  .report-header {{
-    border-bottom: 3px solid #7C3AED;
-    padding-bottom: 24px;
-    margin-bottom: 36px;
-  }}
-  .report-header h1 {{
-    font-size: 26px;
-    font-weight: 700;
-    color: #7C3AED;
-    margin-bottom: 6px;
-  }}
-  .report-header .subtitle {{
-    font-size: 15px;
-    color: #64748B;
-  }}
-  .report-header .subtitle strong {{
-    color: #334155;
-  }}
-
-  /* Section headers */
-  .section {{
-    margin-bottom: 40px;
-  }}
-  .section h2 {{
-    font-size: 18px;
-    font-weight: 700;
-    color: #1E293B;
-    border-left: 4px solid #7C3AED;
-    padding-left: 14px;
-    margin-bottom: 20px;
-  }}
-  .section h3 {{
-    font-size: 15px;
-    font-weight: 600;
-    color: #475569;
-    margin: 20px 0 10px 0;
-  }}
-  .trend-platform {{
-    font-size: 14px;
-    font-weight: 600;
-    color: #7C3AED;
-    margin: 18px 0 8px 0;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }}
-
-  /* Metric cards */
-  .metrics-grid {{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 16px;
-    margin-bottom: 12px;
-  }}
-  .metric-card {{
-    background: #F8FAFC;
-    border-radius: 10px;
-    padding: 20px 18px;
-    text-align: center;
-  }}
-  .metric-value {{
-    font-size: 24px;
-    font-weight: 700;
-    color: #1E293B;
-    margin-bottom: 4px;
-  }}
-  .metric-label {{
-    font-size: 12px;
-    font-weight: 500;
-    color: #64748B;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }}
-
-  /* Tables */
-  table {{
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 12px;
-    font-size: 13px;
-  }}
-  thead tr {{
-    background: #7C3AED;
-    color: #fff;
-  }}
-  th {{
-    padding: 10px 14px;
-    font-weight: 600;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    white-space: nowrap;
-  }}
-  td {{
-    padding: 9px 14px;
-    border-bottom: 1px solid #E2E8F0;
-  }}
-  tbody tr:nth-child(even) {{
-    background: #F8FAFC;
-  }}
-  tbody tr:hover {{
-    background: #EDE9FE;
-  }}
-
-  .empty {{
-    color: #94A3B8;
-    font-style: italic;
-    padding: 12px 0;
-  }}
-
-  /* Footer */
-  .report-footer {{
-    margin-top: 48px;
-    padding-top: 20px;
-    border-top: 1px solid #E2E8F0;
-    text-align: center;
-    font-size: 11px;
-    color: #94A3B8;
-  }}
-
-  /* Print styles */
-  @media print {{
-    body {{ font-size: 11px; }}
-    .container {{ padding: 0; max-width: 100%; }}
-    .metric-card {{ break-inside: avoid; }}
-    table {{ page-break-inside: auto; }}
-    tr {{ page-break-inside: avoid; }}
-    thead {{ display: table-header-group; }}
-    .section {{ page-break-inside: avoid; }}
-    tbody tr:hover {{ background: inherit; }}
-  }}
+{_css()}
 </style>
 </head>
 <body>
-<div class="container">
 
-  <div class="report-header">
-    <h1>Right Horizons — Marketing Performance Report</h1>
-    <div class="subtitle">
-      <strong>{domain}</strong> &nbsp;|&nbsp; {start} — {end}
+<!-- Header -->
+<div class="report-header">
+  <div class="header-brand">
+    <div class="header-logo">RH</div>
+    <div>
+      <div class="header-title">Marketing Weekly Report</div>
+      <div class="header-subtitle">{domain}</div>
     </div>
   </div>
-
-  <!-- Performance Summary -->
-  <div class="section">
-    <h2>Performance Summary</h2>
-    {cards_html}
+  <div class="header-meta">
+    <div class="header-period">{start} — {end}</div>
+    <div class="header-dept">Department: Marketing</div>
   </div>
-
-  <!-- SEO Performance -->
-  <div class="section">
-    <h2>SEO Performance</h2>
-    <h3>Website Traffic (GA4)</h3>
-    {seo_traffic_table}
-    <h3>Search Console Overview</h3>
-    {gsc_summary_table}
-    <h3>Top Search Queries</h3>
-    {queries_table}
-    <h3>Top Pages</h3>
-    {pages_table}
-  </div>
-
-  <!-- Social Media — Instagram -->
-  <div class="section">
-    <h2>Social Media — Instagram{ig_header}</h2>
-    {ig_table}
-  </div>
-
-  <!-- Social Media — Facebook -->
-  <div class="section">
-    <h2>Social Media — Facebook{fb_header}</h2>
-    {fb_table}
-  </div>
-
-  <!-- Paid Ads — Meta -->
-  <div class="section">
-    <h2>Paid Ads — Meta</h2>
-    {ads_table}
-  </div>
-
-  {"" if not social_trend else f"""
-  <!-- Social Media Trend -->
-  <div class="section">
-    <h2>Social Media Trend</h2>
-    {trend_html}
-  </div>
-  """}
-
-  <div class="report-footer">
-    Generated on {generated_at} &nbsp;·&nbsp; Right Horizons &nbsp;·&nbsp; Confidential
-  </div>
-
 </div>
-</body>
-</html>'''
 
-    return html
+<!-- 1. Performance Overview -->
+<div class="sheet" id="performance-overview">
+  <div class="sheet-title">
+    <span class="sheet-icon">📊</span>
+    Performance Overview
+  </div>
+  {perf_overview}
+</div>
+
+<!-- 2. SEO Trend -->
+<div class="sheet" id="seo-trend">
+  <div class="sheet-title">
+    <span class="sheet-icon">🔍</span>
+    SEO Weekly Performance — Trend
+  </div>
+  {seo_section}
+</div>
+
+<!-- 3. SMM Trend -->
+<div class="sheet" id="smm-trend">
+  <div class="sheet-title">
+    <span class="sheet-icon">📱</span>
+    Social Media Marketing — Trend
+  </div>
+  {smm_section}
+</div>
+
+<!-- 4. Ads -->
+<div class="sheet" id="ads">
+  <div class="sheet-title">
+    <span class="sheet-icon">🎯</span>
+    Paid Ads — Performance
+  </div>
+  {ads_section}
+</div>
+
+<!-- 5. Executive Summary -->
+<div class="sheet" id="executive-summary">
+  <div class="sheet-title">
+    <span class="sheet-icon">📌</span>
+    Executive Summary
+  </div>
+  {exec_section}
+</div>
+
+<!-- Footer -->
+<div class="report-footer">
+  <div>Generated on {generated_at}</div>
+  <div>Right Horizons — Confidential</div>
+</div>
+
+</body>
+</html>"""
+
+
+def _build_performance_overview(gsc, ga4, social_fb, social_ig, meta_ads):
+    ig_reach = _v(social_ig, 'reach', 0) or 0
+    fb_reach = _v(social_fb, 'reach', 0) or 0
+    total_reach = ig_reach + fb_reach
+
+    ig_imp = _v(social_ig, 'views', 0) or 0
+    fb_imp = _v(social_fb, 'views', 0) or 0
+    gsc_imp = _v(gsc, 'impressions', 0) or 0
+    total_impressions = ig_imp + fb_imp + gsc_imp
+
+    ig_eng = _v(social_ig, 'engagements', 0) or 0
+    fb_eng = _v(social_fb, 'engagements', 0) or 0
+    total_engagements = ig_eng + fb_eng
+
+    organic_sessions = _v(ga4, 'organic_sessions', 0) or 0
+    top5_kw = _v(gsc, 'top5_keywords', 0) or 0
+
+    ad_impressions = sum(int(_v(c, 'impressions', 0) or 0) for c in meta_ads)
+    ad_clicks = sum(int(_v(c, 'clicks', 0) or 0) for c in meta_ads)
+    ad_ctr = (ad_clicks / ad_impressions * 100) if ad_impressions > 0 else 0
+    total_leads = sum(int(_v(c, 'leads', 0) or 0) for c in meta_ads)
+    total_spend = sum(float(_v(c, 'spend', 0) or 0) for c in meta_ads)
+
+    eng_rate = (total_engagements / total_reach * 100) if total_reach > 0 else 0
+
+    metrics = [
+        ('Total Reach (all platforms)', _fmt(total_reach or None)),
+        ('Total Impressions (all platforms)', _fmt(total_impressions or None)),
+        ('Total Engagements', _fmt(total_engagements or None)),
+        ('Avg. Engagement Rate (%)', _fmt(eng_rate, is_pct=True) if eng_rate > 0 else '—'),
+        ('Organic Sessions (SEO)', _fmt(organic_sessions or None)),
+        ('Top 5 Keywords Ranked', _fmt(top5_kw or None)),
+        ('Total Ad Impressions', _fmt(ad_impressions or None)),
+        ('Total Ad Clicks', _fmt(ad_clicks or None)),
+        ('Overall Ad CTR (%)', _fmt(ad_ctr, is_pct=True) if ad_ctr > 0 else '—'),
+        ('Total Leads', _fmt(total_leads or None)),
+        ('Total Ad Spend', _fmt(total_spend, is_currency=True) if total_spend > 0 else '—'),
+    ]
+
+    rows = ''.join(f'<tr><td class="metric-name">{m[0]}</td><td class="metric-val">{m[1]}</td></tr>' for m in metrics)
+
+    return f"""
+    <div class="section-header accent-purple">PERFORMANCE SUMMARY — ALL CHANNELS</div>
+    <table class="data-table">
+      <thead><tr><th style="text-align:left;">Metric</th><th style="text-align:right;">This Period</th></tr></thead>
+      <tbody>{rows}</tbody>
+    </table>
+    """
+
+
+def _build_seo_trend(gsc, ga4, seo_trend):
+    sections = []
+
+    # Traffic section
+    traffic_metrics = [
+        ('Organic Sessions', _v(ga4, 'organic_sessions')),
+        ('Organic Users', _v(ga4, 'organic_users')),
+        ('Website Leads', _v(ga4, 'leads')),
+    ]
+    sections.append(_trend_table('TRAFFIC', traffic_metrics))
+
+    # Engagement
+    engagement_metrics = [
+        ('Avg. Session Duration (sec)', _v(ga4, 'avgSessionDuration')),
+        ('Bounce Rate', _v(ga4, 'bounceRate')),
+    ]
+    sections.append(_trend_table('ENGAGEMENT', engagement_metrics, pct_keys=['Bounce Rate']))
+
+    # Search Console
+    gsc_metrics = [
+        ('Google Search Console Clicks', _v(gsc, 'clicks')),
+        ('Google Search Console Impressions', _v(gsc, 'impressions')),
+        ('Avg. Position', _v(gsc, 'position')),
+    ]
+    sections.append(_trend_table('SEARCH CONSOLE', gsc_metrics))
+
+    # Top Queries
+    queries = _v(gsc, 'queries') or []
+    if queries:
+        q_rows = ''
+        for i, q in enumerate(queries[:20], 1):
+            q_rows += f"""<tr>
+                <td>{i}</td>
+                <td style="text-align:left;">{q.get('query', '—')}</td>
+                <td class="metric-val">{_fmt(q.get('clicks'))}</td>
+                <td class="metric-val">{_fmt(q.get('impressions'))}</td>
+                <td class="metric-val">{_fmt(q.get('ctr'), is_pct=True)}</td>
+                <td class="metric-val">{_fmt(q.get('position'))}</td>
+            </tr>"""
+        sections.append(f"""
+        <div class="section-header accent-blue">TOP QUERIES</div>
+        <table class="data-table">
+          <thead><tr><th>#</th><th style="text-align:left;">Query</th><th>Clicks</th><th>Impressions</th><th>CTR</th><th>Avg Position</th></tr></thead>
+          <tbody>{q_rows}</tbody>
+        </table>""")
+
+    # Top Pages
+    pages = _v(gsc, 'pages') or _v(ga4, 'pages') or []
+    if pages:
+        p_rows = ''
+        for i, p in enumerate(pages[:15], 1):
+            if isinstance(p, dict):
+                page_url = p.get('page', p.get('pagePath', ''))
+                if len(page_url) > 60:
+                    page_url = page_url[:57] + '...'
+                p_rows += f"""<tr>
+                    <td>{i}</td>
+                    <td style="text-align:left; font-size:0.72rem;">{page_url}</td>
+                    <td class="metric-val">{_fmt(p.get('clicks', p.get('sessions')))}</td>
+                    <td class="metric-val">{_fmt(p.get('impressions', p.get('users')))}</td>
+                </tr>"""
+        if p_rows:
+            sections.append(f"""
+            <div class="section-header accent-blue">TOP PAGES</div>
+            <table class="data-table">
+              <thead><tr><th>#</th><th style="text-align:left;">Page</th><th>Clicks/Sessions</th><th>Impressions/Users</th></tr></thead>
+              <tbody>{p_rows}</tbody>
+            </table>""")
+
+    return '\n'.join(sections) if sections else '<p class="empty-note">No SEO data available for this period.</p>'
+
+
+def _trend_table(header, metrics, pct_keys=None):
+    pct_keys = pct_keys or []
+    rows = ''
+    for label, val in metrics:
+        is_pct = label in pct_keys
+        rows += f'<tr><td class="metric-name">{label}</td><td class="metric-val">{_fmt(val, is_pct=is_pct)}</td></tr>'
+    return f"""
+    <div class="section-header accent-blue">{header}</div>
+    <table class="data-table">
+      <thead><tr><th style="text-align:left;">Metric</th><th style="text-align:right;">Value</th></tr></thead>
+      <tbody>{rows}</tbody>
+    </table>"""
+
+
+def _build_smm_trend(social_trend):
+    if not social_trend:
+        return '<p class="empty-note">No social media trend data available.</p>'
+
+    periods = [t.get('period', '') for t in social_trend]
+    period_headers = ''.join(f'<th class="period-th">{p}</th>' for p in periods)
+
+    smm_metrics = [
+        ('Followers / Page Likes', 'followers'),
+        ('New Followers (net)', 'new_followers'),
+        ('Reach', 'reach'),
+        ('Views', 'views'),
+        ('Engagements (total)', 'engagements'),
+        ('Engagement Rate (%)', 'engagement_rate'),
+        ('Posts Published', 'posts_published'),
+        ('Stories / Reels', 'reels_stories'),
+        ('Video Views', 'video_views'),
+        ('Link Clicks', 'link_clicks'),
+        ('Profile Visits / Page Views', 'profile_visits', 'profile_views'),
+        ('Saves / Shares', 'saves_shares'),
+    ]
+
+    def _platform_rows(platform_key, platform_label, color, icon):
+        header = f"""<tr class="platform-header" style="background:{color}10;">
+            <td colspan="{len(periods) + 1}" style="font-weight:800; font-size:0.72rem;
+            letter-spacing:0.08em; color:{color}; padding:0.6rem 1rem;">
+            {icon} {platform_label}</td></tr>"""
+        rows = ''
+        for item in smm_metrics:
+            label = item[0]
+            keys = item[1:]
+            is_pct = 'rate' in label.lower()
+            row = f'<td class="metric-name">{label}</td>'
+            for t in social_trend:
+                plat = t.get(platform_key) or {}
+                val = None
+                for k in keys:
+                    val = plat.get(k)
+                    if val is not None:
+                        break
+                row += f'<td class="metric-val">{_fmt(val, is_pct=is_pct)}</td>'
+            rows += f'<tr>{row}</tr>'
+        return header + rows
+
+    ig_rows = _platform_rows('ig', 'INSTAGRAM', '#E4405F', '📷')
+    fb_rows = _platform_rows('fb', 'FACEBOOK', '#1877F2', '👥')
+
+    # Check for LinkedIn data in trend
+    has_linkedin = any(t.get('li') for t in social_trend)
+    li_rows = ''
+    if has_linkedin:
+        li_rows = _platform_rows('li', 'LINKEDIN', '#0A66C2', '💼')
+
+    return f"""
+    <table class="data-table trend-table">
+      <thead><tr><th style="text-align:left; width:220px;">Metric</th>{period_headers}</tr></thead>
+      <tbody>
+        {ig_rows}
+        {fb_rows}
+        {li_rows}
+      </tbody>
+    </table>"""
+
+
+def _build_ads(meta_ads):
+    if not meta_ads:
+        return '<p class="empty-note">No ad campaign data available for this period.</p>'
+
+    # Platform summary
+    total_imp = sum(int(_v(c, 'impressions', 0) or 0) for c in meta_ads)
+    total_clicks = sum(int(_v(c, 'clicks', 0) or 0) for c in meta_ads)
+    total_leads = sum(int(_v(c, 'leads', 0) or 0) for c in meta_ads)
+    total_spend = sum(float(_v(c, 'spend', 0) or 0) for c in meta_ads)
+    total_reach = sum(int(_v(c, 'reach', 0) or 0) for c in meta_ads)
+    ctr = (total_clicks / total_imp * 100) if total_imp > 0 else 0
+    cpl = (total_spend / total_leads) if total_leads > 0 else 0
+
+    summary = f"""
+    <div class="section-header accent-green">PLATFORM PERFORMANCE — SUMMARY</div>
+    <table class="data-table">
+      <thead><tr><th style="text-align:left;">Metric</th><th>Value</th></tr></thead>
+      <tbody>
+        <tr><td class="metric-name">Total Impressions</td><td class="metric-val">{_fmt(total_imp)}</td></tr>
+        <tr><td class="metric-name">Total Clicks</td><td class="metric-val">{_fmt(total_clicks)}</td></tr>
+        <tr><td class="metric-name">Total Leads</td><td class="metric-val">{_fmt(total_leads)}</td></tr>
+        <tr><td class="metric-name">CTR</td><td class="metric-val">{_fmt(ctr, is_pct=True)}</td></tr>
+        <tr><td class="metric-name">Total Reach</td><td class="metric-val">{_fmt(total_reach)}</td></tr>
+        <tr><td class="metric-name">Total Spend</td><td class="metric-val">{_fmt(total_spend, is_currency=True)}</td></tr>
+        <tr><td class="metric-name">CPL</td><td class="metric-val">{_fmt(cpl, is_currency=True)}</td></tr>
+      </tbody>
+    </table>"""
+
+    # Campaign details
+    camp_rows = ''
+    for c in meta_ads:
+        name = c.get('campaign_name', c.get('name', '—'))
+        if len(name) > 50:
+            name = name[:47] + '...'
+        status = c.get('status', '—')
+        status_color = '#10B981' if status == 'ACTIVE' else '#9CA3AF'
+        camp_rows += f"""<tr>
+            <td style="text-align:left; font-size:0.75rem;">{name}</td>
+            <td><span style="color:{status_color}; font-weight:600; font-size:0.72rem;">{status}</span></td>
+            <td class="metric-val">{_fmt(_v(c, 'impressions'))}</td>
+            <td class="metric-val">{_fmt(_v(c, 'clicks'))}</td>
+            <td class="metric-val">{_fmt(_v(c, 'ctr'), is_pct=True)}</td>
+            <td class="metric-val">{_fmt(_v(c, 'reach'))}</td>
+            <td class="metric-val">{_fmt(_v(c, 'leads'))}</td>
+            <td class="metric-val">{_fmt(float(_v(c, 'spend', 0) or 0), is_currency=True)}</td>
+            <td class="metric-val">{_fmt(float(_v(c, 'cpc', 0) or 0), is_currency=True)}</td>
+        </tr>"""
+
+    campaigns = f"""
+    <div class="section-header accent-green">CAMPAIGN PERFORMANCE — DETAIL</div>
+    <table class="data-table">
+      <thead><tr>
+        <th style="text-align:left;">Campaign</th><th>Status</th><th>Impressions</th>
+        <th>Clicks</th><th>CTR</th><th>Reach</th><th>Leads</th><th>Spend</th><th>CPC</th>
+      </tr></thead>
+      <tbody>{camp_rows}</tbody>
+    </table>"""
+
+    return summary + campaigns
+
+
+def _build_executive_summary(gsc, ga4, social_fb, social_ig, meta_ads):
+    highlights = []
+
+    # Auto-generate highlights from data
+    organic = _v(ga4, 'organic_sessions')
+    if organic and isinstance(organic, (int, float)) and organic > 0:
+        highlights.append(f"Organic sessions reached {_fmt(int(organic))} for the reporting period.")
+
+    gsc_clicks = _v(gsc, 'clicks')
+    gsc_imp = _v(gsc, 'impressions')
+    if gsc_clicks and gsc_imp:
+        highlights.append(f"Search Console recorded {_fmt(int(gsc_clicks))} clicks from {_fmt(int(gsc_imp))} impressions.")
+
+    ig_reach = _v(social_ig, 'reach', 0) or 0
+    fb_reach = _v(social_fb, 'reach', 0) or 0
+    if ig_reach + fb_reach > 0:
+        highlights.append(f"Total social media reach: {_fmt(ig_reach + fb_reach)} (Instagram: {_fmt(ig_reach)}, Facebook: {_fmt(fb_reach)}).")
+
+    ig_eng = _v(social_ig, 'engagements', 0) or 0
+    fb_eng = _v(social_fb, 'engagements', 0) or 0
+    if ig_eng + fb_eng > 0:
+        highlights.append(f"Combined social engagements: {_fmt(ig_eng + fb_eng)}.")
+
+    ig_followers = _v(social_ig, 'followers', 0) or 0
+    fb_followers = _v(social_fb, 'followers', 0) or 0
+    if ig_followers > 0 or fb_followers > 0:
+        highlights.append(f"Current followers — Instagram: {_fmt(ig_followers)}, Facebook: {_fmt(fb_followers)}.")
+
+    total_ad_spend = sum(float(_v(c, 'spend', 0) or 0) for c in meta_ads)
+    total_ad_leads = sum(int(_v(c, 'leads', 0) or 0) for c in meta_ads)
+    if total_ad_spend > 0:
+        cpl = total_ad_spend / total_ad_leads if total_ad_leads > 0 else 0
+        highlights.append(f"Ad spend: {_fmt(total_ad_spend, is_currency=True)} generating {_fmt(total_ad_leads)} leads" +
+                         (f" at {_fmt(cpl, is_currency=True)} CPL." if cpl > 0 else "."))
+
+    if not highlights:
+        return '<p class="empty-note">No data available to generate executive summary.</p>'
+
+    bullets = ''.join(f'<li>{h}</li>' for h in highlights)
+
+    return f"""
+    <div class="section-header accent-amber">THE HEADLINE</div>
+    <ul class="summary-list">{bullets}</ul>
+
+    <div class="section-header accent-green">KEY HIGHLIGHTS</div>
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="summary-card-title">Social Reach</div>
+        <div class="summary-card-value">{_fmt((ig_reach + fb_reach) or None)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-card-title">Total Engagements</div>
+        <div class="summary-card-value">{_fmt((ig_eng + fb_eng) or None)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-card-title">Organic Sessions</div>
+        <div class="summary-card-value">{_fmt(_v(ga4, 'organic_sessions'))}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-card-title">Ad Leads</div>
+        <div class="summary-card-value">{_fmt(total_ad_leads or None)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-card-title">Ad Spend</div>
+        <div class="summary-card-value">{_fmt(total_ad_spend, is_currency=True) if total_ad_spend > 0 else '—'}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-card-title">GSC Clicks</div>
+        <div class="summary-card-value">{_fmt(_v(gsc, 'clicks'))}</div>
+      </div>
+    </div>
+    """
+
+
+def _css():
+    return """
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #F8F9FC;
+      color: #1E293B;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      padding: 0;
+    }
+
+    /* Header */
+    .report-header {
+      background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 50%, #4C1D95 100%);
+      color: #fff;
+      padding: 2rem 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header-brand { display: flex; align-items: center; gap: 1rem; }
+    .header-logo {
+      width: 48px; height: 48px; border-radius: 12px;
+      background: rgba(255,255,255,0.2); backdrop-filter: blur(10px);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 1.1rem; letter-spacing: 0.04em;
+    }
+    .header-title { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.02em; }
+    .header-subtitle { font-size: 0.82rem; opacity: 0.8; font-weight: 500; }
+    .header-meta { text-align: right; }
+    .header-period {
+      font-size: 0.9rem; font-weight: 700;
+      background: rgba(255,255,255,0.15); padding: 0.35rem 1rem;
+      border-radius: 8px; display: inline-block; margin-bottom: 0.25rem;
+    }
+    .header-dept { font-size: 0.75rem; opacity: 0.7; }
+
+    /* Sheets */
+    .sheet {
+      background: #fff;
+      margin: 1.25rem 2rem;
+      border-radius: 12px;
+      padding: 1.75rem 2rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      page-break-inside: avoid;
+    }
+    .sheet-title {
+      font-size: 1.05rem; font-weight: 800; color: #1E293B;
+      margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem;
+      padding-bottom: 0.75rem; border-bottom: 2px solid #F1F5F9;
+    }
+    .sheet-icon { font-size: 1.1rem; }
+
+    /* Section headers */
+    .section-header {
+      font-weight: 800; font-size: 0.7rem; letter-spacing: 0.1em;
+      text-transform: uppercase; padding: 0.6rem 1rem;
+      border-radius: 6px; margin: 1.25rem 0 0.75rem 0;
+    }
+    .section-header:first-child { margin-top: 0; }
+    .accent-purple { background: #F5F3FF; color: #7C3AED; border-left: 4px solid #7C3AED; }
+    .accent-blue { background: #EFF6FF; color: #2563EB; border-left: 4px solid #2563EB; }
+    .accent-green { background: #F0FDF4; color: #16A34A; border-left: 4px solid #16A34A; }
+    .accent-red { background: #FEF2F2; color: #DC2626; border-left: 4px solid #DC2626; }
+    .accent-amber { background: #FFFBEB; color: #D97706; border-left: 4px solid #D97706; }
+
+    /* Tables */
+    .data-table {
+      width: 100%; border-collapse: collapse; margin-bottom: 0.5rem;
+      font-size: 0.78rem;
+    }
+    .data-table thead th {
+      background: #F8FAFC; color: #64748B; font-weight: 700;
+      font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 0.6rem 0.75rem; text-align: right;
+      border-bottom: 2px solid #E2E8F0;
+    }
+    .data-table thead th:first-child { text-align: left; }
+    .data-table tbody tr { border-bottom: 1px solid #F1F5F9; }
+    .data-table tbody tr:nth-child(even) { background: #FAFBFD; }
+    .data-table tbody tr:hover { background: #F1F5F9; }
+    .data-table td { padding: 0.55rem 0.75rem; }
+    .metric-name { font-weight: 600; color: #334155; }
+    .metric-val { text-align: right; font-variant-numeric: tabular-nums; color: #1E293B; font-weight: 500; }
+
+    .trend-table { font-size: 0.74rem; }
+    .trend-table .period-th {
+      font-size: 0.62rem; text-align: center; white-space: nowrap;
+      padding: 0.5rem 0.4rem; min-width: 90px;
+    }
+    .trend-table .metric-val { text-align: center; font-size: 0.74rem; }
+    .platform-header td {
+      border-top: 2px solid #E2E8F0 !important;
+    }
+
+    /* Summary */
+    .summary-list {
+      padding: 0.75rem 1.5rem; line-height: 1.9; color: #334155;
+    }
+    .summary-list li { margin-bottom: 0.25rem; }
+    .summary-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem; margin-top: 0.5rem;
+    }
+    .summary-card {
+      background: #F8FAFC; border-radius: 8px; padding: 1rem;
+      text-align: center; border: 1px solid #E2E8F0;
+    }
+    .summary-card-title {
+      font-size: 0.68rem; font-weight: 700; color: #64748B;
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.35rem;
+    }
+    .summary-card-value { font-size: 1.25rem; font-weight: 800; color: #7C3AED; }
+
+    .empty-note {
+      color: #94A3B8; font-style: italic; padding: 1rem 0; font-size: 0.82rem;
+    }
+
+    /* Footer */
+    .report-footer {
+      display: flex; justify-content: space-between; padding: 1.25rem 2.5rem;
+      font-size: 0.7rem; color: #94A3B8; border-top: 1px solid #E2E8F0;
+      margin: 0 2rem;
+    }
+
+    /* Print */
+    @media print {
+      body { background: #fff; font-size: 0.75rem; }
+      .sheet { box-shadow: none; margin: 0.75rem 0; border: 1px solid #E2E8F0; }
+      .report-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .section-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .platform-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .data-table tbody tr:nth-child(even) { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+    """
