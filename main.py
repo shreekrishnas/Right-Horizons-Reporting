@@ -643,10 +643,16 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
                     ga4_sum = ga4.get_summary(creds, prop, start, end)
                     ga4_sum["pages"] = ga4.get_top_pages(creds, prop, start, end, 20)
                     ga4_sum["sources"] = ga4.get_traffic_sources(creds, prop, start, end)
+                    try:
+                        org = ga4.get_organic_summary(creds, prop, start, end)
+                        ga4_sum["organic_sessions"] = org.get("organic_sessions", 0)
+                        ga4_sum["organic_users"] = org.get("organic_users", 0)
+                        ga4_sum["leads"] = org.get("leads", 0)
+                    except Exception:
+                        pass
                     html_data["ga4"] = ga4_sum
                 except Exception:
                     pass
-            # SEO 5-week trend
             try:
                 html_data["seo_trend"] = seo_trend(domain, period, 5)
             except Exception:

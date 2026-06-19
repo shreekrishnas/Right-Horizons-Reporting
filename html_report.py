@@ -155,10 +155,23 @@ def _seo_sheet(seo_trend, gsc, ga4):
     periods = [t.get('period', '') for t in seo_trend] if seo_trend else []
     n = len(periods)
 
+    # Fallback values when no trend data
+    _fallback = {}
+    _fallback.update({
+        'organic_sessions': _g(ga4, 'organic_sessions') or _g(ga4, 'sessions'),
+        'organic_users': _g(ga4, 'organic_users') or _g(ga4, 'users'),
+        'leads': _g(ga4, 'leads', 0),
+        'avg_session_duration': _g(ga4, 'avg_session') or _g(ga4, 'avgSessionDuration'),
+        'bounce_rate': _g(ga4, 'bounce_rate') or _g(ga4, 'bounceRate'),
+        'gsc_clicks': _g(gsc, 'clicks'),
+        'gsc_impressions': _g(gsc, 'impressions'),
+        'gsc_position': _g(gsc, 'position'),
+    })
+
     def _trend_section(title, accent, metrics_def):
         if not seo_trend:
-            rows = ''.join(f'<tr><td class="mn">{label}</td><td class="mv">{_f(val, pct=is_pct)}</td></tr>'
-                          for label, val, is_pct in metrics_def)
+            rows = ''.join(f'<tr><td class="mn">{label}</td><td class="mv">{_f(_fallback.get(key), pct=is_pct)}</td></tr>'
+                          for label, key, is_pct in metrics_def)
             return f"""
             <div class="sec-h {accent}">{title}</div>
             <table class="dt"><thead><tr><th class="tl">Metric</th><th class="tr">Value</th></tr></thead>
