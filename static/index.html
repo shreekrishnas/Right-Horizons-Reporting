@@ -548,21 +548,52 @@
                 <div class="section page-enter">
                     <div class="section-label">Reports & Analytics</div>
                     <div class="glass-card-static" style="padding:1.5rem; margin-bottom:1.5rem;">
-                        <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
+                        <!-- Row 1: Period + Domain -->
+                        <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center; margin-bottom:1rem;">
                             <div class="date-range-group">
                                 <button class="dr-btn active" data-rep-period="weekly" onclick="setRepPeriod('weekly')">Weekly</button>
                                 <button class="dr-btn" data-rep-period="monthly" onclick="setRepPeriod('monthly')">Monthly</button>
                             </div>
-                            <input type="date" class="date-input" id="rep-start">
-                            <input type="date" class="date-input" id="rep-end">
-                            <button class="btn-export" onclick="generateReport()">Generate</button>
+                            <select id="rep-domain" class="date-input" style="height:36px; min-width:180px; font-size:0.82rem; padding:0 0.75rem; border-radius:8px; background:var(--glass-bg); border:1px solid var(--border-color); color:var(--text-primary); cursor:pointer; appearance:none; -webkit-appearance:none; background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239CA3AF%22 stroke-width=%222.5%22><polyline points=%226 9 12 15 18 9%22/></svg>'); background-repeat:no-repeat; background-position:right 10px center;">
+                            </select>
+                        </div>
+                        <!-- Row 2: Date range with smart presets -->
+                        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:1rem;">
+                            <div class="date-range-group">
+                                <button class="dr-btn" data-rep-range="7d" onclick="setRepRange('7d')">Last 7D</button>
+                                <button class="dr-btn active" data-rep-range="28d" onclick="setRepRange('28d')">Last 28D</button>
+                                <button class="dr-btn" data-rep-range="3m" onclick="setRepRange('3m')">Last 3M</button>
+                                <button class="dr-btn" data-rep-range="6m" onclick="setRepRange('6m')">Last 6M</button>
+                                <button class="dr-btn" data-rep-range="thismonth" onclick="setRepRange('thismonth')">This Month</button>
+                                <button class="dr-btn" data-rep-range="lastmonth" onclick="setRepRange('lastmonth')">Last Month</button>
+                            </div>
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                <label style="font-size:0.75rem; font-weight:600; color:var(--text-muted); letter-spacing:0.04em;">FROM</label>
+                                <input type="date" class="date-input" id="rep-start" style="height:36px; border-radius:8px;">
+                            </div>
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                <label style="font-size:0.75rem; font-weight:600; color:var(--text-muted); letter-spacing:0.04em;">TO</label>
+                                <input type="date" class="date-input" id="rep-end" style="height:36px; border-radius:8px;">
+                            </div>
+                            <button class="btn-export" onclick="generateReport()" style="padding:0.5rem 1.25rem; border-radius:8px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px; vertical-align:-2px;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                                Generate
+                            </button>
                             <span style="margin-left:auto;"></span>
-                            <button class="btn-export" onclick="exportReportFmt('excel')">Excel</button>
-                            <button class="btn-export" onclick="exportReportFmt('csv')">CSV</button>
-                            <button class="btn-export" onclick="exportReportFmt('pdf')">PDF</button>
+                            <div style="display:flex; gap:0.5rem;">
+                                <button class="btn-export" onclick="exportReportFmt('html')" style="padding:0.5rem 1rem; border-radius:8px; background:linear-gradient(135deg,#7C3AED,#6D28D9); color:#fff; border:none; font-weight:700; font-size:0.78rem; letter-spacing:0.04em; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    HTML Report
+                                </button>
+                                <button class="btn-export" onclick="exportReportFmt('excel')" style="padding:0.5rem 1rem; border-radius:8px; font-size:0.78rem;">Excel</button>
+                                <button class="btn-export" onclick="exportReportFmt('csv')" style="padding:0.5rem 1rem; border-radius:8px; font-size:0.78rem;">CSV</button>
+                                <button class="btn-export" onclick="exportReportFmt('pdf')" style="padding:0.5rem 1rem; border-radius:8px; font-size:0.78rem;">PDF</button>
+                            </div>
                         </div>
                     </div>
-                    <div id="rep-result"><div class="empty-state"><p>Choose a period and generate a report.</p></div></div>
+                    <div id="rep-result"><div class="empty-state"><p>Choose a period and date range, then click Generate or download directly as HTML.</p></div></div>
                 </div>
             </div>
 

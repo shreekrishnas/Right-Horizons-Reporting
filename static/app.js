@@ -1447,13 +1447,50 @@ function setRepPeriod(p) {
     document.querySelectorAll('[data-rep-period]').forEach(b => b.classList.toggle('active', b.dataset.repPeriod === p));
 }
 
+function setRepRange(preset) {
+    document.querySelectorAll('[data-rep-range]').forEach(b => b.classList.toggle('active', b.dataset.repRange === preset));
+    const today = todayIST();
+    const yesterday = offsetIST(today, -1);
+    let s, e;
+    switch (preset) {
+        case '7d': s = offsetIST(yesterday, -6); e = yesterday; break;
+        case '28d': s = offsetIST(yesterday, -27); e = yesterday; break;
+        case '3m': s = offsetIST(yesterday, -89); e = yesterday; break;
+        case '6m': s = offsetIST(yesterday, -179); e = yesterday; break;
+        case 'thismonth': {
+            const t = today.split('-');
+            s = `${t[0]}-${t[1]}-01`;
+            e = yesterday;
+            break;
+        }
+        case 'lastmonth': {
+            const d = new Date(today + 'T00:00:00+05:30');
+            d.setDate(1); d.setMonth(d.getMonth() - 1);
+            s = d.toISOString().split('T')[0];
+            const d2 = new Date(today + 'T00:00:00+05:30');
+            d2.setDate(0);
+            e = d2.toISOString().split('T')[0];
+            break;
+        }
+        default: s = offsetIST(yesterday, -27); e = yesterday;
+    }
+    document.getElementById('rep-start').value = s;
+    document.getElementById('rep-end').value = e;
+}
+
+function _repDomain() {
+    const sel = document.getElementById('rep-domain');
+    return sel ? sel.value : currentDomain;
+}
+
 async function generateReport() {
     const start = document.getElementById('rep-start').value;
     const end = document.getElementById('rep-end').value;
+    const dom = _repDomain();
     const el = document.getElementById('rep-result');
-    el.innerHTML = '<div class="empty-state"><p>Generating…</p></div>';
+    el.innerHTML = '<div class="empty-state"><p>Generating report…</p></div>';
     try {
-        const qs = `?period=${repPeriod}&domain=${currentDomain}&start=${start}&end=${end}`;
+        const qs = `?period=${repPeriod}&domain=${dom}&start=${start}&end=${end}`;
         const r = await api(`/api/reports/generate${qs}`);
         let html = `<div class="section-label">${esc(r.label)} — ${esc(r.period)} (${esc(r.start)} to ${esc(r.end)})</div>`;
         const sections = [
@@ -1482,7 +1519,8 @@ async function generateReport() {
 function exportReportFmt(fmt) {
     const start = document.getElementById('rep-start').value;
     const end = document.getElementById('rep-end').value;
-    window.location.href = `/api/reports/export?period=${repPeriod}&domain=${currentDomain}&start=${start}&end=${end}&format=${fmt}`;
+    const dom = _repDomain();
+    window.location.href = `/api/reports/export?period=${repPeriod}&domain=${dom}&start=${start}&end=${end}&format=${fmt}`;
 }
 
 // ── Init ──
@@ -1505,7 +1543,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             btn.onclick = () => switchDomain(key);
             tabs.appendChild(btn);
         });
+        // Populate report domain dropdown
+        const repDom = document.getElementById('rep-domain');
+        if (repDom) {
+            repDom.innerHTML = '';
+            Object.entries(domains).forEach(([key, d]) => {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = d.label;
+                if (key === currentDomain) opt.selected = true;
+                repDom.appendChild(opt);
+            });
+        }
     } catch (e) { console.error('Failed to load domains', e); }
+
+    // Set default report dates
+    setRepRange('28d');
 
     document.querySelectorAll('#date-range-group .dr-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1545,12 +1598,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (el) el.textContent = valImg.files[0]?.name || '';
     });
 
-    // Default report dates (IST)
-    const todayStr = todayIST();
-    document.getElementById('rep-end').value = todayStr;
-    document.getElementById('rep-start').value = offsetIST(todayStr, -30);
     // Default calendar month
-    document.getElementById('cal-month').value = todayStr.slice(0, 7);
+    document.getElementById('cal-month').value = todayIST().slice(0, 7);
 
     const loader = document.getElementById('page-loader');
     if (loader) { loader.classList.add('fade'); setTimeout(() => loader.remove(), 400); }

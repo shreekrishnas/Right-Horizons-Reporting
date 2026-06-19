@@ -628,6 +628,83 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
     fmt = format.lower()
     base = f"Report_{d['short']}_{period}_{start}_{end}"
 
+    if fmt == "html":
+        import html_report
+        # Gather rich data for HTML report
+        html_data = {}
+        try:
+            creds = get_credentials()
+            gsc_sum = gsc.get_summary(creds, d["gsc_site"], start, end)
+            gsc_sum["queries"] = gsc.get_top_queries(creds, d["gsc_site"], start, end, 20)
+            gsc_sum["pages"] = gsc.get_top_pages(creds, d["gsc_site"], start, end, 20)
+            html_data["gsc"] = gsc_sum
+            prop = d.get("ga4_property")
+            if prop:
+                try:
+                    ga4_sum = ga4.get_summary(creds, prop, start, end)
+                    ga4_sum["pages"] = ga4.get_top_pages(creds, prop, start, end, 20)
+                    ga4_sum["sources"] = ga4.get_traffic_sources(creds, prop, start, end)
+                    html_data["ga4"] = ga4_sum
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        if META_MARKETING_TOKEN and META_AD_ACCOUNT:
+            try:
+                html_data["meta_ads"] = meta.get_campaigns_summary(META_MARKETING_TOKEN, META_AD_ACCOUNT, start, end)
+            except Exception:
+                pass
+        if META_SOCIAL_TOKEN and META_PAGE_ID:
+            try:
+                html_data["social_fb"] = social.get_fb_comprehensive(META_SOCIAL_TOKEN, META_PAGE_ID, start, end)
+            except Exception:
+                pass
+            try:
+                ig_id = social.get_ig_account(META_SOCIAL_TOKEN, META_PAGE_ID)
+                if ig_id:
+                    html_data["social_ig"] = social.get_ig_comprehensive(META_SOCIAL_TOKEN, ig_id, start, end)
+            except Exception:
+                pass
+            # Social trend for weekly view
+            try:
+                today_ist = _today_ist()
+                days_per = 7 if period == "weekly" else 30
+                ig_id = None
+                try:
+                    ig_id = social.get_ig_account(META_SOCIAL_TOKEN, META_PAGE_ID)
+                except Exception:
+                    pass
+                trend = []
+                for i in range(5):
+                    p_end = today_ist - timedelta(days=i * days_per)
+                    p_start = p_end - timedelta(days=days_per - 1)
+                    ps, pe = p_start.isoformat(), p_end.isoformat()
+                    lbl = f"{p_start.strftime('%b %d')} - {p_end.strftime('%b %d')}" if period == "weekly" else p_start.strftime('%B %Y')
+                    row = {"period": lbl}
+                    try:
+                        row["fb"] = social.get_fb_comprehensive(META_SOCIAL_TOKEN, META_PAGE_ID, ps, pe)
+                    except Exception:
+                        row["fb"] = {}
+                    if ig_id:
+                        try:
+                            row["ig"] = social.get_ig_comprehensive(META_SOCIAL_TOKEN, ig_id, ps, pe)
+                        except Exception:
+                            row["ig"] = {}
+                    else:
+                        row["ig"] = {}
+                    trend.append(row)
+                trend.reverse()
+                html_data["social_trend"] = trend
+            except Exception:
+                pass
+
+        html_content = html_report.generate_html_report(html_data, start, end, d["label"])
+        return StreamingResponse(
+            io.BytesIO(html_content.encode("utf-8")),
+            media_type="text/html",
+            headers={"Content-Disposition": f'attachment; filename="{base}.html"'},
+        )
+
     if fmt == "csv":
         import csv
         buf = io.StringIO()
