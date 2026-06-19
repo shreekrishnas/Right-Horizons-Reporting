@@ -21,7 +21,7 @@ DOMAINS = {
         "label": "Right Horizons",
         "short": "RH",
         "gsc_site": "https://www.righthorizons.com/",
-        "ga4_property": os.getenv("GA4_PROPERTY_RH", "6639050"),
+        "ga4_property": os.getenv("GA4_PROPERTY_RH", "313861315"),
         "color": "#7C3AED",
         "url": "https://www.righthorizons.com",
         "meta_page_id": os.getenv("META_PAGE_ID", "296408333709162"),
