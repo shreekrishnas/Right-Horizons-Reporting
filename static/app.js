@@ -1366,15 +1366,38 @@ function renderValResult(r) {
     const score = r.score || 0;
     const color = score >= 80 ? '#10B981' : score >= 60 ? '#F59E0B' : '#ef4444';
     const ready = r.publish_ready;
+    const entity = r.entity_detected || '';
+    const entityColors = { RH: '#7C3AED', PMS: '#0EA5E9', AIF: '#10B981' };
+    const entityColor = entityColors[entity] || 'var(--text-muted)';
     let html = `<div class="glass-card-static" style="padding:1.5rem;">
         <div style="display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap;">
             <div style="font-size:3rem; font-weight:800; color:${color};">${score}<span style="font-size:1rem; color:var(--text-muted);">/100</span></div>
             <div>
                 <div style="font-weight:700; margin-bottom:0.25rem;">${esc(r.summary || '')}</div>
-                <span style="background:${ready ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'}; color:${ready ? '#10B981' : '#ef4444'}; padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.7rem; font-weight:700;">${ready ? 'PUBLISH READY' : 'NEEDS WORK'}</span>
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.4rem;">
+                    <span style="background:${ready ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'}; color:${ready ? '#10B981' : '#ef4444'}; padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.7rem; font-weight:700;">${ready ? 'PUBLISH READY' : 'NEEDS WORK'}</span>
+                    ${entity ? `<span style="background:${entityColor}15; color:${entityColor}; padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.7rem; font-weight:700;">Entity: ${esc(entity)}</span>` : ''}
+                </div>
             </div>
         </div>
     </div>`;
+    const compIssues = r.compliance_issues || [];
+    if (compIssues.length) {
+        const sevColors = { critical: '#ef4444', warning: '#F59E0B', info: '#0EA5E9' };
+        html += `<div class="glass-card-static" style="padding:1.25rem; margin-top:1rem; border-left:4px solid #ef4444;">
+            <div class="section-label" style="color:#ef4444;">Compliance Issues</div>
+            <ul style="margin:0.5rem 0 0 1.25rem; font-size:0.85rem; line-height:1.8; list-style:none;">
+                ${compIssues.map(c => {
+                    const sc = sevColors[c.severity] || '#F59E0B';
+                    return `<li style="margin-bottom:0.4rem;">
+                        <span style="background:${sc}15; color:${sc}; padding:0.15rem 0.5rem; border-radius:9999px; font-size:0.65rem; font-weight:700; text-transform:uppercase; margin-right:0.5rem;">${esc(c.severity || 'warning')}</span>
+                        ${esc(c.issue || '')}
+                        ${c.guideline_ref ? `<span style="color:var(--text-muted); font-size:0.75rem;"> — ${esc(c.guideline_ref)}</span>` : ''}
+                    </li>`;
+                }).join('')}
+            </ul>
+        </div>`;
+    }
     const sections = [
         { title: 'Strengths', items: r.strengths || [], color: '#10B981' },
         { title: 'Weaknesses', items: r.weaknesses || [], color: '#F59E0B' },

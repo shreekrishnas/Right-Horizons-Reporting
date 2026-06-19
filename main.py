@@ -46,28 +46,6 @@ def _domain(key: str) -> dict:
     return DOMAINS[key]
 
 
-@app.get("/api/debug/ga4")
-def debug_ga4(domain: str = "rh"):
-    d = _domain(domain)
-    prop = d.get("ga4_property", "")
-    result = {"property_id": prop, "domain": domain}
-    if not prop:
-        result["error"] = "No GA4 property configured"
-        return result
-    try:
-        creds = get_credentials()
-        result["auth"] = "ok"
-    except Exception as e:
-        result["auth"] = f"FAILED: {e}"
-        return result
-    try:
-        summary = ga4.get_summary(creds, prop, "2026-06-01", "2026-06-18")
-        result["ga4_call"] = "ok"
-        result["data"] = summary
-    except Exception as e:
-        result["ga4_call"] = f"FAILED: {e}"
-    return result
-
 
 # ── Health & Config ──────────────────────────────────────────────────────────
 
@@ -945,20 +923,64 @@ def ideas_seen():
 
 # ── Content Validator ────────────────────────────────────────────────────────
 
+_RH_BRAND_GUIDELINES = """
+=== BRAND GUIDELINES: RIGHT HORIZONS GROUP ===
+
+1. RIGHT HORIZONS (Investment Advisory)
+   - Email: contactus@righthorizons.com
+   - Website: http://www.righthorizons.com
+   - Phone: 91 80505 74007
+   - SEBI Registration: Investment Adviser — INA200002601
+   - BSE Enlistment: 1730
+   - Mandatory Disclaimer: "Investment in securities market are subject to market risks. Read all the related documents carefully before investing."
+   - Additional Disclaimer: "Registration granted by SEBI, enlistment as IA with Exchange and certification from National Institute of Securities Markets (NISM) in no way guarantee performance of the intermediary provide any assurance of returns to investors."
+
+2. RIGHT HORIZONS PMS (Portfolio Management Services)
+   - Email: rhpmscare@righthorizons.com
+   - Website: http://www.righthorizonspms.com
+   - Phone: 91 80505 93006
+   - SEBI Registration: INP000004359
+   - Mandatory Disclaimer: "Investments under Portfolio Management Services by Right Horizons Portfolio Management Private Limited are subject to market risks, and past performance does not guarantee future returns. Investors should read the Disclosure Document carefully, understand all risks, and consult tax advisors before investing. No assured returns are offered, and SEBI has not verified performance data."
+
+3. RIGHT HORIZONS AIF (Alternative Investment Funds)
+   - Email: aifsupport@righthorizons.com
+   - Phone: 91 80505 93006
+   - SEBI Registration: IN/AIF3/25-26/2114
+   - Mandatory Disclaimer: "Investments in AIFs are subject to market risks, including potential loss of capital. Past performance of the sponsor/investment manager does not guarantee future returns. Please read the Private Placement Memorandum (PPM) carefully and consult your advisors before investing."
+
+=== COMPLIANCE RULES ===
+- Every creative MUST include the correct disclaimer for the entity it represents.
+- SEBI registration number MUST be displayed.
+- Contact details (email, phone, website) should be present or referenced.
+- No guaranteed/assured returns language is permitted.
+- Past performance disclaimers are mandatory when showing returns data.
+- "Mutual fund investments are subject to market risks" type disclaimers must match the entity type (IA/PMS/AIF).
+"""
+
 VALIDATOR_TEXT_SYSTEM = (
-    "You are a senior content reviewer for a financial services brand. Review the content for grammar, "
-    "clarity, marketing effectiveness, brand alignment, CTA, missing info, compliance (SEBI guidelines "
-    "for Indian financial content). Output ONLY valid JSON: {score: 0-100, grammar_issues: "
-    "[{issue, suggestion}], strengths: [], weaknesses: [], recommendations: [], missing_info: [], "
-    "publish_ready: boolean, summary: string}."
+    "You are a senior content reviewer for Right Horizons, an Indian financial services group. "
+    "Review the content against these official brand guidelines:\n" + _RH_BRAND_GUIDELINES +
+    "\nCheck for: grammar, clarity, marketing effectiveness, brand alignment, CTA, "
+    "SEBI compliance (correct disclaimer present, SEBI reg number, no assured returns language), "
+    "correct contact details, and whether the disclaimer matches the entity (RH/PMS/AIF). "
+    "Flag if the wrong disclaimer or SEBI number is used for the entity. "
+    "Output ONLY valid JSON: {score: 0-100, entity_detected: 'RH'|'PMS'|'AIF'|'unknown', "
+    "compliance_issues: [{issue, severity: 'critical'|'warning'|'info', guideline_ref}], "
+    "grammar_issues: [{issue, suggestion}], strengths: [], weaknesses: [], "
+    "recommendations: [], missing_info: [], publish_ready: boolean, summary: string}."
 )
 
 VALIDATOR_IMAGE_SYSTEM = (
-    "You are a senior creative reviewer for a financial services brand. Review the visual creative for "
-    "design quality, text overlay readability, brand consistency, CTA visibility, and SEBI compliance "
-    "for Indian financial marketing. Output ONLY valid JSON: {score: 0-100, grammar_issues: "
-    "[{issue, suggestion}], strengths: [], weaknesses: [], recommendations: [], missing_info: [], "
-    "publish_ready: boolean, summary: string}."
+    "You are a senior creative reviewer for Right Horizons, an Indian financial services group. "
+    "Review the visual creative against these official brand guidelines:\n" + _RH_BRAND_GUIDELINES +
+    "\nCheck for: design quality, text overlay readability, brand consistency, CTA visibility, "
+    "SEBI compliance (disclaimer text visible and correct for entity, SEBI reg number present, "
+    "no assured returns language), correct contact details, logo usage. "
+    "Flag if disclaimer is missing, wrong, or illegible. "
+    "Output ONLY valid JSON: {score: 0-100, entity_detected: 'RH'|'PMS'|'AIF'|'unknown', "
+    "compliance_issues: [{issue, severity: 'critical'|'warning'|'info', guideline_ref}], "
+    "grammar_issues: [{issue, suggestion}], strengths: [], weaknesses: [], "
+    "recommendations: [], missing_info: [], publish_ready: boolean, summary: string}."
 )
 
 
