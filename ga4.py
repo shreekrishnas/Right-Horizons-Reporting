@@ -94,7 +94,7 @@ def get_organic_summary(creds: Credentials, property_id: str, start: str, end: s
             Metric(name="totalUsers"),
             Metric(name="bounceRate"),
             Metric(name="averageSessionDuration"),
-            Metric(name="conversions"),
+            Metric(name="keyEvents"),
         ],
     ))
     if not resp.rows:

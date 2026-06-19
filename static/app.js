@@ -514,7 +514,8 @@ async function loadGSC() {
         overviewIds.forEach((id, i) => renderMetric(id, vals[i]));
         detailIds.forEach((id, i) => renderMetric(id, vals[i]));
     } catch (e) {
-        [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
+        console.error('GSC summary error:', e);
+        [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) { el.className = 'metric-value'; el.textContent = '—'; } });
     }
     try {
         const queries = await api(`/api/gsc/queries${qs}&limit=15`);
@@ -560,7 +561,8 @@ async function loadGA4() {
         overviewIds.forEach((id, i) => renderMetric(id, vals[i]));
         detailIds.forEach((id, i) => renderMetric(id, vals[i]));
     } catch (e) {
-        [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
+        console.error('GA4 summary error:', e);
+        [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) { el.className = 'metric-value'; el.textContent = '—'; } });
     }
     try {
         const sources = await api(`/api/ga4/sources${qs}`);
