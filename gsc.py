@@ -76,7 +76,13 @@ def get_daily(creds: Credentials, site_url: str, start: str, end: str) -> list:
         },
     ).execute()
     return [
-        {"date": r["keys"][0], "clicks": round(r.get("clicks", 0)), "impressions": round(r.get("impressions", 0))}
+        {
+            "date": r["keys"][0],
+            "clicks": round(r.get("clicks", 0)),
+            "impressions": round(r.get("impressions", 0)),
+            "ctr": round(r.get("ctr", 0) * 100, 2),
+            "position": round(r.get("position", 0), 1),
+        }
         for r in resp.get("rows", [])
     ]
 

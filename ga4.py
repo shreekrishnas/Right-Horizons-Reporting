@@ -115,7 +115,14 @@ def get_daily(creds: Credentials, property_id: str, start: str, end: str) -> lis
         property=f"properties/{property_id}",
         date_ranges=[DateRange(start_date=start, end_date=end)],
         dimensions=[Dimension(name="date")],
-        metrics=[Metric(name="sessions"), Metric(name="totalUsers")],
+        metrics=[
+            Metric(name="sessions"),
+            Metric(name="totalUsers"),
+            Metric(name="newUsers"),
+            Metric(name="bounceRate"),
+            Metric(name="screenPageViews"),
+            Metric(name="averageSessionDuration"),
+        ],
         order_bys=[OrderBy(dimension=OrderBy.DimensionOrderBy(dimension_name="date"))],
         limit=500,
     ))
@@ -124,6 +131,10 @@ def get_daily(creds: Credentials, property_id: str, start: str, end: str) -> lis
             "date": r.dimension_values[0].value,
             "sessions": int(float(r.metric_values[0].value)),
             "users": int(float(r.metric_values[1].value)),
+            "new_users": int(float(r.metric_values[2].value)),
+            "bounce_rate": float(r.metric_values[3].value),
+            "pageviews": int(float(r.metric_values[4].value)),
+            "avg_session": float(r.metric_values[5].value),
         }
         for r in resp.rows
     ]
