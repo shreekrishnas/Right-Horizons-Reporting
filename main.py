@@ -1022,7 +1022,7 @@ def calendar_generate(req: CalendarRequest):
         raise HTTPException(400, "month required (YYYY-MM)")
     domain_label = DOMAINS.get(req.domain, {}).get("label", req.domain)
     level = _level_up(req.domain)
-    sys_prompt = CAL_SYSTEM.format(domain=domain_label, month=req.month)
+    sys_prompt = CAL_SYSTEM.replace("{domain}", domain_label).replace("{month}", req.month)
     user = f"Generate the calendar for {domain_label}, month {req.month}.\n\n"
     user += f"GENERATION LEVEL: {level} (each level must go deeper / more specialized than the last)\n"
     user += "LEVEL-UP RULES:\n"
@@ -1179,7 +1179,7 @@ async def calendar_upload(file: UploadFile = File(...), domain: str = Query("rh"
         raise HTTPException(422, f"Failed to parse file: {e}")
     text = text[:8000]
     domain_label = DOMAINS.get(domain, {}).get("label", domain)
-    sys_prompt = CAL_SYSTEM.format(domain=domain_label, month=month)
+    sys_prompt = CAL_SYSTEM.replace("{domain}", domain_label).replace("{month}", month)
     user = f"Generate the calendar for {domain_label}, month {month}, using the following source document as context:\n\n{text}"
     try:
         items = ai_mod.chat_json(sys_prompt, user, max_tokens=4000)
@@ -1214,7 +1214,7 @@ def ideas_generate(domain: str = "rh", category: str = "all"):
         raise HTTPException(500, "AI module failed to load")
     domain_label = DOMAINS.get(domain, {}).get("label", domain)
     level = _level_up(f"ideas:{domain}")
-    sys_prompt = IDEAS_SYSTEM.format(category=category)
+    sys_prompt = IDEAS_SYSTEM.replace("{category}", category)
     user = f"Generate 10 fresh content ideas for {domain_label}, category: {category}.\n\n"
     user += f"GENERATION LEVEL: {level} (each batch must escalate in depth/specificity)\n"
     user += "LEVEL-UP RULES:\n"
