@@ -100,7 +100,11 @@ function showError(id, msg) {
 
 function renderMetric(id, value) {
     const el = document.getElementById(id);
-    if (el) { el.className = 'metric-value'; el.textContent = formatNum(value); }
+    if (el) {
+        el.className = 'metric-value metric-updated';
+        el.textContent = formatNum(value);
+        setTimeout(() => el.classList.remove('metric-updated'), 600);
+    }
 }
 
 function renderTable(id, headers, rows) {
@@ -1412,6 +1416,7 @@ async function uploadLinkedIn() {
 }
 
 async function loadAll() {
+    console.log('[loadAll] domain=' + currentDomain + ' start=' + dateStart + ' end=' + dateEnd);
     analyticsLoaded = {};
     await Promise.allSettled([loadGSC(), loadGA4(), loadMeta()]);
     try {
