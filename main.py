@@ -119,6 +119,32 @@ def admin_credentials(password: str = ""):
     }
 
 
+@app.post("/api/admin/history")
+def admin_history(password: str = ""):
+    if not password or password != ADMIN_PASSWORD:
+        raise HTTPException(401, "Invalid password")
+    return {
+        "calendar_levels": _generation_level,
+        "calendar_history_counts": {k: len(v) for k, v in _calendar_history.items()},
+        "ideas_history_counts": {k: len(v) for k, v in _ideas_history.items()},
+        "calendar_recent": {k: v[-20:] for k, v in _calendar_history.items()},
+        "ideas_recent": {k: v[-20:] for k, v in _ideas_history.items()},
+    }
+
+
+@app.post("/api/admin/reset-history")
+def admin_reset_history(password: str = "", scope: str = "all"):
+    if not password or password != ADMIN_PASSWORD:
+        raise HTTPException(401, "Invalid password")
+    if scope in ("all", "calendar"):
+        _calendar_history.clear()
+    if scope in ("all", "ideas"):
+        _ideas_history.clear()
+    if scope == "all":
+        _generation_level.clear()
+    return {"ok": True, "scope": scope}
+
+
 @app.get("/api/domains")
 def get_domains():
     return {k: {kk: vv for kk, vv in v.items() if kk not in ("gsc_site", "ga4_property")} for k, v in DOMAINS.items()}
@@ -859,6 +885,39 @@ from pydantic import BaseModel
 
 _calendars: dict = {}  # key: f"{domain}:{month}" -> list of items
 _ideas_state = {"last_check": 0, "available": 0}
+_ideas_history: dict = {}  # key: domain -> list of past idea titles/descriptions
+_calendar_history: dict = {}  # key: domain -> list of past post titles/captions
+_generation_level: dict = {}  # key: domain -> int (increments each generation)
+
+
+def _push_history(store: dict, domain: str, items: list, key_field: str = "title"):
+    """Track up to last 200 items per domain to avoid repetition."""
+    if domain not in store:
+        store[domain] = []
+    for it in items or []:
+        if isinstance(it, dict):
+            t = it.get(key_field) or it.get("caption") or it.get("description") or ""
+            sw = it.get("swimlane", "")
+            if t:
+                store[domain].append({"title": str(t)[:200], "swimlane": sw})
+    store[domain] = store[domain][-200:]
+
+
+def _history_context(store: dict, domain: str, limit: int = 60) -> str:
+    """Build a 'do NOT repeat' block from past items."""
+    past = store.get(domain, [])[-limit:]
+    if not past:
+        return ""
+    lines = []
+    for p in past:
+        sw = f" [{p['swimlane']}]" if p.get("swimlane") else ""
+        lines.append(f"- {p['title']}{sw}")
+    return "\n".join(lines)
+
+
+def _level_up(domain: str) -> int:
+    _generation_level[domain] = _generation_level.get(domain, 0) + 1
+    return _generation_level[domain]
 
 
 class CalendarRequest(BaseModel):
@@ -962,8 +1021,20 @@ def calendar_generate(req: CalendarRequest):
     if not req.month:
         raise HTTPException(400, "month required (YYYY-MM)")
     domain_label = DOMAINS.get(req.domain, {}).get("label", req.domain)
+    level = _level_up(req.domain)
     sys_prompt = CAL_SYSTEM.format(domain=domain_label, month=req.month)
-    user = f"Generate the calendar for {domain_label}, month {req.month}."
+    user = f"Generate the calendar for {domain_label}, month {req.month}.\n\n"
+    user += f"GENERATION LEVEL: {level} (each level must go deeper / more specialized than the last)\n"
+    user += "LEVEL-UP RULES:\n"
+    user += "- Level 1-3: foundational topics (corpus basics, vesting basics, tax residency basics)\n"
+    user += "- Level 4-7: intermediate angles (corpus vs SWP math, ESOP exit waterfalls, NRI DTAA optimization)\n"
+    user += "- Level 8+: advanced/niche (estate freezes, GIFT City FoF structures, ESOP+RSU dual-track, family LLP vs Trust)\n"
+    user += "Pick angles appropriate for current level. NEVER use the exact angle of any past item.\n\n"
+    past = _history_context(_calendar_history, req.domain, limit=80)
+    if past:
+        user += "DO NOT REPEAT THESE PAST POSTS (vary the angle, the numbers, the specifics):\n"
+        user += past + "\n\nProduce ALL-NEW angles. If a swimlane needs to be covered again, "
+        user += "shift the sub-topic, audience segment, age bracket, or numerical example.\n"
     if req.context:
         user += f"\n\nAdditional context:\n{req.context}"
     try:
@@ -971,7 +1042,8 @@ def calendar_generate(req: CalendarRequest):
         if isinstance(items, dict) and "items" in items:
             items = items["items"]
         _calendars[f"{req.domain}:{req.month}"] = items
-        return {"items": items, "month": req.month, "domain": req.domain}
+        _push_history(_calendar_history, req.domain, items if isinstance(items, list) else [], key_field="title")
+        return {"items": items, "month": req.month, "domain": req.domain, "level": level}
     except Exception as e:
         raise HTTPException(502, f"AI error: {e}")
 
@@ -1083,6 +1155,11 @@ async def calendar_upload(file: UploadFile = File(...), domain: str = Query("rh"
             raise HTTPException(422, f"Failed to parse Excel calendar: {e}")
         if items:
             _calendars[f"{domain}:{month}"] = items
+            # Seed history so AI knows these were already published
+            _push_history(_calendar_history, domain, [
+                {"title": (it.get("caption") or "")[:200], "swimlane": it.get("swimlane", "")}
+                for it in items
+            ], key_field="title")
             return {"items": items, "month": month, "domain": domain, "source": "excel"}
 
     # Otherwise, fall back to AI-driven generation from PDF/DOCX/text
@@ -1136,14 +1213,25 @@ def ideas_generate(domain: str = "rh", category: str = "all"):
     if not ai_mod:
         raise HTTPException(500, "AI module failed to load")
     domain_label = DOMAINS.get(domain, {}).get("label", domain)
+    level = _level_up(f"ideas:{domain}")
     sys_prompt = IDEAS_SYSTEM.format(category=category)
-    user = f"Generate 10 creative content ideas for {domain_label}, category: {category}."
+    user = f"Generate 10 fresh content ideas for {domain_label}, category: {category}.\n\n"
+    user += f"GENERATION LEVEL: {level} (each batch must escalate in depth/specificity)\n"
+    user += "LEVEL-UP RULES:\n"
+    user += "- Level 1-3: foundational concepts\n"
+    user += "- Level 4-7: intermediate strategies with concrete math\n"
+    user += "- Level 8+: advanced/niche scenarios (cross-border, multi-entity, regulatory edge cases)\n\n"
+    past = _history_context(_ideas_history, f"ideas:{domain}", limit=80)
+    if past:
+        user += "DO NOT REPEAT THESE PAST IDEAS (find a new angle, audience, or specific case):\n"
+        user += past + "\n\nEvery idea must be NEW. Avoid the same titles, framings, or numerical examples.\n"
     try:
         items = ai_mod.chat_json(sys_prompt, user, max_tokens=3000)
         if isinstance(items, dict) and "items" in items:
             items = items["items"]
         _ideas_state["available"] = len(items) if isinstance(items, list) else 0
-        return {"items": items, "domain": domain, "category": category}
+        _push_history(_ideas_history, f"ideas:{domain}", items if isinstance(items, list) else [], key_field="title")
+        return {"items": items, "domain": domain, "category": category, "level": level}
     except Exception as e:
         raise HTTPException(502, f"AI error: {e}")
 
