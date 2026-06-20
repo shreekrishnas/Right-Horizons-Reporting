@@ -112,20 +112,53 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; -webkit-font-
 /* ── Date range ── */
 .date-range-group { display: flex; align-items: center; gap: 0.4rem; }
 .dr-btn {
-  padding: 0.35rem 0.75rem; border-radius: 9999px; border: 1px solid var(--border-subtle);
+  padding: 0.4rem 0.85rem; border-radius: 9999px; border: 1.5px solid var(--border-subtle);
   background: var(--surface-card); color: var(--text-secondary); font-size: 0.78rem; font-weight: 600;
-  cursor: pointer; transition: all .15s ease;
+  cursor: pointer; transition: all .2s ease;
   box-shadow: 0 2px 6px rgba(15,23,42,0.06);
+  font-family: 'Inter', sans-serif;
 }
-.dr-btn:hover { background: var(--surface-card-elevated); color: var(--text-primary); }
+.dr-btn:hover { background: var(--surface-card-elevated); color: var(--text-primary); border-color: var(--accent, #7C3AED); box-shadow: 0 4px 12px rgba(124,58,237,0.12); transform: translateY(-1px); }
+.dr-btn:active { transform: translateY(0); box-shadow: 0 2px 6px rgba(124,58,237,0.15); }
 .dr-btn.active { background: #7C3AED; color: #fff; border-color: #7C3AED; box-shadow: 0 4px 12px rgba(124,58,237,0.30); }
 .date-input {
   height: 34px; padding: 0 0.625rem; font-size: 0.78rem;
-  border-radius: 0.625rem; border: 1px solid var(--border-input);
+  border-radius: 0.75rem; border: 1.5px solid var(--border-input);
   background: var(--surface-input); color: var(--text-primary);
   font-family: 'Inter', sans-serif;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.05);
 }
-.date-input:focus { border-color: #6366F1; outline: none; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+.date-input:hover { border-color: var(--accent, #7C3AED); box-shadow: 0 4px 12px rgba(124,58,237,0.10); }
+.date-input:focus { border-color: var(--accent, #7C3AED); outline: none; box-shadow: 0 0 0 3px rgba(124,58,237,0.15), 0 4px 12px rgba(124,58,237,0.10); }
+
+/* ── Premium select styling ── */
+select, .metric-select {
+  appearance: none; -webkit-appearance: none;
+  padding: 0.45rem 2rem 0.45rem 0.85rem;
+  border-radius: 0.75rem;
+  border: 1.5px solid var(--border-subtle);
+  background: var(--surface-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 0.75rem center;
+  background-size: 12px;
+  color: var(--text-primary);
+  font-size: 0.8rem; font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.05);
+}
+select:hover, .metric-select:hover {
+  border-color: var(--accent, #7C3AED);
+  box-shadow: 0 4px 12px rgba(124,58,237,0.12);
+}
+select:focus, .metric-select:focus {
+  outline: none;
+  border-color: var(--accent, #7C3AED);
+  box-shadow: 0 0 0 3px rgba(124,58,237,0.15), 0 4px 12px rgba(124,58,237,0.10);
+}
+[data-theme="dark"] select, [data-theme="dark"] .metric-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%239CA3AF' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+}
 
 /* ── Export button ── */
 .btn-export {

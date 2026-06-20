@@ -624,17 +624,8 @@ async function loadGSC() {
             { label: 'Impressions', key: 'impressions' }, { label: 'CTR %', key: 'ctr' },
             { label: 'Position', key: 'position' },
         ], cache.gscPages);
-        makeChart('chart-gsc-perf', {
-            type: 'line',
-            data: {
-                labels: daily.map(d => shortDate(d.date)),
-                datasets: [
-                    { label: 'Clicks', data: daily.map(d => d.clicks), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, yAxisID: 'y' },
-                    { label: 'CTR %', data: daily.map(d => d.ctr || (d.impressions > 0 ? parseFloat(((d.clicks / d.impressions) * 100).toFixed(2)) : 0)), borderColor: CHART_COLORS.teal, backgroundColor: 'transparent', fill: false, tension: 0.4, borderDash: [4, 2], yAxisID: 'y1' },
-                ]
-            },
-            options: { scales: { x: {}, y: { position: 'left' }, y1: { position: 'right', grid: { display: false } } } }
-        });
+        const gscMetricSel = document.getElementById('gsc-metric-select');
+        switchGSCMetric(gscMetricSel ? gscMetricSel.value : 'clicks-impressions');
     } catch (e) {
         console.error('GSC error:', e);
         [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) { el.className = 'metric-value'; el.textContent = '—'; } });
@@ -659,21 +650,93 @@ async function loadGA4() {
             { label: 'Page', key: 'page' }, { label: 'Views', key: 'views' },
             { label: 'Sessions', key: 'sessions' }, { label: 'Avg Duration', key: 'avg_dur' },
         ], cache.ga4Pages);
-        makeChart('chart-ga4-quality', {
-            type: 'line',
-            data: {
-                labels: daily.map(d => shortDate(d.date)),
-                datasets: [
-                    { label: 'Sessions', data: daily.map(d => d.sessions), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, yAxisID: 'y' },
-                    { label: 'Bounce %', data: daily.map(d => parseFloat(((d.bounce_rate || 0) * 100).toFixed(1))), borderColor: CHART_COLORS.red, backgroundColor: 'transparent', fill: false, tension: 0.4, borderDash: [4, 2], yAxisID: 'y1' },
-                ]
-            },
-            options: { scales: { x: {}, y: { position: 'left' }, y1: { position: 'right', grid: { display: false } } } }
-        });
+        const ga4MetricSel = document.getElementById('ga4-metric-select');
+        switchGA4Metric(ga4MetricSel ? ga4MetricSel.value : 'sessions-users');
     } catch (e) {
         console.error('GA4 error:', e);
         [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) { el.className = 'metric-value'; el.textContent = '—'; } });
     }
+}
+
+function switchGSCMetric(value) {
+    const cache = _getCachedOrNull(currentDomain);
+    if (!cache) return;
+    const daily = _filterDaily(cache.gscDaily, dateStart, dateEnd);
+    const labels = daily.map(d => shortDate(d.date));
+    const ctrData = daily.map(d => d.ctr || (d.impressions > 0 ? parseFloat(((d.clicks / d.impressions) * 100).toFixed(2)) : 0));
+    const posData = daily.map(d => d.position || 0);
+    let datasets = [], scales = { x: {} };
+    switch (value) {
+        case 'clicks-impressions':
+            datasets = [
+                { label: 'Clicks', data: daily.map(d => d.clicks), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, yAxisID: 'y' },
+                { label: 'Impressions', data: daily.map(d => d.impressions), borderColor: CHART_COLORS.blue, backgroundColor: CHART_COLORS.blueLight, fill: true, tension: 0.4, yAxisID: 'y1' },
+            ];
+            scales = { x: {}, y: { position: 'left' }, y1: { position: 'right', grid: { display: false } } };
+            break;
+        case 'clicks-ctr':
+            datasets = [
+                { label: 'Clicks', data: daily.map(d => d.clicks), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, yAxisID: 'y' },
+                { label: 'CTR %', data: ctrData, borderColor: CHART_COLORS.teal, backgroundColor: 'transparent', fill: false, tension: 0.4, borderDash: [4, 2], yAxisID: 'y1' },
+            ];
+            scales = { x: {}, y: { position: 'left' }, y1: { position: 'right', grid: { display: false } } };
+            break;
+        case 'impressions-position':
+            datasets = [
+                { label: 'Impressions', data: daily.map(d => d.impressions), borderColor: CHART_COLORS.blue, backgroundColor: CHART_COLORS.blueLight, fill: true, tension: 0.4, yAxisID: 'y' },
+                { label: 'Position', data: posData, borderColor: CHART_COLORS.amber, backgroundColor: 'transparent', fill: false, tension: 0.4, borderDash: [4, 2], yAxisID: 'y1' },
+            ];
+            scales = { x: {}, y: { position: 'left' }, y1: { position: 'right', reverse: true, grid: { display: false } } };
+            break;
+        case 'all':
+            datasets = [
+                { label: 'Clicks', data: daily.map(d => d.clicks), borderColor: CHART_COLORS.purple, backgroundColor: 'transparent', fill: false, tension: 0.4, yAxisID: 'y' },
+                { label: 'Impressions', data: daily.map(d => d.impressions), borderColor: CHART_COLORS.blue, backgroundColor: 'transparent', fill: false, tension: 0.4, yAxisID: 'y1' },
+                { label: 'CTR %', data: ctrData, borderColor: CHART_COLORS.teal, backgroundColor: 'transparent', fill: false, tension: 0.4, borderDash: [4, 2], yAxisID: 'y2' },
+                { label: 'Position', data: posData, borderColor: CHART_COLORS.amber, backgroundColor: 'transparent', fill: false, tension: 0.4, borderDash: [4, 2], yAxisID: 'y3' },
+            ];
+            scales = { x: {}, y: { position: 'left' }, y1: { display: false }, y2: { display: false }, y3: { display: false, reverse: true } };
+            break;
+    }
+    makeChart('chart-gsc-perf', { type: 'line', data: { labels, datasets }, options: { scales } });
+}
+
+function switchGA4Metric(value) {
+    const cache = _getCachedOrNull(currentDomain);
+    if (!cache) return;
+    const daily = _filterDaily(cache.ga4Daily, dateStart, dateEnd);
+    const labels = daily.map(d => shortDate(d.date));
+    let datasets = [], scales = { x: {} };
+    switch (value) {
+        case 'sessions-users':
+            datasets = [
+                { label: 'Sessions', data: daily.map(d => d.sessions), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, yAxisID: 'y' },
+                { label: 'Users', data: daily.map(d => d.users || 0), borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.greenLight, fill: true, tension: 0.4, yAxisID: 'y' },
+            ];
+            scales = { x: {}, y: {} };
+            break;
+        case 'sessions-bounce':
+            datasets = [
+                { label: 'Sessions', data: daily.map(d => d.sessions), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, yAxisID: 'y' },
+                { label: 'Bounce %', data: daily.map(d => parseFloat(((d.bounce_rate || 0) * 100).toFixed(1))), borderColor: CHART_COLORS.red, backgroundColor: 'transparent', fill: false, tension: 0.4, borderDash: [4, 2], yAxisID: 'y1' },
+            ];
+            scales = { x: {}, y: { position: 'left' }, y1: { position: 'right', grid: { display: false } } };
+            break;
+        case 'pageviews':
+            datasets = [
+                { label: 'Pageviews', data: daily.map(d => d.pageviews || 0), borderColor: CHART_COLORS.blue, backgroundColor: CHART_COLORS.blueLight, fill: true, tension: 0.4 },
+            ];
+            scales = { x: {}, y: {} };
+            break;
+        case 'new-returning':
+            datasets = [
+                { label: 'New Users', data: daily.map(d => d.new_users || 0), borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.greenLight, fill: true, tension: 0.4, yAxisID: 'y' },
+                { label: 'Returning Users', data: daily.map(d => Math.max(0, (d.users || 0) - (d.new_users || 0))), borderColor: CHART_COLORS.amber, backgroundColor: 'rgba(245,158,11,0.08)', fill: true, tension: 0.4, yAxisID: 'y' },
+            ];
+            scales = { x: {}, y: {} };
+            break;
+    }
+    makeChart('chart-ga4-quality', { type: 'line', data: { labels, datasets }, options: { scales } });
 }
 
 async function loadMeta() {
@@ -1261,6 +1324,13 @@ async function loadAll() {
     } catch(e) {}
 }
 
+function reloadActiveDashTab() {
+    if (currentDashTab === 'social') loadSocial();
+    else if (currentDashTab === 'youtube') loadYouTube();
+    else if (currentDashTab === 'seo') loadSEOWeekly();
+    else if (currentDashTab === 'meta') loadMeta();
+}
+
 function switchDomain(key) {
     currentDomain = key;
     document.querySelectorAll('.domain-tab[data-domain]').forEach(t => t.classList.toggle('active', t.dataset.domain === key));
@@ -1268,6 +1338,7 @@ function switchDomain(key) {
     if (d) document.getElementById('topbar-title').textContent = d.label;
     analyticsLoaded = {};
     loadAll();
+    reloadActiveDashTab();
 }
 
 function exportReport() {
@@ -1665,6 +1736,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         btn.addEventListener('click', () => {
             setDates(btn.dataset.preset);
             loadAll();
+            reloadActiveDashTab();
         });
     });
     document.getElementById('date-start').addEventListener('change', (e) => {
@@ -1674,12 +1746,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Reset calendar to new date's month
         if (dateStart) { const d = new Date(dateStart); socialCalYear = d.getFullYear(); socialCalMonth = d.getMonth(); }
         loadAll();
+        reloadActiveDashTab();
     });
     document.getElementById('date-end').addEventListener('change', (e) => {
         dateEnd = e.target.value;
         activePreset = '';
         document.querySelectorAll('#date-range-group .dr-btn').forEach(b => b.classList.remove('active'));
         loadAll();
+        reloadActiveDashTab();
     });
 
     document.getElementById('btn-export').addEventListener('click', exportReport);
