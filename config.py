@@ -16,6 +16,10 @@ META_AD_ACCOUNT = os.getenv("META_AD_ACCOUNT", "act_267691143342137")
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
+YOUTUBE_CLIENT_ID = os.getenv("YOUTUBE_CLIENT_ID", "")
+YOUTUBE_CLIENT_SECRET = os.getenv("YOUTUBE_CLIENT_SECRET", "")
+YOUTUBE_REFRESH_TOKEN = os.getenv("YOUTUBE_REFRESH_TOKEN", "")
+
 DOMAINS = {
     "rh": {
         "label": "Right Horizons",

@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from config import DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN, META_PAGE_ID, META_APP_ID, META_APP_SECRET
-from google_auth import get_credentials
+from google_auth import get_credentials, get_youtube_credentials
 import gsc
 import ga4
 import meta
@@ -457,7 +457,7 @@ def seo_trend(domain: str = "rh", period: str = "weekly", periods: int = 5):
 @app.get("/api/youtube/channel")
 def youtube_channel():
     try:
-        creds = get_credentials()
+        creds = get_youtube_credentials()
         return youtube.get_channel_stats(creds)
     except Exception as e:
         raise HTTPException(502, f"YouTube error: {e}")
@@ -466,7 +466,7 @@ def youtube_channel():
 @app.get("/api/youtube/videos")
 def youtube_videos(limit: int = 10):
     try:
-        creds = get_credentials()
+        creds = get_youtube_credentials()
         return youtube.get_recent_videos(creds, limit)
     except Exception as e:
         raise HTTPException(502, f"YouTube error: {e}")
