@@ -378,6 +378,9 @@ async function _ensureCache(domain) {
     return await prefetchDomain(domain);
 }
 
+let _analyticsGSCDaily = [];
+let _analyticsGA4Daily = [];
+
 async function loadAnalytics() {
     const src = document.getElementById('analytics-source').value;
     ['gsc', 'ga4', 'meta', 'social'].forEach(s => {
@@ -385,18 +388,24 @@ async function loadAnalytics() {
         if (el) el.style.display = s === src ? 'block' : 'none';
     });
 
+    const qs = `?domain=${currentDomain}&start=${dateStart}&end=${dateEnd}`;
+
     if (src === 'gsc') {
         try {
-            const cache = await _ensureCache(currentDomain);
+            const [daily, queries, pages] = await Promise.all([
+                api(`/api/gsc/daily${qs}`),
+                api(`/api/gsc/queries${qs}&limit=15`),
+                api(`/api/gsc/pages${qs}&limit=15`),
+            ]);
+            _analyticsGSCDaily = daily || [];
             const gscSel = document.getElementById('a-gsc-metric-select');
             switchAnalyticsGSCMetric(gscSel ? gscSel.value : 'clicks-impressions');
-            const daily = _filterDaily(cache.gscDaily, dateStart, dateEnd);
-            const ctrData = daily.map(d => d.ctr || (d.impressions > 0 ? parseFloat(((d.clicks / d.impressions) * 100).toFixed(2)) : 0));
+            const ctrData = _analyticsGSCDaily.map(d => d.ctr || (d.impressions > 0 ? parseFloat(((d.clicks / d.impressions) * 100).toFixed(2)) : 0));
             const avgCtr = ctrData.length ? (ctrData.reduce((a, b) => a + b, 0) / ctrData.length).toFixed(2) : 0;
             makeChart('a-gsc-ctr', {
                 type: 'line',
                 data: {
-                    labels: daily.map(d => shortDate(d.date)),
+                    labels: _analyticsGSCDaily.map(d => shortDate(d.date)),
                     datasets: [{ label: 'CTR %', data: ctrData, borderColor: CHART_COLORS.teal, backgroundColor: 'transparent', fill: false, tension: 0.4, pointRadius: 0, hoverRadius: 5 }]
                 },
                 options: {
@@ -408,21 +417,19 @@ async function loadAnalytics() {
                     }
                 }
             });
-            const queries = cache.gscQueries || [];
             makeChart('a-gsc-queries', {
                 type: 'bar',
                 data: {
-                    labels: queries.slice(0, 10).map(q => q.query),
-                    datasets: [{ label: 'Clicks', data: queries.slice(0, 10).map(q => q.clicks), backgroundColor: CHART_COLORS.purple, borderRadius: 6 }]
+                    labels: (queries || []).slice(0, 10).map(q => q.query),
+                    datasets: [{ label: 'Clicks', data: (queries || []).slice(0, 10).map(q => q.clicks), backgroundColor: CHART_COLORS.purple, borderRadius: 6 }]
                 },
                 options: { indexAxis: 'y', scales: { x: {}, y: { ticks: { font: { size: 10 } } } } }
             });
-            const pages = cache.gscPages || [];
             makeChart('a-gsc-pages', {
                 type: 'bar',
                 data: {
-                    labels: pages.slice(0, 10).map(p => shortUrl(p.page)),
-                    datasets: [{ label: 'Clicks', data: pages.slice(0, 10).map(p => p.clicks), backgroundColor: CHART_COLORS.blue, borderRadius: 6 }]
+                    labels: (pages || []).slice(0, 10).map(p => shortUrl(p.page)),
+                    datasets: [{ label: 'Clicks', data: (pages || []).slice(0, 10).map(p => p.clicks), backgroundColor: CHART_COLORS.blue, borderRadius: 6 }]
                 },
                 options: { indexAxis: 'y', scales: { x: {}, y: { ticks: { font: { size: 10 } } } } }
             });
@@ -431,15 +438,18 @@ async function loadAnalytics() {
 
     if (src === 'ga4') {
         try {
-            const cache = await _ensureCache(currentDomain);
+            const [daily, sources, pages] = await Promise.all([
+                api(`/api/ga4/daily${qs}`),
+                api(`/api/ga4/sources${qs}`),
+                api(`/api/ga4/pages${qs}&limit=15`),
+            ]);
+            _analyticsGA4Daily = daily || [];
             const ga4Sel = document.getElementById('a-ga4-metric-select');
             switchAnalyticsGA4Metric(ga4Sel ? ga4Sel.value : 'sessions-users');
-            const daily = _filterDaily(cache.ga4Daily, dateStart, dateEnd);
-            const summary = _ga4SummaryFromDaily(daily);
+            const summary = _ga4SummaryFromDaily(_analyticsGA4Daily);
             const el = document.getElementById('a-ga4-bounce');
             if (el) el.textContent = summary.bounce_rate + '%';
-            const sources = cache.ga4Sources || [];
-            if (sources.length) {
+            if (sources && sources.length) {
                 const total = sources.reduce((s, r) => s + (r.sessions || 0), 0);
                 makeChart('a-ga4-sources', {
                     type: 'doughnut',
@@ -459,12 +469,11 @@ async function loadAnalytics() {
                     }
                 });
             }
-            const pages = cache.ga4Pages || [];
             makeChart('a-ga4-pages', {
                 type: 'bar',
                 data: {
-                    labels: pages.slice(0, 10).map(p => shortUrl(p.page)),
-                    datasets: [{ label: 'Views', data: pages.slice(0, 10).map(p => p.views), backgroundColor: CHART_COLORS.purple, borderRadius: 6 }]
+                    labels: (pages || []).slice(0, 10).map(p => shortUrl(p.page)),
+                    datasets: [{ label: 'Views', data: (pages || []).slice(0, 10).map(p => p.views), backgroundColor: CHART_COLORS.purple, borderRadius: 6 }]
                 },
                 options: { indexAxis: 'y', scales: { x: {}, y: { ticks: { font: { size: 10 } } } } }
             });
@@ -560,9 +569,8 @@ async function loadAnalytics() {
 }
 
 function switchAnalyticsGSCMetric(value) {
-    const cache = _getCachedOrNull(currentDomain);
-    if (!cache) return;
-    const daily = _filterDaily(cache.gscDaily, dateStart, dateEnd);
+    const daily = _analyticsGSCDaily;
+    if (!daily || !daily.length) return;
     const labels = daily.map(d => shortDate(d.date));
     const ctrData = daily.map(d => d.ctr || (d.impressions > 0 ? parseFloat(((d.clicks / d.impressions) * 100).toFixed(2)) : 0));
     const posData = daily.map(d => d.position || 0);
@@ -606,9 +614,8 @@ function switchAnalyticsGSCMetric(value) {
 }
 
 function switchAnalyticsGA4Metric(value) {
-    const cache = _getCachedOrNull(currentDomain);
-    if (!cache) return;
-    const daily = _filterDaily(cache.ga4Daily, dateStart, dateEnd);
+    const daily = _analyticsGA4Daily;
+    if (!daily || !daily.length) return;
     const labels = daily.map(d => shortDate(d.date));
     const chartLabels = { 'sessions-users': 'Sessions & Users', 'sessions-bounce': 'Sessions & Bounce Rate', 'pageviews': 'Pageviews', 'new-returning': 'New vs Returning Users' };
     const labelEl = document.getElementById('a-ga4-chart-label');
@@ -659,14 +666,23 @@ function switchDashTab(tab) {
 }
 
 // ── Data loading (cache-aware) ──
+let _dashGSCDaily = [];
+let _dashGA4Daily = [];
+let _dashGA4Sources = [];
+
 async function loadGSC() {
     const overviewIds = ['gsc-clicks', 'gsc-impressions', 'gsc-ctr', 'gsc-position'];
     const detailIds = ['gsc-clicks-d', 'gsc-impressions-d', 'gsc-ctr-d', 'gsc-position-d'];
     [...overviewIds, ...detailIds].forEach(id => showLoading(id));
     try {
-        const cache = await _ensureCache(currentDomain);
-        const daily = _filterDaily(cache.gscDaily, dateStart, dateEnd);
-        const summary = _gscSummaryFromDaily(daily);
+        const qs = `?domain=${currentDomain}&start=${dateStart}&end=${dateEnd}`;
+        const [daily, queries, pages] = await Promise.all([
+            api(`/api/gsc/daily${qs}`),
+            api(`/api/gsc/queries${qs}&limit=15`),
+            api(`/api/gsc/pages${qs}&limit=15`),
+        ]);
+        _dashGSCDaily = daily || [];
+        const summary = _gscSummaryFromDaily(_dashGSCDaily);
         const vals = [summary.clicks, summary.impressions, summary.ctr + '%', summary.position];
         overviewIds.forEach((id, i) => renderMetric(id, vals[i]));
         detailIds.forEach((id, i) => renderMetric(id, vals[i]));
@@ -674,12 +690,12 @@ async function loadGSC() {
             { label: 'Query', key: 'query' }, { label: 'Clicks', key: 'clicks' },
             { label: 'Impressions', key: 'impressions' }, { label: 'CTR %', key: 'ctr' },
             { label: 'Position', key: 'position' },
-        ], cache.gscQueries);
+        ], queries || []);
         renderTable('gsc-pages-table', [
             { label: 'Page', key: 'page' }, { label: 'Clicks', key: 'clicks' },
             { label: 'Impressions', key: 'impressions' }, { label: 'CTR %', key: 'ctr' },
             { label: 'Position', key: 'position' },
-        ], cache.gscPages);
+        ], pages || []);
         const gscMetricSel = document.getElementById('gsc-metric-select');
         switchGSCMetric(gscMetricSel ? gscMetricSel.value : 'clicks-impressions');
     } catch (e) {
@@ -693,19 +709,25 @@ async function loadGA4() {
     const detailIds = ['ga4-sessions-d', 'ga4-users-d', 'ga4-pageviews-d', 'ga4-bounce-d'];
     [...overviewIds, ...detailIds].forEach(id => showLoading(id));
     try {
-        const cache = await _ensureCache(currentDomain);
-        const daily = _filterDaily(cache.ga4Daily, dateStart, dateEnd);
-        const summary = _ga4SummaryFromDaily(daily);
+        const qs = `?domain=${currentDomain}&start=${dateStart}&end=${dateEnd}`;
+        const [daily, sources, pages] = await Promise.all([
+            api(`/api/ga4/daily${qs}`),
+            api(`/api/ga4/sources${qs}`),
+            api(`/api/ga4/pages${qs}&limit=15`),
+        ]);
+        _dashGA4Daily = daily || [];
+        _dashGA4Sources = sources || [];
+        const summary = _ga4SummaryFromDaily(_dashGA4Daily);
         const vals = [summary.sessions, summary.users, summary.pageviews, summary.bounce_rate + '%'];
         overviewIds.forEach((id, i) => renderMetric(id, vals[i]));
         detailIds.forEach((id, i) => renderMetric(id, vals[i]));
         renderTable('ga4-sources-table', [
             { label: 'Channel', key: 'channel' }, { label: 'Sessions', key: 'sessions' }, { label: 'Users', key: 'users' },
-        ], cache.ga4Sources);
+        ], sources || []);
         renderTable('ga4-pages-table', [
             { label: 'Page', key: 'page' }, { label: 'Views', key: 'views' },
             { label: 'Sessions', key: 'sessions' }, { label: 'Avg Duration', key: 'avg_dur' },
-        ], cache.ga4Pages);
+        ], pages || []);
         const ga4MetricSel = document.getElementById('ga4-metric-select');
         switchGA4Metric(ga4MetricSel ? ga4MetricSel.value : 'sessions-users');
     } catch (e) {
@@ -715,9 +737,8 @@ async function loadGA4() {
 }
 
 function switchGSCMetric(value) {
-    const cache = _getCachedOrNull(currentDomain);
-    if (!cache) return;
-    const daily = _filterDaily(cache.gscDaily, dateStart, dateEnd);
+    const daily = _dashGSCDaily;
+    if (!daily || !daily.length) return;
     const labels = daily.map(d => shortDate(d.date));
     const ctrData = daily.map(d => d.ctr || (d.impressions > 0 ? parseFloat(((d.clicks / d.impressions) * 100).toFixed(2)) : 0));
     const posData = daily.map(d => d.position || 0);
@@ -758,9 +779,8 @@ function switchGSCMetric(value) {
 }
 
 function switchGA4Metric(value) {
-    const cache = _getCachedOrNull(currentDomain);
-    if (!cache) return;
-    const daily = _filterDaily(cache.ga4Daily, dateStart, dateEnd);
+    const daily = _dashGA4Daily;
+    if (!daily || !daily.length) return;
     const labels = daily.map(d => shortDate(d.date));
     let datasets = [], scales = { x: {} };
     switch (value) {
@@ -1343,11 +1363,9 @@ async function uploadLinkedIn() {
 async function loadAll() {
     analyticsLoaded = {};
     await Promise.allSettled([loadGSC(), loadGA4(), loadMeta()]);
-    // Overview charts from cache (no extra API calls)
     try {
-        const cache = _getCachedOrNull(currentDomain);
-        const gscData = cache ? _filterDaily(cache.gscDaily, dateStart, dateEnd) : [];
-        const ga4Data = cache ? _filterDaily(cache.ga4Daily, dateStart, dateEnd) : [];
+        const gscData = _dashGSCDaily || [];
+        const ga4Data = _dashGA4Daily || [];
         const labels = (gscData.length >= ga4Data.length ? gscData : ga4Data).map(d => shortDate(d.date));
         makeChart('chart-overview-trend', {
             type: 'line',
@@ -1360,8 +1378,8 @@ async function loadAll() {
             },
             options: { scales: { x: {}, y: {} } }
         });
-        const sources = cache ? cache.ga4Sources : [];
-        if (sources && sources.length) {
+        const sources = _dashGA4Sources || [];
+        if (sources.length) {
             makeChart('chart-overview-sources', {
                 type: 'doughnut',
                 data: {
