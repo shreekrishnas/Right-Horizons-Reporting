@@ -926,6 +926,20 @@ class CalendarRequest(BaseModel):
     context: str = ""
 
 
+def _unwrap_items(data):
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for key in ("items", "posts", "calendar", "ideas", "data", "result", "results"):
+            v = data.get(key)
+            if isinstance(v, list):
+                return v
+        for v in data.values():
+            if isinstance(v, list):
+                return v
+    return []
+
+
 RH_CONTENT_DNA = """
 RIGHT HORIZONS CONTENT DNA (learned from actual RH SM calendars Apr/May/Jun 2026)
 
@@ -1039,8 +1053,7 @@ def calendar_generate(req: CalendarRequest):
         user += f"\n\nAdditional context:\n{req.context}"
     try:
         items = ai_mod.chat_json(sys_prompt, user, max_tokens=8000)
-        if isinstance(items, dict) and "items" in items:
-            items = items["items"]
+        items = _unwrap_items(items)
         _calendars[f"{req.domain}:{req.month}"] = items
         _push_history(_calendar_history, req.domain, items if isinstance(items, list) else [], key_field="title")
         return {"items": items, "month": req.month, "domain": req.domain, "level": level}
@@ -1183,8 +1196,7 @@ async def calendar_upload(file: UploadFile = File(...), domain: str = Query("rh"
     user = f"Generate the calendar for {domain_label}, month {month}, using the following source document as context:\n\n{text}"
     try:
         items = ai_mod.chat_json(sys_prompt, user, max_tokens=8000)
-        if isinstance(items, dict) and "items" in items:
-            items = items["items"]
+        items = _unwrap_items(items)
         _calendars[f"{domain}:{month}"] = items
         return {"items": items, "month": month, "domain": domain, "source": "ai"}
     except Exception as e:
@@ -1226,9 +1238,8 @@ def ideas_generate(domain: str = "rh", category: str = "all"):
         user += "DO NOT REPEAT THESE PAST IDEAS (find a new angle, audience, or specific case):\n"
         user += past + "\n\nEvery idea must be NEW. Avoid the same titles, framings, or numerical examples.\n"
     try:
-        items = ai_mod.chat_json(sys_prompt, user, max_tokens=3000)
-        if isinstance(items, dict) and "items" in items:
-            items = items["items"]
+        items = ai_mod.chat_json(sys_prompt, user, max_tokens=4000)
+        items = _unwrap_items(items)
         _ideas_state["available"] = len(items) if isinstance(items, list) else 0
         _push_history(_ideas_history, f"ideas:{domain}", items if isinstance(items, list) else [], key_field="title")
         return {"items": items, "domain": domain, "category": category, "level": level}
