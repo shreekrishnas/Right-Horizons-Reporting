@@ -122,11 +122,11 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; -webkit-font-
 .dr-btn:active { transform: translateY(0); box-shadow: 0 2px 6px rgba(124,58,237,0.15); }
 .dr-btn.active { background: #7C3AED; color: #fff; border-color: #7C3AED; box-shadow: 0 4px 12px rgba(124,58,237,0.30); }
 .date-input {
-  height: 34px; padding: 0 0.625rem; font-size: 0.78rem;
-  border-radius: 0.75rem; border: 1.5px solid var(--border-input);
-  background: var(--surface-input); color: var(--text-primary);
-  font-family: 'Inter', sans-serif;
-  transition: all 0.2s ease;
+  height: 36px; padding: 0 0.75rem; font-size: 0.8rem;
+  border-radius: 0.75rem; border: 1.5px solid var(--border-subtle);
+  background: var(--surface-card); color: var(--text-primary);
+  font-family: 'Inter', sans-serif; font-weight: 500;
+  cursor: pointer; transition: all 0.2s ease;
   box-shadow: 0 2px 8px rgba(15,23,42,0.05);
 }
 .date-input:hover { border-color: var(--accent, #7C3AED); box-shadow: 0 4px 12px rgba(124,58,237,0.10); }

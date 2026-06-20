@@ -21,7 +21,7 @@ async function api(path, opts) {
 }
 
 function formatNum(n) {
-    if (n === undefined || n === null) return '-';
+    if (n === undefined || n === null) return '0';
     if (typeof n === 'number') return n.toLocaleString('en-IN');
     return n;
 }
@@ -499,19 +499,14 @@ async function loadAnalytics() {
 
     if (src === 'meta') {
         try {
-            const status = await api('/api/meta/status');
-            if (!status.marketing) return;
-            const accounts = await api('/api/meta/accounts');
-            if (!accounts || !accounts.length) return;
-            const acctId = accounts[0].id;
-            const mqs = `?ad_account=${acctId}&start=${dateStart}&end=${dateEnd}`;
+            const mqs = `?domain=${currentDomain}&start=${dateStart}&end=${dateEnd}`;
             const campaigns = await api(`/api/meta/campaigns${mqs}`);
             if (campaigns && campaigns.length) {
                 makeChart('a-meta-spend', {
                     type: 'bar',
                     data: {
                         labels: campaigns.map(c => (c.name || '').slice(0, 20)),
-                        datasets: [{ label: 'Spend ($)', data: campaigns.map(c => parseFloat(c.spend) || 0), backgroundColor: CHART_COLORS.purple, borderRadius: 6 }]
+                        datasets: [{ label: 'Spend (₹)', data: campaigns.map(c => parseFloat(c.spend) || 0), backgroundColor: CHART_COLORS.purple, borderRadius: 6 }]
                     },
                     options: { scales: { x: { ticks: { maxTicksLimit: 6 } }, y: {} } }
                 });
@@ -531,7 +526,7 @@ async function loadAnalytics() {
                         type: 'line',
                         data: {
                             labels: daily.map(d => shortDate(d.date)),
-                            datasets: [{ label: 'Spend ($)', data: daily.map(d => parseFloat(d.spend) || 0), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, pointRadius: 0, hoverRadius: 5 }]
+                            datasets: [{ label: 'Spend (₹)', data: daily.map(d => parseFloat(d.spend) || 0), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, pointRadius: 0, hoverRadius: 5 }]
                         },
                         options: { scales: { x: {}, y: {} } }
                     });
@@ -628,7 +623,7 @@ async function loadGSC() {
         switchGSCMetric(gscMetricSel ? gscMetricSel.value : 'clicks-impressions');
     } catch (e) {
         console.error('GSC error:', e);
-        [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) { el.className = 'metric-value'; el.textContent = '—'; } });
+        [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) { el.className = 'metric-value'; el.textContent = '-'; } });
     }
 }
 
@@ -654,7 +649,7 @@ async function loadGA4() {
         switchGA4Metric(ga4MetricSel ? ga4MetricSel.value : 'sessions-users');
     } catch (e) {
         console.error('GA4 error:', e);
-        [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) { el.className = 'metric-value'; el.textContent = '—'; } });
+        [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) { el.className = 'metric-value'; el.textContent = '-'; } });
     }
 }
 
@@ -741,19 +736,22 @@ function switchGA4Metric(value) {
 
 async function loadMeta() {
     try {
-        const status = await api('/api/meta/status');
-        if (!status.marketing) {
-            const el = document.getElementById('meta-overview');
-            if (el) el.innerHTML = '<div class="empty-state"><p>Meta Marketing API not connected</p></div>';
-            const t = document.getElementById('meta-campaigns-table');
-            if (t) t.innerHTML = '<div class="empty-state"><p>Meta Marketing API not connected</p></div>';
-            return;
+        const statusFilterEl = document.getElementById('meta-status-filter');
+        const statusVal = statusFilterEl ? statusFilterEl.value : 'active';
+        const qs = `?domain=${currentDomain}&start=${dateStart}&end=${dateEnd}`;
+        let campaigns;
+        try {
+            campaigns = await api(`/api/meta/campaigns${qs}&status=${statusVal}`);
+        } catch (e) {
+            if (e.message && e.message.includes('not configured')) {
+                const el = document.getElementById('meta-overview');
+                if (el) el.innerHTML = '<div class="empty-state"><p>Meta Ads not configured for this domain</p></div>';
+                const t = document.getElementById('meta-campaigns-table');
+                if (t) t.innerHTML = '<div class="empty-state"><p>Meta Ads not configured for this domain</p></div>';
+                return;
+            }
+            throw e;
         }
-        const accounts = await api('/api/meta/accounts');
-        if (!accounts || accounts.length === 0) return;
-        const acctId = accounts[0].id;
-        const qs = `?ad_account=${acctId}&start=${dateStart}&end=${dateEnd}`;
-        const campaigns = await api(`/api/meta/campaigns${qs}`);
         renderTable('meta-campaigns-table', [
             { label: 'Campaign', key: 'name' }, { label: 'Status', key: 'status' },
             { label: 'Spend', key: 'spend' }, { label: 'Impressions', key: 'impressions' },
@@ -766,7 +764,7 @@ async function loadMeta() {
             const totalImpressions = campaigns.reduce((s, c) => s + (parseInt(c.impressions) || 0), 0);
             overview.innerHTML = `
                 <div class="metrics-grid">
-                    <div class="metric-card"><div class="accent-strip" style="background:#7C3AED"></div><div class="metric-label">Total Spend</div><div class="metric-value">$${totalSpend.toFixed(2)}</div></div>
+                    <div class="metric-card"><div class="accent-strip" style="background:#7C3AED"></div><div class="metric-label">Total Spend</div><div class="metric-value">₹${formatNum(Math.round(totalSpend))}</div></div>
                     <div class="metric-card"><div class="accent-strip" style="background:#0EA5E9"></div><div class="metric-label">Clicks</div><div class="metric-value">${formatNum(totalClicks)}</div></div>
                     <div class="metric-card"><div class="accent-strip" style="background:#10B981"></div><div class="metric-label">Impressions</div><div class="metric-value">${formatNum(totalImpressions)}</div></div>
                     <div class="metric-card"><div class="accent-strip" style="background:#F59E0B"></div><div class="metric-label">Campaigns</div><div class="metric-value">${campaigns.length}</div></div>
@@ -780,7 +778,7 @@ async function loadMeta() {
                     data: {
                         labels: campaigns.map(c => (c.name||'').slice(0,20)),
                         datasets: [
-                            { label: 'Spend ($)', data: campaigns.map(c => parseFloat(c.spend) || 0), backgroundColor: CHART_COLORS.purple, borderRadius: 4 },
+                            { label: 'Spend (₹)', data: campaigns.map(c => parseFloat(c.spend) || 0), backgroundColor: CHART_COLORS.purple, borderRadius: 4 },
                             { label: 'Clicks', data: campaigns.map(c => parseInt(c.clicks) || 0), backgroundColor: CHART_COLORS.blue, borderRadius: 4 },
                         ]
                     },

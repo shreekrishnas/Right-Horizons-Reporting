@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:wght@700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/trilliant.css">
     <link rel="stylesheet" href="/static/styles.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237C3AED'/%3E%3Ctext x='16' y='22' font-family='Inter,sans-serif' font-size='16' font-weight='800' fill='white' text-anchor='middle'%3ERH%3C/text%3E%3C/svg%3E">
 </head>
 <body>
 
@@ -220,7 +221,13 @@
 
                 <div id="dash-meta" class="dash-section" style="display:none;">
                     <div class="section">
-                        <div class="section-label">Meta Ads — Detail</div>
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+                            <div class="section-label" style="margin-bottom:0">Meta Ads - Detail</div>
+                            <select class="metric-select" id="meta-status-filter" onchange="loadMeta()">
+                                <option value="active">Active Campaigns</option>
+                                <option value="all">All Campaigns</option>
+                            </select>
+                        </div>
                         <div class="table-card" id="meta-campaigns-table"><div class="empty-state"><p>Loading...</p></div></div>
                         <div class="glass-card-static" style="padding:1.25rem; margin-top:1.5rem;">
                             <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.05em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Ad Spend vs Results</div>
@@ -422,7 +429,7 @@
                             </div>
                             <div class="glass-card-static" style="padding:1.25rem; text-align:center;">
                                 <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.5rem;">Bounce Rate</div>
-                                <div style="font-size:2.5rem; font-weight:800; color:var(--accent);" id="a-ga4-bounce">—</div>
+                                <div style="font-size:2.5rem; font-weight:800; color:var(--accent);" id="a-ga4-bounce">-</div>
                                 <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">Average bounce rate for period</div>
                             </div>
                             <div class="glass-card-static" style="padding:1.25rem;">
@@ -461,11 +468,11 @@
                                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
                                     <div style="text-align:center; padding:1rem; border-radius:12px; background:linear-gradient(135deg, rgba(24,119,242,0.12), rgba(24,119,242,0.04));">
                                         <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.5rem;">FB Followers</div>
-                                        <div style="font-size:2rem; font-weight:800; color:#1877F2;" id="a-social-fb-followers">—</div>
+                                        <div style="font-size:2rem; font-weight:800; color:#1877F2;" id="a-social-fb-followers">-</div>
                                     </div>
                                     <div style="text-align:center; padding:1rem; border-radius:12px; background:linear-gradient(135deg, rgba(228,64,95,0.12), rgba(228,64,95,0.04));">
                                         <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.5rem;">IG Followers</div>
-                                        <div style="font-size:2rem; font-weight:800; color:#E4405F;" id="a-social-ig-followers">—</div>
+                                        <div style="font-size:2rem; font-weight:800; color:#E4405F;" id="a-social-ig-followers">-</div>
                                     </div>
                                 </div>
                             </div>
