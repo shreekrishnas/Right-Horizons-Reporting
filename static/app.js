@@ -385,32 +385,18 @@ async function loadAnalytics() {
         if (el) el.style.display = s === src ? 'block' : 'none';
     });
 
-    const qs = `?domain=${currentDomain}&start=${dateStart}&end=${dateEnd}`;
-
     if (src === 'gsc') {
         try {
             const cache = await _ensureCache(currentDomain);
+            const gscSel = document.getElementById('a-gsc-metric-select');
+            switchAnalyticsGSCMetric(gscSel ? gscSel.value : 'clicks-impressions');
             const daily = _filterDaily(cache.gscDaily, dateStart, dateEnd);
-            const labels = daily.map(d => shortDate(d.date));
-            const c1 = makeChart('a-gsc-clicks', {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [
-                        { label: 'Clicks', data: daily.map(d => d.clicks), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, pointRadius: 0, hoverRadius: 5, yAxisID: 'y' },
-                        { label: 'Impressions', data: daily.map(d => d.impressions), borderColor: CHART_COLORS.blue, backgroundColor: CHART_COLORS.blueLight, fill: true, tension: 0.4, pointRadius: 0, hoverRadius: 5, yAxisID: 'y1' },
-                    ]
-                },
-                options: { scales: { x: {}, y: { position: 'left' }, y1: { position: 'right', grid: { display: false } } } }
-            });
-            applyGradient(c1, 0, CHART_COLORS.purple);
-            applyGradient(c1, 1, CHART_COLORS.blue);
             const ctrData = daily.map(d => d.ctr || (d.impressions > 0 ? parseFloat(((d.clicks / d.impressions) * 100).toFixed(2)) : 0));
             const avgCtr = ctrData.length ? (ctrData.reduce((a, b) => a + b, 0) / ctrData.length).toFixed(2) : 0;
             makeChart('a-gsc-ctr', {
                 type: 'line',
                 data: {
-                    labels,
+                    labels: daily.map(d => shortDate(d.date)),
                     datasets: [{ label: 'CTR %', data: ctrData, borderColor: CHART_COLORS.teal, backgroundColor: 'transparent', fill: false, tension: 0.4, pointRadius: 0, hoverRadius: 5 }]
                 },
                 options: {
@@ -440,27 +426,15 @@ async function loadAnalytics() {
                 },
                 options: { indexAxis: 'y', scales: { x: {}, y: { ticks: { font: { size: 10 } } } } }
             });
-        } catch (e) {}
+        } catch (e) { console.error('Analytics GSC error:', e); }
     }
 
     if (src === 'ga4') {
         try {
             const cache = await _ensureCache(currentDomain);
+            const ga4Sel = document.getElementById('a-ga4-metric-select');
+            switchAnalyticsGA4Metric(ga4Sel ? ga4Sel.value : 'sessions-users');
             const daily = _filterDaily(cache.ga4Daily, dateStart, dateEnd);
-            const labels = daily.map(d => shortDate(d.date));
-            const c1 = makeChart('a-ga4-sessions', {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [
-                        { label: 'Sessions', data: daily.map(d => d.sessions), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Users', data: daily.map(d => d.users || 0), borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.greenLight, fill: true, tension: 0.4, pointRadius: 0, hoverRadius: 5 },
-                    ]
-                },
-                options: { scales: { x: {}, y: {} } }
-            });
-            applyGradient(c1, 0, CHART_COLORS.purple);
-            applyGradient(c1, 1, CHART_COLORS.green);
             const summary = _ga4SummaryFromDaily(daily);
             const el = document.getElementById('a-ga4-bounce');
             if (el) el.textContent = summary.bounce_rate + '%';
@@ -494,7 +468,7 @@ async function loadAnalytics() {
                 },
                 options: { indexAxis: 'y', scales: { x: {}, y: { ticks: { font: { size: 10 } } } } }
             });
-        } catch (e) {}
+        } catch (e) { console.error('Analytics GA4 error:', e); }
     }
 
     if (src === 'meta') {
@@ -583,6 +557,93 @@ async function loadAnalytics() {
             }
         } catch (e) {}
     }
+}
+
+function switchAnalyticsGSCMetric(value) {
+    const cache = _getCachedOrNull(currentDomain);
+    if (!cache) return;
+    const daily = _filterDaily(cache.gscDaily, dateStart, dateEnd);
+    const labels = daily.map(d => shortDate(d.date));
+    const ctrData = daily.map(d => d.ctr || (d.impressions > 0 ? parseFloat(((d.clicks / d.impressions) * 100).toFixed(2)) : 0));
+    const posData = daily.map(d => d.position || 0);
+    let datasets = [], scales = { x: {} };
+    const chartLabels = { 'clicks-impressions': 'Clicks & Impressions', 'clicks-ctr': 'Clicks & CTR', 'impressions-position': 'Impressions & Position', 'all': 'All Metrics' };
+    const labelEl = document.getElementById('a-gsc-chart-label');
+    if (labelEl) labelEl.textContent = chartLabels[value] || 'Clicks & Impressions';
+    switch (value) {
+        case 'clicks-impressions':
+            datasets = [
+                { label: 'Clicks', data: daily.map(d => d.clicks), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, yAxisID: 'y' },
+                { label: 'Impressions', data: daily.map(d => d.impressions), borderColor: CHART_COLORS.blue, backgroundColor: CHART_COLORS.blueLight, fill: true, tension: 0.4, yAxisID: 'y1' },
+            ];
+            scales = { x: {}, y: { position: 'left' }, y1: { position: 'right', grid: { display: false } } };
+            break;
+        case 'clicks-ctr':
+            datasets = [
+                { label: 'Clicks', data: daily.map(d => d.clicks), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, yAxisID: 'y' },
+                { label: 'CTR %', data: ctrData, borderColor: CHART_COLORS.teal, backgroundColor: 'transparent', fill: false, tension: 0.4, borderDash: [4, 2], yAxisID: 'y1' },
+            ];
+            scales = { x: {}, y: { position: 'left' }, y1: { position: 'right', grid: { display: false } } };
+            break;
+        case 'impressions-position':
+            datasets = [
+                { label: 'Impressions', data: daily.map(d => d.impressions), borderColor: CHART_COLORS.blue, backgroundColor: CHART_COLORS.blueLight, fill: true, tension: 0.4, yAxisID: 'y' },
+                { label: 'Position', data: posData, borderColor: CHART_COLORS.amber, backgroundColor: 'transparent', fill: false, tension: 0.4, borderDash: [4, 2], yAxisID: 'y1' },
+            ];
+            scales = { x: {}, y: { position: 'left' }, y1: { position: 'right', reverse: true, grid: { display: false } } };
+            break;
+        case 'all':
+            datasets = [
+                { label: 'Clicks', data: daily.map(d => d.clicks), borderColor: CHART_COLORS.purple, backgroundColor: 'transparent', fill: false, tension: 0.4, yAxisID: 'y' },
+                { label: 'Impressions', data: daily.map(d => d.impressions), borderColor: CHART_COLORS.blue, backgroundColor: 'transparent', fill: false, tension: 0.4, yAxisID: 'y1' },
+                { label: 'CTR %', data: ctrData, borderColor: CHART_COLORS.teal, backgroundColor: 'transparent', fill: false, tension: 0.4, borderDash: [4, 2], yAxisID: 'y2' },
+                { label: 'Position', data: posData, borderColor: CHART_COLORS.amber, backgroundColor: 'transparent', fill: false, tension: 0.4, borderDash: [4, 2], yAxisID: 'y3' },
+            ];
+            scales = { x: {}, y: { position: 'left' }, y1: { display: false }, y2: { display: false }, y3: { display: false, reverse: true } };
+            break;
+    }
+    makeChart('a-gsc-clicks', { type: 'line', data: { labels, datasets }, options: { scales } });
+}
+
+function switchAnalyticsGA4Metric(value) {
+    const cache = _getCachedOrNull(currentDomain);
+    if (!cache) return;
+    const daily = _filterDaily(cache.ga4Daily, dateStart, dateEnd);
+    const labels = daily.map(d => shortDate(d.date));
+    const chartLabels = { 'sessions-users': 'Sessions & Users', 'sessions-bounce': 'Sessions & Bounce Rate', 'pageviews': 'Pageviews', 'new-returning': 'New vs Returning Users' };
+    const labelEl = document.getElementById('a-ga4-chart-label');
+    if (labelEl) labelEl.textContent = chartLabels[value] || 'Sessions & Users';
+    let datasets = [], scales = { x: {} };
+    switch (value) {
+        case 'sessions-users':
+            datasets = [
+                { label: 'Sessions', data: daily.map(d => d.sessions), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4 },
+                { label: 'Users', data: daily.map(d => d.users || 0), borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.greenLight, fill: true, tension: 0.4 },
+            ];
+            scales = { x: {}, y: {} };
+            break;
+        case 'sessions-bounce':
+            datasets = [
+                { label: 'Sessions', data: daily.map(d => d.sessions), borderColor: CHART_COLORS.purple, backgroundColor: CHART_COLORS.purpleLight, fill: true, tension: 0.4, yAxisID: 'y' },
+                { label: 'Bounce %', data: daily.map(d => parseFloat(((d.bounce_rate || 0) * 100).toFixed(1))), borderColor: CHART_COLORS.red, backgroundColor: 'transparent', fill: false, tension: 0.4, borderDash: [4, 2], yAxisID: 'y1' },
+            ];
+            scales = { x: {}, y: { position: 'left' }, y1: { position: 'right', grid: { display: false } } };
+            break;
+        case 'pageviews':
+            datasets = [
+                { label: 'Pageviews', data: daily.map(d => d.pageviews || 0), borderColor: CHART_COLORS.blue, backgroundColor: CHART_COLORS.blueLight, fill: true, tension: 0.4 },
+            ];
+            scales = { x: {}, y: {} };
+            break;
+        case 'new-returning':
+            datasets = [
+                { label: 'New Users', data: daily.map(d => d.new_users || 0), borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.greenLight, fill: true, tension: 0.4 },
+                { label: 'Returning', data: daily.map(d => Math.max(0, (d.users || 0) - (d.new_users || 0))), borderColor: CHART_COLORS.amber, backgroundColor: 'rgba(245,158,11,0.08)', fill: true, tension: 0.4 },
+            ];
+            scales = { x: {}, y: {} };
+            break;
+    }
+    makeChart('a-ga4-sessions', { type: 'line', data: { labels, datasets }, options: { scales } });
 }
 
 function switchDashTab(tab) {
@@ -1337,6 +1398,7 @@ function switchDomain(key) {
     analyticsLoaded = {};
     loadAll();
     reloadActiveDashTab();
+    if (currentView === 'analytics') loadAnalytics();
 }
 
 function exportReport() {
@@ -1735,16 +1797,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             setDates(btn.dataset.preset);
             loadAll();
             reloadActiveDashTab();
+            if (currentView === 'analytics') loadAnalytics();
         });
     });
     document.getElementById('date-start').addEventListener('change', (e) => {
         dateStart = e.target.value;
         activePreset = '';
         document.querySelectorAll('#date-range-group .dr-btn').forEach(b => b.classList.remove('active'));
-        // Reset calendar to new date's month
         if (dateStart) { const d = new Date(dateStart); socialCalYear = d.getFullYear(); socialCalMonth = d.getMonth(); }
         loadAll();
         reloadActiveDashTab();
+        if (currentView === 'analytics') loadAnalytics();
     });
     document.getElementById('date-end').addEventListener('change', (e) => {
         dateEnd = e.target.value;
@@ -1752,6 +1815,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelectorAll('#date-range-group .dr-btn').forEach(b => b.classList.remove('active'));
         loadAll();
         reloadActiveDashTab();
+        if (currentView === 'analytics') loadAnalytics();
     });
 
     document.getElementById('btn-export').addEventListener('click', exportReport);

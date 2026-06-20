@@ -390,7 +390,7 @@
                 <div class="section page-enter">
                     <div class="glass-card-static" style="padding:1rem 1.5rem; margin-bottom:1.5rem; display:flex; align-items:center; gap:1rem;">
                         <div style="font-weight:700; font-size:0.85rem; color:var(--text);">Data Source</div>
-                        <select id="analytics-source" onchange="loadAnalytics()" style="background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:0.5rem 1rem; font-family:Inter; font-size:0.85rem; cursor:pointer;">
+                        <select id="analytics-source" class="metric-select" onchange="loadAnalytics()">
                             <option value="gsc">Google Search Console</option>
                             <option value="ga4">Google Analytics</option>
                             <option value="meta">Meta Ads</option>
@@ -400,10 +400,19 @@
 
                     <!-- GSC Charts -->
                     <div id="analytics-gsc">
+                        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem;">
+                            <div style="font-weight:700; font-size:0.85rem;">Compare Metrics</div>
+                            <select class="metric-select" id="a-gsc-metric-select" onchange="switchAnalyticsGSCMetric(this.value)">
+                                <option value="clicks-impressions">Clicks vs Impressions</option>
+                                <option value="clicks-ctr">Clicks vs CTR</option>
+                                <option value="impressions-position">Impressions vs Position</option>
+                                <option value="all">All Metrics</option>
+                            </select>
+                        </div>
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem;">
-                            <div class="glass-card-static" style="padding:1.25rem;">
-                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Clicks & Impressions</div>
-                                <div style="position:relative; height:250px;"><canvas id="a-gsc-clicks"></canvas></div>
+                            <div class="glass-card-static" style="padding:1.25rem; grid-column: span 2;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;" id="a-gsc-chart-label">Clicks & Impressions</div>
+                                <div style="position:relative; height:280px;"><canvas id="a-gsc-clicks"></canvas></div>
                             </div>
                             <div class="glass-card-static" style="padding:1.25rem;">
                                 <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Click-Through Rate</div>
@@ -413,7 +422,7 @@
                                 <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Top Queries</div>
                                 <div style="position:relative; height:250px;"><canvas id="a-gsc-queries"></canvas></div>
                             </div>
-                            <div class="glass-card-static" style="padding:1.25rem;">
+                            <div class="glass-card-static" style="padding:1.25rem; grid-column: span 2;">
                                 <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Top Pages</div>
                                 <div style="position:relative; height:250px;"><canvas id="a-gsc-pages"></canvas></div>
                             </div>
@@ -422,10 +431,19 @@
 
                     <!-- GA4 Charts -->
                     <div id="analytics-ga4" style="display:none;">
+                        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem;">
+                            <div style="font-weight:700; font-size:0.85rem;">Compare Metrics</div>
+                            <select class="metric-select" id="a-ga4-metric-select" onchange="switchAnalyticsGA4Metric(this.value)">
+                                <option value="sessions-users">Sessions vs Users</option>
+                                <option value="sessions-bounce">Sessions vs Bounce Rate</option>
+                                <option value="pageviews">Pageviews</option>
+                                <option value="new-returning">New vs Returning Users</option>
+                            </select>
+                        </div>
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem;">
-                            <div class="glass-card-static" style="padding:1.25rem;">
-                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Sessions & Users</div>
-                                <div style="position:relative; height:250px;"><canvas id="a-ga4-sessions"></canvas></div>
+                            <div class="glass-card-static" style="padding:1.25rem; grid-column: span 2;">
+                                <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;" id="a-ga4-chart-label">Sessions & Users</div>
+                                <div style="position:relative; height:280px;"><canvas id="a-ga4-sessions"></canvas></div>
                             </div>
                             <div class="glass-card-static" style="padding:1.25rem; text-align:center;">
                                 <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.5rem;">Bounce Rate</div>
@@ -436,7 +454,7 @@
                                 <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Traffic Sources</div>
                                 <div style="position:relative; height:250px;"><canvas id="a-ga4-sources"></canvas></div>
                             </div>
-                            <div class="glass-card-static" style="padding:1.25rem;">
+                            <div class="glass-card-static" style="padding:1.25rem; grid-column: span 2;">
                                 <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Top Pages</div>
                                 <div style="position:relative; height:250px;"><canvas id="a-ga4-pages"></canvas></div>
                             </div>
