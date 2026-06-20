@@ -86,10 +86,16 @@ def _extract_json(text: str):
 
 
 def chat_json(system: str, user: str, max_tokens: int = 3000):
-    sys_full = system + "\n\nIMPORTANT: Respond with ONLY valid JSON. No markdown, no commentary."
+    sys_full = system + (
+        "\n\nIMPORTANT: Respond with ONLY a valid JSON object of the form "
+        '{"items": [...]} where items is the array described above. '
+        "Escape all double quotes inside string values as \\\". "
+        "Use straight quotes only, no curly/smart quotes. No markdown, no commentary."
+    )
     payload = {
         "model": MODEL,
         "max_tokens": max_tokens,
+        "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": sys_full},
             {"role": "user", "content": user},
