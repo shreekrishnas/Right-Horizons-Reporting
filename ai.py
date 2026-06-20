@@ -47,27 +47,42 @@ def chat(system: str, user: str, max_tokens: int = 2000) -> str:
     return _post(payload)
 
 
+def _repair_json(text: str) -> str:
+    import re
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+    if text.count('[') > text.count(']'):
+        text = text.rstrip().rstrip(',') + ']'
+    if text.count('{') > text.count('}'):
+        text = text.rstrip().rstrip(',') + '}'
+    text = re.sub(r'(?<!\\)\n', ' ', text)
+    return text
+
+
 def _extract_json(text: str):
     text = text.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.lower().startswith("json"):
-            text = text[4:]
-        text = text.strip()
-        if text.endswith("```"):
-            text = text[:-3].strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        start = text.find("[")
-        startobj = text.find("{")
-        candidates = [c for c in (start, startobj) if c >= 0]
-        if candidates:
-            s = min(candidates)
-            end = max(text.rfind("]"), text.rfind("}"))
-            if end > s:
-                return json.loads(text[s:end + 1])
-        raise
+    if "```" in text:
+        import re
+        m = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
+        if m:
+            text = m.group(1).strip()
+    for attempt in range(3):
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            if attempt == 0:
+                start = text.find("[")
+                startobj = text.find("{")
+                candidates = [c for c in (start, startobj) if c >= 0]
+                if candidates:
+                    s = min(candidates)
+                    end = max(text.rfind("]"), text.rfind("}"))
+                    if end > s:
+                        text = text[s:end + 1]
+                        continue
+            if attempt <= 1:
+                text = _repair_json(text)
+                continue
+            raise
 
 
 def chat_json(system: str, user: str, max_tokens: int = 3000):

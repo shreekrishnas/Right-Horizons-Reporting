@@ -1038,7 +1038,7 @@ def calendar_generate(req: CalendarRequest):
     if req.context:
         user += f"\n\nAdditional context:\n{req.context}"
     try:
-        items = ai_mod.chat_json(sys_prompt, user, max_tokens=4000)
+        items = ai_mod.chat_json(sys_prompt, user, max_tokens=8000)
         if isinstance(items, dict) and "items" in items:
             items = items["items"]
         _calendars[f"{req.domain}:{req.month}"] = items
@@ -1182,7 +1182,7 @@ async def calendar_upload(file: UploadFile = File(...), domain: str = Query("rh"
     sys_prompt = CAL_SYSTEM.replace("{domain}", domain_label).replace("{month}", month)
     user = f"Generate the calendar for {domain_label}, month {month}, using the following source document as context:\n\n{text}"
     try:
-        items = ai_mod.chat_json(sys_prompt, user, max_tokens=4000)
+        items = ai_mod.chat_json(sys_prompt, user, max_tokens=8000)
         if isinstance(items, dict) and "items" in items:
             items = items["items"]
         _calendars[f"{domain}:{month}"] = items
