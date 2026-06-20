@@ -78,8 +78,10 @@ function setDates(preset) {
     }
     dateStart = startDate;
     dateEnd = end;
-    const ds = document.getElementById('date-start'); if (ds) ds.value = dateStart;
-    const de = document.getElementById('date-end'); if (de) de.value = dateEnd;
+    const ds = document.getElementById('date-start');
+    const de = document.getElementById('date-end');
+    if (ds) { ds.value = dateStart; if (ds._flatpickr) ds._flatpickr.setDate(dateStart, false); }
+    if (de) { de.value = dateEnd; if (de._flatpickr) de._flatpickr.setDate(dateEnd, false); }
     activePreset = preset;
     document.querySelectorAll('[data-preset]').forEach(b => {
         b.classList.toggle('active', b.dataset.preset === preset);
@@ -1301,24 +1303,73 @@ async function loadYouTube() {
     } catch (e) { showError('yt-videos-table', e.message); }
 }
 
+function _copyToClipboard(text, btnEl) {
+    navigator.clipboard.writeText(text).then(() => {
+        const orig = btnEl.textContent;
+        btnEl.textContent = 'Copied!';
+        btnEl.style.background = '#10B981';
+        setTimeout(() => { btnEl.textContent = orig; btnEl.style.background = ''; }, 1500);
+    });
+}
+
 async function generateSEO() {
     const topic = document.getElementById('yt-seo-topic').value.trim();
     if (!topic) return;
+    const speaker = (document.getElementById('yt-seo-speaker')?.value || '').trim();
+    const transcript = (document.getElementById('yt-seo-transcript')?.value || '').trim();
     const resultEl = document.getElementById('yt-seo-result');
-    resultEl.innerHTML = '<div class="empty-state"><p>Generating...</p></div>';
+    resultEl.innerHTML = '<div class="empty-state"><p style="color:var(--accent-primary);">Generating SEO content...</p></div>';
     try {
-        const seo = await api(`/api/youtube/seo?topic=${encodeURIComponent(topic)}`);
-        let html = '<div class="glass-card-static" style="padding:1.5rem;">';
-        html += '<div class="table-title">Suggested Titles</div><ul style="list-style:none; margin-bottom:1rem;">';
-        seo.suggested_titles.forEach(t => html += `<li style="padding:0.3rem 0; font-size:0.85rem;">${esc(t)}</li>`);
-        html += '</ul><div class="table-title">Description</div>';
-        html += `<pre style="white-space:pre-wrap; font-size:0.8rem; background:var(--surface-input); padding:1rem; border-radius:0.75rem; margin-bottom:1rem; font-family:Inter,sans-serif;">${esc(seo.description)}</pre>`;
-        html += '<div class="table-title">Hashtags</div><div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:1rem;">';
-        seo.hashtags.forEach(h => html += `<span style="background:var(--accent-primary-soft); color:var(--accent-primary); padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.75rem; font-weight:600;">${esc(h)}</span>`);
-        html += '</div><div class="table-title">Tags</div><div style="display:flex; flex-wrap:wrap; gap:0.4rem;">';
-        seo.tags.forEach(t => html += `<span style="background:var(--surface-hover); padding:0.25rem 0.6rem; border-radius:9999px; font-size:0.75rem;">${esc(t)}</span>`);
+        let url = `/api/youtube/seo?topic=${encodeURIComponent(topic)}`;
+        if (speaker) url += `&speaker=${encodeURIComponent(speaker)}`;
+        if (transcript) url += `&transcript=${encodeURIComponent(transcript)}`;
+        const seo = await api(url);
+        let html = '';
+
+        html += '<div class="glass-card-static" style="padding:1.5rem; margin-bottom:1rem;">';
+        html += '<div class="table-title" style="margin-bottom:0.75rem;">Suggested Titles</div>';
+        (seo.titles || []).forEach((t, i) => {
+            const badge = t.type === 'SEO Optimized'
+                ? '<span style="background:#7C3AED20;color:#7C3AED;padding:2px 8px;border-radius:9999px;font-size:0.7rem;font-weight:700;margin-right:0.5rem;">SEO</span>'
+                : '<span style="background:#0EA5E920;color:#0EA5E9;padding:2px 8px;border-radius:9999px;font-size:0.7rem;font-weight:700;margin-right:0.5rem;">BRAND</span>';
+            html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.75rem;background:var(--surface-input);border-radius:0.6rem;margin-bottom:0.5rem;">
+                <div style="font-size:0.85rem;font-weight:500;">${badge}${esc(t.title)}</div>
+                <button onclick="_copyToClipboard('${esc(t.title).replace(/'/g,"\\'")}', this)" style="background:var(--accent-primary-soft);color:var(--accent-primary);border:none;padding:4px 12px;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;white-space:nowrap;">Copy</button>
+            </div>`;
+        });
+        html += '</div>';
+
+        html += '<div class="glass-card-static" style="padding:1.5rem; margin-bottom:1rem;">';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;"><div class="table-title" style="margin:0;">Description</div>';
+        html += `<button id="copy-desc-btn" style="background:var(--accent-primary-soft);color:var(--accent-primary);border:none;padding:4px 12px;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;">Copy</button></div>`;
+        html += `<pre id="seo-desc-text" style="white-space:pre-wrap;font-size:0.8rem;background:var(--surface-input);padding:1rem;border-radius:0.75rem;font-family:Inter,sans-serif;line-height:1.6;max-height:300px;overflow-y:auto;">${esc(seo.description)}</pre>`;
+        html += '</div>';
+
+        html += '<div class="glass-card-static" style="padding:1.5rem; margin-bottom:1rem;">';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;"><div class="table-title" style="margin:0;">Hashtags</div>';
+        html += `<button id="copy-hash-btn" style="background:var(--accent-primary-soft);color:var(--accent-primary);border:none;padding:4px 12px;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;">Copy All</button></div>`;
+        html += '<div style="display:flex;flex-wrap:wrap;gap:0.4rem;" id="seo-hashtags-wrap">';
+        seo.hashtags.forEach(h => html += `<span style="background:var(--accent-primary-soft);color:var(--accent-primary);padding:0.3rem 0.7rem;border-radius:9999px;font-size:0.75rem;font-weight:600;">${esc(h)}</span>`);
         html += '</div></div>';
+
+        html += '<div class="glass-card-static" style="padding:1.5rem;">';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;"><div class="table-title" style="margin:0;">Tags</div>';
+        html += `<button id="copy-tags-btn" style="background:var(--accent-primary-soft);color:var(--accent-primary);border:none;padding:4px 12px;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;">Copy All</button></div>`;
+        html += '<div style="display:flex;flex-wrap:wrap;gap:0.4rem;" id="seo-tags-wrap">';
+        seo.tags.forEach(t => html += `<span style="background:var(--surface-hover);padding:0.3rem 0.7rem;border-radius:9999px;font-size:0.75rem;">${esc(t)}</span>`);
+        html += '</div></div>';
+
         resultEl.innerHTML = html;
+
+        document.getElementById('copy-desc-btn').onclick = function() {
+            _copyToClipboard(seo.description, this);
+        };
+        document.getElementById('copy-hash-btn').onclick = function() {
+            _copyToClipboard(seo.hashtags.join(' '), this);
+        };
+        document.getElementById('copy-tags-btn').onclick = function() {
+            _copyToClipboard(seo.tags.join(', '), this);
+        };
     } catch (e) { resultEl.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`; }
 }
 
@@ -1818,23 +1869,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (currentView === 'analytics') loadAnalytics();
         });
     });
-    document.getElementById('date-start').addEventListener('change', (e) => {
-        dateStart = e.target.value;
+    function _onDateChange() {
         activePreset = '';
         document.querySelectorAll('#date-range-group .dr-btn').forEach(b => b.classList.remove('active'));
         if (dateStart) { const d = new Date(dateStart); socialCalYear = d.getFullYear(); socialCalMonth = d.getMonth(); }
         loadAll();
         reloadActiveDashTab();
         if (currentView === 'analytics') loadAnalytics();
-    });
-    document.getElementById('date-end').addEventListener('change', (e) => {
-        dateEnd = e.target.value;
-        activePreset = '';
-        document.querySelectorAll('#date-range-group .dr-btn').forEach(b => b.classList.remove('active'));
-        loadAll();
-        reloadActiveDashTab();
-        if (currentView === 'analytics') loadAnalytics();
-    });
+    }
+
+    if (typeof flatpickr !== 'undefined') {
+        const fpOpts = {
+            dateFormat: 'Y-m-d',
+            disableMobile: true,
+            theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light',
+        };
+        flatpickr('#date-start', { ...fpOpts, defaultDate: dateStart, onChange: (sel, ds) => { dateStart = ds; _onDateChange(); } });
+        flatpickr('#date-end', { ...fpOpts, defaultDate: dateEnd, onChange: (sel, ds) => { dateEnd = ds; _onDateChange(); } });
+    } else {
+        document.getElementById('date-start').addEventListener('change', (e) => { dateStart = e.target.value; _onDateChange(); });
+        document.getElementById('date-end').addEventListener('change', (e) => { dateEnd = e.target.value; _onDateChange(); });
+    }
 
     document.getElementById('btn-export').addEventListener('click', exportReport);
     document.getElementById('theme-toggle').addEventListener('click', toggleTheme);

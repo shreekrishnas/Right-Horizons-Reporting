@@ -473,10 +473,10 @@ def youtube_videos(limit: int = 10):
 
 
 @app.get("/api/youtube/seo")
-def youtube_seo(topic: str = ""):
+def youtube_seo(topic: str = "", speaker: str = "", transcript: str = ""):
     if not topic.strip():
         raise HTTPException(400, "topic parameter required")
-    return youtube.generate_seo_metadata(topic)
+    return youtube.generate_seo_metadata(topic, speaker, transcript)
 
 
 # ── LinkedIn (Excel upload) ─────────────────────────────────────────────────

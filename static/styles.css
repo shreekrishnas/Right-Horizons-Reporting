@@ -336,3 +336,32 @@ select:focus, .metric-select:focus {
   .date-range-group { flex-wrap: wrap; }
   .app-main { padding: 1rem; }
 }
+
+/* ── Flatpickr custom theme ── */
+.flatpickr-calendar {
+  font-family: 'Inter', sans-serif !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15), 0 0 0 1px rgba(124,58,237,0.08) !important;
+  border: none !important;
+  overflow: hidden;
+}
+.flatpickr-months {
+  background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%) !important;
+  border-radius: 1rem 1rem 0 0 !important;
+  padding: 0.25rem 0 !important;
+}
+.flatpickr-months .flatpickr-month,
+.flatpickr-current-month,
+.flatpickr-current-month .cur-month,
+.flatpickr-current-month input.cur-year { color: #fff !important; fill: #fff !important; font-weight: 700 !important; }
+.flatpickr-months .flatpickr-prev-month, .flatpickr-months .flatpickr-next-month { fill: #fff !important; color: #fff !important; }
+.flatpickr-months .flatpickr-prev-month:hover, .flatpickr-months .flatpickr-next-month:hover { color: #E9D5FF !important; }
+.flatpickr-months .flatpickr-prev-month svg, .flatpickr-months .flatpickr-next-month svg { fill: #fff !important; }
+span.flatpickr-weekday { color: var(--text-muted, #64748B) !important; font-weight: 700 !important; font-size: 0.75rem !important; }
+.flatpickr-day { border-radius: 0.5rem !important; font-weight: 500 !important; font-size: 0.82rem !important; }
+.flatpickr-day:hover { background: #7C3AED15 !important; border-color: transparent !important; }
+.flatpickr-day.selected, .flatpickr-day.selected:hover { background: #7C3AED !important; border-color: #7C3AED !important; color: #fff !important; box-shadow: 0 4px 12px rgba(124,58,237,0.35) !important; }
+.flatpickr-day.today { border-color: #7C3AED !important; color: #7C3AED !important; font-weight: 700 !important; }
+.flatpickr-day.today.selected { color: #fff !important; }
+.flatpickr-innerContainer { padding: 0.25rem !important; }
+.flatpickr-day.flatpickr-disabled { color: var(--text-muted, #94A3B8) !important; opacity: 0.4 !important; }
