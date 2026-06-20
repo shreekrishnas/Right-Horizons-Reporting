@@ -41,16 +41,20 @@ function shortDate(d) {
 const CHART_COLORS = {
     purple: '#7C3AED',
     purpleLight: 'rgba(124, 58, 237, 0.08)',
+    purpleDark: '#6D28D9',
     blue: '#0EA5E9',
     blueLight: 'rgba(14, 165, 233, 0.08)',
+    blueDark: '#0284C7',
     green: '#10B981',
     greenLight: 'rgba(16, 185, 129, 0.08)',
+    greenDark: '#059669',
     red: '#EF4444',
     redLight: 'rgba(239, 68, 68, 0.08)',
     amber: '#F59E0B',
+    amberLight: 'rgba(245, 158, 11, 0.08)',
     pink: '#EC4899',
     teal: '#14B8A6',
-    palette: ['#7C3AED', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#8B5CF6', '#06B6D4']
+    palette: ['#7C3AED', '#0EA5E9', '#10B981', '#F59E0B', '#EC4899', '#06B6D4', '#8B5CF6', '#F97316', '#14B8A6', '#EF4444']
 };
 
 // Return today's date string in IST (UTC+5:30)
@@ -144,64 +148,177 @@ function getThemeColors() {
     };
 }
 
+function _hexToRgba(hex, alpha) {
+    if (!hex || typeof hex !== 'string') return `rgba(124,58,237,${alpha})`;
+    if (hex.startsWith('rgba')) return hex;
+    if (hex.startsWith('rgb(')) return hex.replace('rgb(', 'rgba(').replace(')', `,${alpha})`);
+    const h = hex.replace('#', '');
+    const r = parseInt(h.substring(0, 2), 16);
+    const g = parseInt(h.substring(2, 4), 16);
+    const b = parseInt(h.substring(4, 6), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function _makeLineGradient(canvas, color, isDark) {
+    const ctx = canvas.getContext('2d');
+    const h = canvas.height || canvas.clientHeight || 250;
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, _hexToRgba(color, isDark ? 0.45 : 0.35));
+    gradient.addColorStop(0.5, _hexToRgba(color, isDark ? 0.18 : 0.12));
+    gradient.addColorStop(1, _hexToRgba(color, 0));
+    return gradient;
+}
+
+function _makeBarGradient(canvas, color, isDark) {
+    const ctx = canvas.getContext('2d');
+    const h = canvas.height || canvas.clientHeight || 250;
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(1, _hexToRgba(color, isDark ? 0.45 : 0.55));
+    return gradient;
+}
+
 function makeChart(id, config) {
     if (charts[id]) { charts[id].destroy(); }
     const ctx = document.getElementById(id);
     if (!ctx) return null;
     const c = getThemeColors();
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     config.options = config.options || {};
     config.options.responsive = true;
     config.options.maintainAspectRatio = false;
+    config.options.interaction = config.options.interaction || { mode: 'index', intersect: false };
+    config.options.animation = config.options.animation || { duration: 800, easing: 'easeOutCubic' };
+
+    // Auto-enhance datasets with gradients
+    const datasets = (config.data && config.data.datasets) || [];
+    if (config.type === 'line') {
+        datasets.forEach((d, i) => {
+            const color = d.borderColor || CHART_COLORS.palette[i % CHART_COLORS.palette.length];
+            d.borderColor = color;
+            if (d.fill !== false && d.backgroundColor !== 'transparent') {
+                d.backgroundColor = _makeLineGradient(ctx, color, isDark);
+                if (d.fill === undefined) d.fill = true;
+            }
+            d.borderWidth = d.borderWidth || 2.5;
+            d.tension = d.tension !== undefined ? d.tension : 0.4;
+            d.pointRadius = d.pointRadius !== undefined ? d.pointRadius : 0;
+            d.pointHoverRadius = d.pointHoverRadius !== undefined ? d.pointHoverRadius : 6;
+            d.pointHoverBackgroundColor = color;
+            d.pointHoverBorderColor = '#fff';
+            d.pointHoverBorderWidth = 2.5;
+        });
+    } else if (config.type === 'bar') {
+        datasets.forEach((d, i) => {
+            const color = d.backgroundColor && typeof d.backgroundColor === 'string' && d.backgroundColor.startsWith('#')
+                ? d.backgroundColor
+                : CHART_COLORS.palette[i % CHART_COLORS.palette.length];
+            if (typeof d.backgroundColor === 'string' && d.backgroundColor.startsWith('#')) {
+                d.backgroundColor = _makeBarGradient(ctx, color, isDark);
+            }
+            d.borderRadius = d.borderRadius !== undefined ? d.borderRadius : 8;
+            d.borderSkipped = false;
+            d.hoverBackgroundColor = color;
+            d.maxBarThickness = d.maxBarThickness || 40;
+        });
+    } else if (config.type === 'doughnut' || config.type === 'pie') {
+        datasets.forEach(d => {
+            d.borderWidth = d.borderWidth !== undefined ? d.borderWidth : 3;
+            d.borderColor = d.borderColor || (isDark ? '#0F172A' : '#fff');
+            d.hoverOffset = d.hoverOffset || 12;
+            d.hoverBorderWidth = 4;
+        });
+        config.options.cutout = config.options.cutout || (config.type === 'doughnut' ? '68%' : 0);
+    }
 
     // Plugin defaults
     config.options.plugins = config.options.plugins || {};
     config.options.plugins.legend = config.options.plugins.legend || {};
-    config.options.plugins.legend.labels = { color: c.text, font: { family: 'Inter', size: 11 }, boxWidth: 12, padding: 12 };
-    // Auto-hide legend for single dataset (non-doughnut)
-    const ds = config.data && config.data.datasets;
-    if (ds && ds.length === 1 && config.type !== 'doughnut') {
-        config.options.plugins.legend.display = false;
+    config.options.plugins.legend.labels = Object.assign({
+        color: c.text,
+        font: { family: 'Inter', size: 11, weight: '600' },
+        boxWidth: 8,
+        boxHeight: 8,
+        padding: 14,
+        usePointStyle: true,
+        pointStyle: 'circle',
+    }, config.options.plugins.legend.labels || {});
+    if (datasets.length === 1 && config.type !== 'doughnut' && config.type !== 'pie') {
+        if (config.options.plugins.legend.display === undefined) config.options.plugins.legend.display = false;
     } else {
         config.options.plugins.legend.position = config.options.plugins.legend.position || 'top';
+        config.options.plugins.legend.align = config.options.plugins.legend.align || 'end';
     }
 
-    // Tooltip formatting
-    config.options.plugins.tooltip = config.options.plugins.tooltip || {};
+    // Premium tooltip
+    config.options.plugins.tooltip = Object.assign({
+        enabled: true,
+        backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.98)',
+        titleColor: isDark ? '#F1F5F9' : '#0F172A',
+        bodyColor: isDark ? '#CBD5E1' : '#475569',
+        borderColor: isDark ? 'rgba(124, 58, 237, 0.4)' : 'rgba(124, 58, 237, 0.15)',
+        borderWidth: 1,
+        cornerRadius: 12,
+        padding: 12,
+        boxPadding: 6,
+        titleFont: { family: 'Inter', size: 12, weight: '700' },
+        bodyFont: { family: 'Inter', size: 12, weight: '500' },
+        usePointStyle: true,
+        displayColors: true,
+        caretSize: 6,
+    }, config.options.plugins.tooltip || {});
     config.options.plugins.tooltip.callbacks = config.options.plugins.tooltip.callbacks || {};
     if (!config.options.plugins.tooltip.callbacks.label) {
         config.options.plugins.tooltip.callbacks.label = function(ctx) {
             let label = ctx.dataset.label || '';
-            if (label) label += ': ';
+            if (label) label += '  ';
             const v = ctx.parsed.y !== undefined ? ctx.parsed.y : ctx.parsed;
             return label + formatNum(v);
         };
     }
 
-    // Element defaults for clean lines
+    // Element defaults
     config.options.elements = config.options.elements || {};
     config.options.elements.line = config.options.elements.line || {};
-    config.options.elements.line.borderWidth = config.options.elements.line.borderWidth || 2;
+    config.options.elements.line.borderWidth = config.options.elements.line.borderWidth || 2.5;
+    config.options.elements.line.capBezierPoints = true;
     config.options.elements.point = config.options.elements.point || {};
     if (config.options.elements.point.radius === undefined) config.options.elements.point.radius = 0;
-    if (config.options.elements.point.hoverRadius === undefined) config.options.elements.point.hoverRadius = 4;
+    if (config.options.elements.point.hoverRadius === undefined) config.options.elements.point.hoverRadius = 6;
 
-    // Scale defaults
+    // Premium scales
     if (config.options.scales) {
         Object.entries(config.options.scales).forEach(([key, s]) => {
             s.ticks = s.ticks || {};
             s.ticks.color = c.muted;
-            s.ticks.font = { family: 'Inter', size: 11 };
+            s.ticks.font = { family: 'Inter', size: 10, weight: '500' };
+            s.ticks.padding = s.ticks.padding || 8;
             s.grid = s.grid || {};
             if (key.startsWith('x')) {
-                s.grid.color = c.border + '15';
+                s.grid.display = s.grid.display !== undefined ? s.grid.display : false;
                 s.ticks.maxTicksLimit = s.ticks.maxTicksLimit || 8;
             } else {
-                s.grid.display = s.grid.display !== undefined ? s.grid.display : false;
+                if (s.grid.display === undefined) s.grid.display = true;
+                s.grid.color = isDark ? 'rgba(148,163,184,0.08)' : 'rgba(148,163,184,0.12)';
+                s.grid.lineWidth = 1;
+                s.grid.drawTicks = false;
+                if (s.ticks.callback === undefined) {
+                    s.ticks.callback = function(v) {
+                        if (typeof v !== 'number') return v;
+                        if (Math.abs(v) >= 1000000) return (v / 1000000).toFixed(1) + 'M';
+                        if (Math.abs(v) >= 1000) return (v / 1000).toFixed(1) + 'K';
+                        return v;
+                    };
+                }
             }
             s.border = s.border || {};
             s.border.display = false;
         });
     }
+
+    // Layout padding for breathing room
+    config.options.layout = config.options.layout || {};
+    config.options.layout.padding = config.options.layout.padding || { top: 8, right: 8, bottom: 4, left: 4 };
 
     charts[id] = new Chart(ctx, config);
     return charts[id];

@@ -207,15 +207,24 @@ select:focus, .metric-select:focus {
 
 /* ── Glass cards ── */
 .glass-card-static {
-  background: rgba(255,255,255,0.65);
+  background: rgba(255,255,255,0.75);
   backdrop-filter: blur(16px) saturate(140%);
   border: 1px solid rgba(255,255,255,0.65);
-  border-radius: 1.5rem;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 20px rgba(15,23,42,0.06), 0 1px 4px rgba(15,23,42,0.04);
+  transition: box-shadow .25s ease, transform .25s ease;
+}
+.glass-card-static:hover {
+  box-shadow: 0 12px 36px rgba(124,58,237,0.10), 0 2px 8px rgba(15,23,42,0.05);
+  transform: translateY(-2px);
 }
 [data-theme="dark"] .glass-card-static {
   background: rgba(30,41,59,0.65);
   border-color: rgba(255,255,255,0.08);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2), 0 1px 4px rgba(0,0,0,0.15);
+}
+[data-theme="dark"] .glass-card-static:hover {
+  box-shadow: 0 12px 36px rgba(124,58,237,0.18), 0 2px 8px rgba(0,0,0,0.25);
 }
 
 /* ── Metric cards ── */
