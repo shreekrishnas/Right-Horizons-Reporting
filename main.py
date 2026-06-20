@@ -9,7 +9,10 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN, META_PAGE_ID, META_APP_ID, META_APP_SECRET
+from config import DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN, META_PAGE_ID, META_APP_ID, META_APP_SECRET, ADMIN_PASSWORD
+from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
+from config import YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN
+from config import OPENROUTER_API_KEY
 from google_auth import get_credentials, get_youtube_credentials
 import gsc
 import ga4
@@ -56,6 +59,64 @@ def health():
         return {"status": "ok", "google_auth": True, "meta_marketing": bool(META_MARKETING_TOKEN), "meta_social": bool(META_SOCIAL_TOKEN)}
     except Exception as e:
         return {"status": "degraded", "google_auth": False, "error": str(e), "meta_marketing": bool(META_MARKETING_TOKEN), "meta_social": bool(META_SOCIAL_TOKEN)}
+
+
+def _mask(val: str) -> str:
+    if not val:
+        return ""
+    if len(val) <= 8:
+        return "****"
+    return val[:4] + "*" * (len(val) - 8) + val[-4:]
+
+
+@app.post("/api/admin/login")
+def admin_login(password: str = ""):
+    if not password or password != ADMIN_PASSWORD:
+        raise HTTPException(401, "Invalid password")
+    return {"ok": True}
+
+
+@app.post("/api/admin/credentials")
+def admin_credentials(password: str = ""):
+    if not password or password != ADMIN_PASSWORD:
+        raise HTTPException(401, "Invalid password")
+    return {
+        "google": {
+            "client_id": _mask(GOOGLE_CLIENT_ID),
+            "client_secret": _mask(GOOGLE_CLIENT_SECRET),
+            "refresh_token": _mask(GOOGLE_REFRESH_TOKEN),
+            "status": "Connected" if GOOGLE_REFRESH_TOKEN else "Not configured",
+        },
+        "youtube": {
+            "client_id": _mask(YOUTUBE_CLIENT_ID),
+            "client_secret": _mask(YOUTUBE_CLIENT_SECRET),
+            "refresh_token": _mask(YOUTUBE_REFRESH_TOKEN),
+            "status": "Connected" if YOUTUBE_REFRESH_TOKEN else "Not configured",
+        },
+        "meta": {
+            "marketing_token": _mask(META_MARKETING_TOKEN),
+            "social_token": _mask(META_SOCIAL_TOKEN),
+            "app_id": _mask(META_APP_ID),
+            "app_secret": _mask(META_APP_SECRET),
+            "page_id": META_PAGE_ID,
+            "status": "Connected" if META_MARKETING_TOKEN else "Not configured",
+        },
+        "openrouter": {
+            "api_key": _mask(OPENROUTER_API_KEY),
+            "status": "Connected" if OPENROUTER_API_KEY else "Not configured",
+        },
+        "domains": {
+            k: {
+                "label": v["label"],
+                "ga4_property": v.get("ga4_property", ""),
+                "gsc_site": v.get("gsc_site", ""),
+                "meta_page_id": v.get("meta_page_id", ""),
+                "meta_ad_account": v.get("meta_ad_account", ""),
+                "meta_social_token_set": bool(v.get("meta_social_token")),
+            }
+            for k, v in DOMAINS.items()
+        },
+    }
 
 
 @app.get("/api/domains")

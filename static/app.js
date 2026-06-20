@@ -1493,6 +1493,99 @@ async function checkHealth() {
     }
 }
 
+let _adminPassword = '';
+
+async function adminLogin() {
+    const pw = document.getElementById('admin-password').value;
+    const errEl = document.getElementById('admin-login-error');
+    if (!pw) { errEl.textContent = 'Please enter a password'; errEl.style.display = 'block'; return; }
+    try {
+        await api(`/api/admin/login?password=${encodeURIComponent(pw)}`, { method: 'POST' });
+        _adminPassword = pw;
+        document.getElementById('admin-login-gate').style.display = 'none';
+        document.getElementById('admin-panel').style.display = 'block';
+        errEl.style.display = 'none';
+        loadAdminCredentials();
+    } catch (e) {
+        errEl.textContent = 'Invalid password';
+        errEl.style.display = 'block';
+        document.getElementById('admin-password').value = '';
+    }
+}
+
+function adminLogout() {
+    _adminPassword = '';
+    document.getElementById('admin-panel').style.display = 'none';
+    document.getElementById('admin-login-gate').style.display = 'block';
+    document.getElementById('admin-password').value = '';
+    document.getElementById('admin-credentials').innerHTML = '';
+    document.getElementById('admin-domains').innerHTML = '';
+}
+
+async function loadAdminCredentials() {
+    try {
+        const data = await api(`/api/admin/credentials?password=${encodeURIComponent(_adminPassword)}`, { method: 'POST' });
+        const container = document.getElementById('admin-credentials');
+        const statusBadge = (s) => s === 'Connected'
+            ? '<span style="background:#10B98120;color:#10B981;padding:3px 10px;border-radius:9999px;font-size:0.7rem;font-weight:700;">Connected</span>'
+            : '<span style="background:#EF444420;color:#EF4444;padding:3px 10px;border-radius:9999px;font-size:0.7rem;font-weight:700;">Not configured</span>';
+
+        const sections = [
+            { key: 'google', label: 'Google (GSC / GA4)', icon: '🔍', color: '#4285F4', fields: ['client_id', 'client_secret', 'refresh_token'] },
+            { key: 'youtube', label: 'YouTube', icon: '▶', color: '#FF0000', fields: ['client_id', 'client_secret', 'refresh_token'] },
+            { key: 'meta', label: 'Meta (Ads / Social)', icon: 'f', color: '#1877F2', fields: ['marketing_token', 'social_token', 'app_id', 'app_secret', 'page_id'] },
+            { key: 'openrouter', label: 'OpenRouter (AI)', icon: '⚡', color: '#7C3AED', fields: ['api_key'] },
+        ];
+
+        let html = '';
+        sections.forEach(sec => {
+            const d = data[sec.key] || {};
+            html += `<div class="glass-card-static" style="padding:1.25rem;">`;
+            html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">`;
+            html += `<div style="display:flex;align-items:center;gap:0.6rem;">`;
+            html += `<div style="width:36px;height:36px;border-radius:0.6rem;background:${sec.color}15;color:${sec.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.9rem;">${sec.icon}</div>`;
+            html += `<div style="font-weight:700;font-size:0.9rem;">${sec.label}</div>`;
+            html += `</div>${statusBadge(d.status)}</div>`;
+            sec.fields.forEach(f => {
+                const val = d[f] || '';
+                const label = f.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.45rem 0;border-bottom:1px solid var(--border-subtle);font-size:0.8rem;">`;
+                html += `<span style="color:var(--text-muted);font-weight:500;">${label}</span>`;
+                html += `<code style="font-size:0.72rem;color:var(--text-secondary);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(val || 'Not set')}</code>`;
+                html += `</div>`;
+            });
+            html += `</div>`;
+        });
+        container.innerHTML = html;
+
+        const domContainer = document.getElementById('admin-domains');
+        let domHtml = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;">';
+        Object.entries(data.domains || {}).forEach(([key, d]) => {
+            domHtml += `<div class="glass-card-static" style="padding:1.25rem;">`;
+            domHtml += `<div style="font-weight:700;font-size:0.9rem;margin-bottom:0.75rem;">${esc(d.label)}</div>`;
+            const fields = [
+                ['GA4 Property', d.ga4_property],
+                ['GSC Site', d.gsc_site],
+                ['Meta Page ID', d.meta_page_id],
+                ['Ad Account', d.meta_ad_account],
+                ['Social Token', d.meta_social_token_set ? 'Set' : 'Not set'],
+            ];
+            fields.forEach(([label, val]) => {
+                const isSet = val && val !== 'Not set';
+                domHtml += `<div style="display:flex;justify-content:space-between;padding:0.35rem 0;border-bottom:1px solid var(--border-subtle);font-size:0.78rem;">`;
+                domHtml += `<span style="color:var(--text-muted);">${label}</span>`;
+                domHtml += `<span style="color:${isSet ? 'var(--text-secondary)' : '#EF4444'};font-size:0.72rem;">${esc(val || 'Not set')}</span>`;
+                domHtml += `</div>`;
+            });
+            domHtml += `</div>`;
+        });
+        domHtml += '</div>';
+        domContainer.innerHTML = domHtml;
+    } catch (e) {
+        document.getElementById('admin-credentials').innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
+    }
+}
+
 async function exchangeToken() {
     const input = document.getElementById('token-input');
     const token = input.value.trim();

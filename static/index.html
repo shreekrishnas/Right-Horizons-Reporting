@@ -57,8 +57,8 @@
                 <span class="sidebar-tooltip">Reports & Analytics</span>
             </button>
             <button class="sidebar-item" data-view="settings" onclick="switchView('settings')" style="margin-top:auto;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-                <span class="sidebar-tooltip">Settings</span>
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                <span class="sidebar-tooltip">Admin</span>
             </button>
         </div>
     </nav>
@@ -650,30 +650,68 @@
                 </div>
             </div>
 
-            <!-- ═══ Settings view ═══ -->
+            <!-- ═══ Settings / Admin view ═══ -->
             <div id="view-settings" style="display:none">
-                <div class="section page-enter">
+                <!-- Login gate -->
+                <div id="admin-login-gate" class="section page-enter">
+                    <div style="max-width:420px; margin:4rem auto; text-align:center;">
+                        <div style="width:64px; height:64px; border-radius:1rem; background:linear-gradient(135deg,#7C3AED,#6D28D9); display:flex; align-items:center; justify-content:center; margin:0 auto 1.5rem;">
+                            <svg width="28" height="28" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                        </div>
+                        <div style="font-size:1.25rem; font-weight:800; margin-bottom:0.5rem;">Admin Access</div>
+                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1.5rem;">Enter the admin password to manage API credentials and integrations.</p>
+                        <div style="display:flex; gap:0.75rem;">
+                            <input type="password" id="admin-password" class="date-input" placeholder="Enter password..." style="flex:1; height:44px; font-size:0.9rem;" onkeydown="if(event.key==='Enter')adminLogin()">
+                            <button class="btn-export" onclick="adminLogin()" style="height:44px; padding:0 1.5rem; font-weight:700;">Unlock</button>
+                        </div>
+                        <div id="admin-login-error" style="color:#EF4444; font-size:0.8rem; margin-top:0.75rem; display:none;"></div>
+                    </div>
+                </div>
+
+                <!-- Admin panel (hidden until login) -->
+                <div id="admin-panel" style="display:none;" class="section page-enter">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.5rem;">
+                        <div>
+                            <div class="section-label" style="margin:0;">Admin Panel</div>
+                            <p style="color:var(--text-muted); font-size:0.8rem; margin-top:0.25rem;">Manage API credentials and integrations</p>
+                        </div>
+                        <button class="btn-export" onclick="adminLogout()" style="background:var(--surface-card); color:var(--text-muted); border:1.5px solid var(--border-subtle); font-size:0.8rem;">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="vertical-align:-2px;"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+                            Lock
+                        </button>
+                    </div>
+
+                    <!-- Credentials overview -->
+                    <div id="admin-credentials" style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:2rem;"></div>
+
+                    <!-- Domain configs -->
+                    <div class="section-label">Domain Configurations</div>
+                    <div id="admin-domains" style="margin-bottom:2rem;"></div>
+
+                    <!-- Meta Token Exchange -->
                     <div class="section-label">Meta Token Exchange</div>
-                    <div class="glass-card-static" style="padding:2rem; margin-bottom:1.5rem;">
-                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem;">
-                            Paste a short-lived Meta token to exchange it for a 60-day long-lived token and a never-expiring page token.
-                            Requires <code>META_APP_ID</code> and <code>META_APP_SECRET</code> set in Vercel env vars.
+                    <div class="glass-card-static" style="padding:1.5rem; margin-bottom:1.5rem;">
+                        <p style="color:var(--text-muted); font-size:0.82rem; margin-bottom:1rem;">
+                            Paste a short-lived Meta token to exchange for a 60-day long-lived token and a never-expiring page token.
                         </p>
                         <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-                            <input type="text" id="token-input" class="date-input" style="flex:1; min-width:300px; height:40px; font-size:0.85rem;" placeholder="Paste short-lived token here...">
-                            <button class="btn-export" onclick="exchangeToken()">Exchange Token</button>
+                            <input type="text" id="token-input" class="date-input" style="flex:1; min-width:280px; height:42px; font-size:0.85rem;" placeholder="Paste short-lived token here...">
+                            <button class="btn-export" onclick="exchangeToken()" style="height:42px;">Exchange Token</button>
                         </div>
                     </div>
                     <div id="token-result" style="display:none;">
-                        <div class="glass-card-static" style="padding:2rem;">
+                        <div class="glass-card-static" style="padding:1.5rem;">
                             <div class="section-label" style="color:var(--accent);">Token Exchange Result</div>
                             <div id="token-result-content" style="font-size:0.85rem; line-height:1.8;"></div>
                         </div>
                     </div>
-                    <div class="glass-card-static" style="padding:2rem; margin-top:1.5rem;">
+
+                    <!-- Environment info -->
+                    <div class="glass-card-static" style="padding:1.5rem; margin-top:1.5rem;">
                         <div class="section-label">Environment Variables</div>
-                        <p style="color:var(--text-muted); font-size:0.85rem; line-height:1.8;">
-                            Set <code>OPENROUTER_API_KEY</code> in Vercel for AI features (Calendar, Ideas, Validator).
+                        <p style="color:var(--text-muted); font-size:0.82rem; line-height:1.8;">
+                            All API keys and tokens are managed via <strong>Vercel environment variables</strong>. Changes made there require a redeployment to take effect.
+                            Set <code>ADMIN_PASSWORD</code> to change the admin login password.
                         </p>
                     </div>
                 </div>
