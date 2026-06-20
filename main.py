@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN, META_PAGE_ID, META_AD_ACCOUNT, META_APP_ID, META_APP_SECRET
+from config import DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN, META_PAGE_ID, META_APP_ID, META_APP_SECRET
 from google_auth import get_credentials
 import gsc
 import ga4
@@ -184,24 +184,26 @@ def meta_status():
 
 
 @app.get("/api/meta/campaigns")
-def meta_campaigns(start: str = "", end: str = "", ad_account: str = ""):
+def meta_campaigns(start: str = "", end: str = "", domain: str = "rh", status: str = "all"):
     if not META_MARKETING_TOKEN:
         raise HTTPException(400, "Meta Marketing token not configured")
+    ad_account = DOMAINS.get(domain, {}).get("meta_ad_account", "")
     if not ad_account:
-        raise HTTPException(400, "ad_account parameter required")
+        raise HTTPException(400, "Meta Ads not configured for this domain")
     start, end = _dates(start, end)
     try:
-        return meta.get_campaigns_summary(META_MARKETING_TOKEN, ad_account, start, end)
+        return meta.get_campaigns_summary(META_MARKETING_TOKEN, ad_account, start, end, status)
     except Exception as e:
         raise HTTPException(502, f"Meta API error: {e}")
 
 
 @app.get("/api/meta/daily")
-def meta_daily(start: str = "", end: str = "", ad_account: str = ""):
+def meta_daily(start: str = "", end: str = "", domain: str = "rh"):
     if not META_MARKETING_TOKEN:
         raise HTTPException(400, "Meta Marketing token not configured")
+    ad_account = DOMAINS.get(domain, {}).get("meta_ad_account", "")
     if not ad_account:
-        raise HTTPException(400, "ad_account parameter required")
+        raise HTTPException(400, "Meta Ads not configured for this domain")
     start, end = _dates(start, end)
     try:
         return meta.get_daily_spend(META_MARKETING_TOKEN, ad_account, start, end)
@@ -210,13 +212,15 @@ def meta_daily(start: str = "", end: str = "", ad_account: str = ""):
 
 
 @app.get("/api/meta/accounts")
-def meta_accounts():
+def meta_accounts(domain: str = "rh"):
     if not META_MARKETING_TOKEN:
         raise HTTPException(400, "Meta Marketing token not configured")
+    ad_account = DOMAINS.get(domain, {}).get("meta_ad_account", "")
+    if not ad_account:
+        raise HTTPException(400, "Meta Ads not configured for this domain")
     try:
         accounts = meta.get_ad_accounts(META_MARKETING_TOKEN)
-        if META_AD_ACCOUNT:
-            accounts = [a for a in accounts if a["id"] == META_AD_ACCOUNT]
+        accounts = [a for a in accounts if a["id"] == ad_account]
         return accounts
     except Exception as e:
         raise HTTPException(502, f"Meta API error: {e}")
@@ -516,11 +520,10 @@ def export_report(domain: str = "rh", start: str = "", end: str = ""):
             pass
 
     meta_camps = None
-    if META_MARKETING_TOKEN:
+    ad_account = DOMAINS.get(domain, {}).get("meta_ad_account", "")
+    if META_MARKETING_TOKEN and ad_account:
         try:
-            accounts = meta.get_ad_accounts(META_MARKETING_TOKEN)
-            if accounts:
-                meta_camps = meta.get_campaigns_summary(META_MARKETING_TOKEN, accounts[0]["id"], start, end)
+            meta_camps = meta.get_campaigns_summary(META_MARKETING_TOKEN, ad_account, start, end)
         except Exception:
             pass
 
@@ -606,9 +609,10 @@ def reports_generate(period: str = "weekly", domain: str = "rh", start: str = ""
                 out["ga4"] = {"error": str(e)}
     except Exception as e:
         out["auth_error"] = str(e)
-    if META_MARKETING_TOKEN and META_AD_ACCOUNT:
+    ad_account = DOMAINS.get(domain, {}).get("meta_ad_account", "")
+    if META_MARKETING_TOKEN and ad_account:
         try:
-            camps = meta.get_campaigns_summary(META_MARKETING_TOKEN, META_AD_ACCOUNT, start, end)
+            camps = meta.get_campaigns_summary(META_MARKETING_TOKEN, ad_account, start, end)
             spend = sum(float(c.get("spend") or 0) for c in camps)
             clicks = sum(int(c.get("clicks") or 0) for c in camps)
             impressions = sum(int(c.get("impressions") or 0) for c in camps)
@@ -674,9 +678,10 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
                 pass
         except Exception:
             pass
-        if META_MARKETING_TOKEN and META_AD_ACCOUNT:
+        ad_account = DOMAINS.get(domain, {}).get("meta_ad_account", "")
+        if META_MARKETING_TOKEN and ad_account:
             try:
-                html_data["meta_ads"] = meta.get_campaigns_summary(META_MARKETING_TOKEN, META_AD_ACCOUNT, start, end)
+                html_data["meta_ads"] = meta.get_campaigns_summary(META_MARKETING_TOKEN, ad_account, start, end)
             except Exception:
                 pass
         h_token, h_page_id = _meta_creds(domain)
@@ -768,9 +773,10 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
             except Exception:
                 pass
         meta_camps = None
-        if META_MARKETING_TOKEN and META_AD_ACCOUNT:
+        ad_account = DOMAINS.get(domain, {}).get("meta_ad_account", "")
+        if META_MARKETING_TOKEN and ad_account:
             try:
-                meta_camps = meta.get_campaigns_summary(META_MARKETING_TOKEN, META_AD_ACCOUNT, start, end)
+                meta_camps = meta.get_campaigns_summary(META_MARKETING_TOKEN, ad_account, start, end)
             except Exception:
                 pass
         xlsx = build_report(domain, d["label"], start, end, gsc_sum, gsc_q, gsc_p, ga4_sum, ga4_p, ga4_src, meta_camps)

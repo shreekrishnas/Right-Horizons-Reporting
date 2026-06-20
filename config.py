@@ -26,6 +26,7 @@ DOMAINS = {
         "url": "https://www.righthorizons.com",
         "meta_page_id": os.getenv("META_PAGE_ID", "296408333709162"),
         "meta_social_token": os.getenv("META_SOCIAL_TOKEN", ""),
+        "meta_ad_account": os.getenv("META_AD_ACCOUNT_RH", "act_267691143342137"),
     },
     "pms": {
         "label": "Right Horizons PMS",
@@ -36,6 +37,7 @@ DOMAINS = {
         "url": "https://righthorizonspms.com",
         "meta_page_id": os.getenv("META_PAGE_ID_PMS", "117532164550609"),
         "meta_social_token": os.getenv("META_SOCIAL_TOKEN_PMS", ""),
+        "meta_ad_account": os.getenv("META_AD_ACCOUNT_PMS", ""),
     },
     "aif": {
         "label": "Right Horizons AIF",
@@ -46,5 +48,6 @@ DOMAINS = {
         "url": "https://aif.righthorizonspms.com",
         "meta_page_id": os.getenv("META_PAGE_ID_AIF", "1069286109601470"),
         "meta_social_token": os.getenv("META_SOCIAL_TOKEN_AIF", ""),
+        "meta_ad_account": os.getenv("META_AD_ACCOUNT_AIF", ""),
     },
 }

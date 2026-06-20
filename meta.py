@@ -22,12 +22,13 @@ def get_ad_accounts(token: str) -> list:
     return data.get("data", [])
 
 
-def get_campaigns_summary(token: str, ad_account_id: str, start: str, end: str) -> list:
+def get_campaigns_summary(token: str, ad_account_id: str, start: str, end: str, status_filter: str = "all") -> list:
+    statuses = '["ACTIVE"]' if status_filter == "active" else '["ACTIVE","PAUSED"]'
     data = _get(
         f"/{ad_account_id}/campaigns", token,
         {
             "fields": "name,status,objective",
-            "filtering": '[{"field":"effective_status","operator":"IN","value":["ACTIVE","PAUSED"]}]',
+            "filtering": '[{"field":"effective_status","operator":"IN","value":' + statuses + '}]',
             "limit": 100,
         },
     )
