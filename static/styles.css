@@ -429,3 +429,13 @@ span.flatpickr-weekday { color: #64748B !important; font-weight: 700 !important;
 [data-theme="dark"] .flatpickr-day:hover { background: rgba(124,58,237,0.15) !important; }
 [data-theme="dark"] span.flatpickr-weekday { color: #94A3B8 !important; }
 [data-theme="dark"] .flatpickr-weekdays { background: transparent !important; }
+
+/* Reporting Room */
+.channel-section .channel-content { display: none; }
+.channel-section.expanded .channel-content { display: block !important; }
+.channel-section.expanded .chevron-icon { transform: rotate(180deg); }
+.channel-section button:hover { background: rgba(124,58,237,0.04) !important; }
+.rr-export-mode { padding:1rem; border:2px solid var(--border-color); border-radius:10px; cursor:pointer; transition:all 0.2s; }
+.rr-export-mode:hover { border-color:#7C3AED; background:rgba(124,58,237,0.04); }
+.rr-export-mode.active, [data-export-mode].active { border-color:#7C3AED !important; background:rgba(124,58,237,0.06); }
+@keyframes spin { to { transform: rotate(360deg); } }

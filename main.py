@@ -874,6 +874,395 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
         raise HTTPException(502, f"Export error: {e}")
 
 
+# ── Report Room ─────────────────────────────────────────────────────────────
+
+def _compute_comparison_dates(start_str: str, end_str: str, compare: str):
+    """Return (compare_start, compare_end) as ISO strings, or (None, None)."""
+    if compare == "none":
+        return None, None
+    s = date.fromisoformat(start_str)
+    e = date.fromisoformat(end_str)
+    duration = (e - s).days + 1
+    if compare == "previous_month":
+        # Shift both dates back ~1 month (28 days keeps it simple, no dateutil)
+        cs = s.replace(month=s.month - 1) if s.month > 1 else s.replace(year=s.year - 1, month=12)
+        ce = e.replace(month=e.month - 1) if e.month > 1 else e.replace(year=e.year - 1, month=12)
+        # Handle day overflow (e.g. March 31 -> Feb 28)
+        import calendar
+        for dt_name in ('cs', 'ce'):
+            dt = cs if dt_name == 'cs' else ce
+            max_day = calendar.monthrange(dt.year, dt.month)[1]
+            if dt_name == 'cs':
+                cs = dt.replace(day=min(s.day, max_day))
+            else:
+                ce = dt.replace(day=min(e.day, max_day))
+        return cs.isoformat(), ce.isoformat()
+    else:  # previous_period
+        ce = s - timedelta(days=1)
+        cs = ce - timedelta(days=duration - 1)
+        return cs.isoformat(), ce.isoformat()
+
+
+def _calc_delta(current_val, previous_val):
+    """Calculate delta between two numeric values."""
+    if previous_val is None or current_val is None:
+        return None
+    try:
+        c = float(current_val)
+        p = float(previous_val)
+    except (TypeError, ValueError):
+        return None
+    diff = c - p
+    pct = round((diff / p) * 100, 2) if p != 0 else (100.0 if c > 0 else 0.0)
+    direction = "stable" if abs(pct) <= 5 else ("up" if diff > 0 else "down")
+    return {"value": round(diff, 2), "pct": pct, "direction": direction}
+
+
+def _calc_deltas(current: dict, previous: dict, keys: list):
+    """Calculate deltas for a list of metric keys."""
+    if not previous:
+        return None
+    return {k: _calc_delta(current.get(k, 0), previous.get(k, 0)) for k in keys}
+
+
+def _fetch_gsc_channel(creds, d, start, end):
+    site = d["gsc_site"]
+    summary = gsc.get_summary(creds, site, start, end)
+    top_queries = gsc.get_top_queries(creds, site, start, end, 20)
+    top_pages = gsc.get_top_pages(creds, site, start, end, 20)
+    current = {
+        "clicks": summary.get("clicks", 0),
+        "impressions": summary.get("impressions", 0),
+        "ctr": summary.get("ctr", 0),
+        "position": summary.get("position", 0),
+    }
+    return current, top_queries, top_pages
+
+
+def _fetch_ga4_channel(creds, d, start, end):
+    prop = d.get("ga4_property")
+    if not prop:
+        return None, [], []
+    summary = ga4.get_summary(creds, prop, start, end)
+    top_pages = ga4.get_top_pages(creds, prop, start, end, 20)
+    sources = ga4.get_traffic_sources(creds, prop, start, end)
+    current = {
+        "sessions": summary.get("sessions", 0),
+        "users": summary.get("users", 0),
+        "pageviews": summary.get("pageviews", 0),
+        "bounce_rate": summary.get("bounce_rate", 0),
+    }
+    return current, top_pages, sources
+
+
+def _fetch_meta_channel(domain, start, end):
+    ad_account = DOMAINS.get(domain, {}).get("meta_ad_account", "")
+    if not META_MARKETING_TOKEN or not ad_account:
+        return None, []
+    camps = meta.get_campaigns_summary(META_MARKETING_TOKEN, ad_account, start, end)
+    spend = sum(float(c.get("spend") or 0) for c in camps)
+    clicks = sum(int(c.get("clicks") or 0) for c in camps)
+    impressions = sum(int(c.get("impressions") or 0) for c in camps)
+    leads = sum(int(c.get("leads") or c.get("results") or 0) for c in camps)
+    ctr = round((clicks / impressions) * 100, 2) if impressions else 0
+    cpl = round(spend / leads, 2) if leads else 0
+    current = {
+        "spend": round(spend, 2), "impressions": impressions,
+        "clicks": clicks, "ctr": ctr, "leads": leads, "cpl": cpl,
+    }
+    return current, camps
+
+
+def _fetch_social_channel(domain, start, end):
+    s_token, s_page_id = _meta_creds(domain)
+    if not s_token or not s_page_id:
+        return None
+    fb = social.get_fb_comprehensive(s_token, s_page_id, start, end)
+    ig_data = {}
+    try:
+        ig_id = social.get_ig_account(s_token, s_page_id)
+        if ig_id:
+            ig_data = social.get_ig_comprehensive(s_token, ig_id, start, end)
+    except Exception:
+        pass
+    return {"fb": fb, "ig": ig_data}
+
+
+def _fetch_youtube_channel():
+    creds = get_youtube_credentials()
+    stats = youtube.get_channel_stats(creds)
+    current = {
+        "views": stats.get("views", stats.get("viewCount", 0)),
+        "subscribers": stats.get("subscribers", stats.get("subscriberCount", 0)),
+        "videos": stats.get("videos", stats.get("videoCount", 0)),
+    }
+    return current
+
+
+def _build_highlights(channels_data: dict):
+    """Scan all channel deltas and categorize metrics."""
+    improved, dropped, stable = [], [], []
+    label_map = {
+        "gsc": "GSC", "ga4": "GA4", "meta": "Meta", "social": "Social", "youtube": "YouTube"
+    }
+    for ch_name, ch_data in channels_data.items():
+        delta = ch_data.get("delta")
+        current = ch_data.get("current")
+        previous = ch_data.get("previous")
+        if not delta or not previous:
+            continue
+        prefix = label_map.get(ch_name, ch_name.upper())
+        for metric, d in delta.items():
+            if not d or not isinstance(d, dict):
+                continue
+            entry = {
+                "metric": f"{prefix} {metric.replace('_', ' ').title()}",
+                "current": current.get(metric, 0) if isinstance(current, dict) else 0,
+                "previous": previous.get(metric, 0) if isinstance(previous, dict) else 0,
+                "change_pct": d.get("pct", 0),
+            }
+            direction = d.get("direction", "stable")
+            if direction == "up":
+                improved.append(entry)
+            elif direction == "down":
+                dropped.append(entry)
+            else:
+                stable.append(entry)
+    improved.sort(key=lambda x: abs(x["change_pct"]), reverse=True)
+    dropped.sort(key=lambda x: abs(x["change_pct"]), reverse=True)
+    return {"improved": improved, "dropped": dropped, "stable": stable}
+
+
+def _generate_insights(channels_data: dict):
+    """Generate automatic insights based on data patterns."""
+    insights = []
+    gsc_d = channels_data.get("gsc", {}).get("delta") or {}
+    ga4_d = channels_data.get("ga4", {}).get("delta") or {}
+    meta_d = channels_data.get("meta", {}).get("delta") or {}
+    gsc_c = channels_data.get("gsc", {}).get("current") or {}
+
+    # Impressions up but clicks down → CTR needs attention
+    imp_d = gsc_d.get("impressions", {})
+    click_d = gsc_d.get("clicks", {})
+    if imp_d and click_d:
+        if imp_d.get("direction") == "up" and click_d.get("direction") == "down":
+            insights.append({"type": "warning", "title": "CTR needs attention",
+                             "description": "Search impressions are up but clicks declined. Review title tags and meta descriptions for better click-through."})
+
+    # Clicks up but leads down
+    meta_click_d = meta_d.get("clicks", {})
+    meta_lead_d = meta_d.get("leads", {})
+    if meta_click_d and meta_lead_d:
+        if meta_click_d.get("direction") == "up" and meta_lead_d.get("direction") == "down":
+            insights.append({"type": "warning", "title": "Landing page review needed",
+                             "description": "Ad clicks are increasing but lead conversions dropped. Landing page experience may need optimization."})
+
+    # Spend similar but CPL up
+    spend_d = meta_d.get("spend", {})
+    cpl_d = meta_d.get("cpl", {})
+    if spend_d and cpl_d:
+        if spend_d.get("direction") in ("stable", "up") and cpl_d.get("direction") == "up":
+            insights.append({"type": "warning", "title": "Audience fatigue possible",
+                             "description": "Cost per lead is rising while spend is steady or increasing. Consider refreshing ad creatives or audiences."})
+
+    # High impressions but low CTR in SEO
+    if gsc_c.get("impressions", 0) > 1000 and gsc_c.get("ctr", 0) < 2:
+        insights.append({"type": "opportunity", "title": "Title/meta optimization opportunity",
+                         "description": "High search impressions with low CTR suggest title tags and meta descriptions could be improved to drive more clicks."})
+
+    # GA4 sessions up but bounce rate also up
+    sess_d = ga4_d.get("sessions", {})
+    bounce_d = ga4_d.get("bounce_rate", {})
+    if sess_d and bounce_d:
+        if sess_d.get("direction") == "up" and bounce_d.get("direction") == "up":
+            insights.append({"type": "warning", "title": "Traffic quality concern",
+                             "description": "Sessions are growing but bounce rate is also increasing. Review traffic sources for quality."})
+
+    # GA4 users down
+    users_d = ga4_d.get("users", {})
+    if users_d and users_d.get("direction") == "down" and abs(users_d.get("pct", 0)) > 15:
+        insights.append({"type": "alert", "title": "Significant user decline",
+                         "description": f"Users dropped by {abs(users_d.get('pct', 0))}%. Investigate traffic source changes."})
+
+    # Meta spend up but impressions down
+    meta_imp_d = meta_d.get("impressions", {})
+    if spend_d and meta_imp_d:
+        if spend_d.get("direction") == "up" and meta_imp_d.get("direction") == "down":
+            insights.append({"type": "warning", "title": "Ad efficiency declining",
+                             "description": "Ad spend is increasing but impressions are dropping. CPM may be rising due to competition or audience saturation."})
+
+    if not insights:
+        insights.append({"type": "info", "title": "Stable performance",
+                         "description": "No major anomalies detected. Performance is generally consistent with the comparison period."})
+    return insights
+
+
+@app.get("/api/reports/room")
+def reports_room(
+    domain: str = "rh",
+    start: str = "",
+    end: str = "",
+    compare: str = "previous_period",
+    channels: str = "gsc,ga4,meta,social,youtube",
+):
+    today = _today_ist()
+    if not end:
+        end = today.isoformat()
+    if not start:
+        start = (today - timedelta(days=29)).isoformat()
+    if compare not in ("previous_period", "previous_month", "none"):
+        raise HTTPException(400, "compare must be one of: previous_period, previous_month, none")
+
+    d = _domain(domain)
+    compare_start, compare_end = _compute_comparison_dates(start, end, compare)
+    channel_list = [c.strip() for c in channels.split(",") if c.strip()]
+    channels_data = {}
+
+    creds = None
+    try:
+        creds = get_credentials()
+    except Exception:
+        pass
+
+    gsc_keys = ["clicks", "impressions", "ctr", "position"]
+    ga4_keys = ["sessions", "users", "pageviews", "bounce_rate"]
+    meta_keys = ["spend", "impressions", "clicks", "ctr", "leads", "cpl"]
+
+    # GSC
+    if "gsc" in channel_list and creds:
+        try:
+            current, top_queries, top_pages = _fetch_gsc_channel(creds, d, start, end)
+            prev = None
+            if compare_start:
+                try:
+                    prev, _, _ = _fetch_gsc_channel(creds, d, compare_start, compare_end)
+                except Exception:
+                    pass
+            channels_data["gsc"] = {
+                "current": current, "previous": prev,
+                "delta": _calc_deltas(current, prev, gsc_keys),
+                "top_queries": top_queries, "top_pages": top_pages,
+            }
+        except Exception as e:
+            channels_data["gsc"] = {"error": str(e), "current": None, "previous": None, "delta": None}
+
+    # GA4
+    if "ga4" in channel_list and creds:
+        try:
+            current, top_pages, sources = _fetch_ga4_channel(creds, d, start, end)
+            if current is None:
+                channels_data["ga4"] = {"error": "No GA4 property configured", "current": None, "previous": None, "delta": None}
+            else:
+                prev = None
+                if compare_start:
+                    try:
+                        prev, _, _ = _fetch_ga4_channel(creds, d, compare_start, compare_end)
+                    except Exception:
+                        pass
+                channels_data["ga4"] = {
+                    "current": current, "previous": prev,
+                    "delta": _calc_deltas(current, prev, ga4_keys),
+                    "top_pages": top_pages, "traffic_sources": sources,
+                }
+        except Exception as e:
+            channels_data["ga4"] = {"error": str(e), "current": None, "previous": None, "delta": None}
+
+    # Meta
+    if "meta" in channel_list:
+        try:
+            current, campaigns = _fetch_meta_channel(domain, start, end)
+            if current is None:
+                channels_data["meta"] = {"error": "Meta not configured", "current": None, "previous": None, "delta": None}
+            else:
+                prev = None
+                if compare_start:
+                    try:
+                        prev, _ = _fetch_meta_channel(domain, compare_start, compare_end)
+                    except Exception:
+                        pass
+                channels_data["meta"] = {
+                    "current": current, "previous": prev,
+                    "delta": _calc_deltas(current, prev, meta_keys),
+                    "campaigns": campaigns,
+                }
+        except Exception as e:
+            channels_data["meta"] = {"error": str(e), "current": None, "previous": None, "delta": None}
+
+    # Social
+    if "social" in channel_list:
+        try:
+            current = _fetch_social_channel(domain, start, end)
+            if current is None:
+                channels_data["social"] = {"error": "Social not configured", "current": None, "previous": None, "delta": None}
+            else:
+                prev = None
+                if compare_start:
+                    try:
+                        prev = _fetch_social_channel(domain, compare_start, compare_end)
+                    except Exception:
+                        pass
+                channels_data["social"] = {
+                    "current": current, "previous": prev, "delta": None,
+                }
+        except Exception as e:
+            channels_data["social"] = {"error": str(e), "current": None, "previous": None, "delta": None}
+
+    # YouTube
+    if "youtube" in channel_list:
+        try:
+            current = _fetch_youtube_channel()
+            # YouTube stats are typically lifetime/current, no date range comparison
+            channels_data["youtube"] = {
+                "current": current, "previous": None, "delta": None,
+            }
+        except Exception as e:
+            channels_data["youtube"] = {"error": str(e), "current": None, "previous": None, "delta": None}
+
+    highlights = _build_highlights(channels_data)
+    insights = _generate_insights(channels_data)
+
+    return {
+        "domain": domain, "label": d["label"], "start": start, "end": end,
+        "compare_start": compare_start, "compare_end": compare_end,
+        "channels": channels_data,
+        "highlights": highlights,
+        "insights": insights,
+    }
+
+
+@app.post("/api/reports/room/summary")
+def reports_room_summary(
+    domain: str = "rh",
+    start: str = "",
+    end: str = "",
+    compare: str = "previous_period",
+    channels: str = "gsc,ga4,meta,social,youtube",
+):
+    if not ai_mod:
+        raise HTTPException(503, "AI module not available")
+    room_data = reports_room(domain, start, end, compare, channels)
+    sys_prompt = (
+        "You are a senior digital marketing analyst. Given the report room data below, "
+        "produce an executive summary as JSON with these exact fields:\n"
+        "- what_improved: string summarizing metrics that improved\n"
+        "- what_dropped: string summarizing metrics that dropped\n"
+        "- what_stable: string summarizing stable metrics\n"
+        "- main_win: string describing the biggest positive takeaway\n"
+        "- main_concern: string describing the biggest concern\n"
+        "- key_opportunity: string describing the top opportunity to act on\n"
+        "- recommended_focus: string describing what to prioritize next\n"
+        "- next_steps: array of 3-5 actionable next step strings\n"
+        "Be concise, specific, and data-driven. Reference actual numbers where possible."
+    )
+    import json
+    user_msg = f"Report room data for {room_data.get('label', domain)} ({start} to {end}):\n\n{json.dumps(room_data, default=str)}"
+    try:
+        summary = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=4000)
+        return {"domain": domain, "label": room_data.get("label"), "start": start, "end": end, "summary": summary}
+    except Exception as e:
+        raise HTTPException(502, f"AI summary generation failed: {e}")
+
+
 # ── Content Calendar ─────────────────────────────────────────────────────────
 
 try:

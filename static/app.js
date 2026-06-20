@@ -1957,7 +1957,10 @@ async function validateVideo() {
     } catch (e) { el.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`; }
 }
 
-// ── Reports ──
+// ── Reporting Room ──
+let _roomData = null;
+let _exportMode = 'client';
+
 function setRepPeriod(p) {
     repPeriod = p;
     document.querySelectorAll('[data-rep-period]').forEach(b => b.classList.toggle('active', b.dataset.repPeriod === p));
@@ -1999,37 +2002,241 @@ function _repDomain() {
     return sel ? sel.value : currentDomain;
 }
 
+function _getSelectedChannels() {
+    const chs = [];
+    document.querySelectorAll('[data-channel]').forEach(cb => {
+        if (cb.checked) chs.push(cb.dataset.channel === 'seo' ? 'gsc' : cb.dataset.channel);
+    });
+    return chs.length ? chs.join(',') : 'gsc,ga4,meta,social,youtube';
+}
+
+function _deltaHtml(d) {
+    if (!d) return '';
+    const arrow = d.direction === 'up' ? '↑' : d.direction === 'down' ? '↓' : '→';
+    const color = d.direction === 'up' ? '#10B981' : d.direction === 'down' ? '#EF4444' : '#F59E0B';
+    const pct = d.pct !== undefined && d.pct !== null ? `${d.pct > 0 ? '+' : ''}${d.pct.toFixed(1)}%` : '';
+    return `<span style="font-size:0.72rem; font-weight:600; color:${color}; margin-left:4px;">${arrow} ${pct}</span>`;
+}
+
+function _metricCard(label, value, delta, color) {
+    return `<div class="metric-card"><div class="accent-strip" style="background:${color || '#7C3AED'}"></div><div class="metric-label">${esc(label)}</div><div class="metric-value">${formatNum(value)}${_deltaHtml(delta)}</div></div>`;
+}
+
+function _renderHighlights(highlights) {
+    const improved = document.getElementById('highlights-improved');
+    const dropped = document.getElementById('highlights-dropped');
+    const stable = document.getElementById('highlights-stable');
+    if (!highlights) return;
+    const renderList = (items, el) => {
+        const inner = el.querySelector('div:last-child');
+        if (!items || !items.length) { inner.innerHTML = '<span style="color:var(--text-muted); font-size:0.82rem;">None detected</span>'; return; }
+        inner.innerHTML = items.map(h => {
+            const arrow = h.change_pct > 0 ? '↑' : h.change_pct < 0 ? '↓' : '→';
+            const pct = h.change_pct !== undefined ? ` (${h.change_pct > 0 ? '+' : ''}${h.change_pct.toFixed(1)}%)` : '';
+            return `<div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0; border-bottom:1px solid var(--border-color);">
+                <span style="font-size:0.82rem; font-weight:500;">${esc(h.metric)}</span>
+                <span style="font-size:0.78rem; font-weight:600;">${formatNum(h.current)} ${arrow}${pct}</span>
+            </div>`;
+        }).join('');
+    };
+    renderList(highlights.improved, improved);
+    renderList(highlights.dropped, dropped);
+    renderList(highlights.stable, stable);
+}
+
+function _renderChannelBreakdown(channels) {
+    const channelMeta = {
+        gsc: { title: 'SEO / Google Search Console', color: '#7C3AED', metrics: ['clicks', 'impressions', 'ctr', 'position'] },
+        ga4: { title: 'Google Analytics 4', color: '#0EA5E9', metrics: ['sessions', 'users', 'pageviews', 'bounce_rate', 'new_users', 'avg_session'] },
+        meta: { title: 'Meta Ads', color: '#10B981', metrics: ['spend', 'impressions', 'clicks', 'ctr', 'leads', 'cpl'] },
+        social: { title: 'Social', color: '#F59E0B', metrics: [] },
+        youtube: { title: 'YouTube', color: '#EF4444', metrics: ['views', 'subscribers', 'estimatedMinutesWatched', 'likes', 'comments'] },
+    };
+    Object.entries(channels || {}).forEach(([key, ch]) => {
+        const meta = channelMeta[key];
+        if (!meta) return;
+        const metricsEl = document.getElementById(`${key === 'gsc' ? 'seo' : key}-metrics`);
+        const tablesEl = document.getElementById(`${key === 'gsc' ? 'seo' : key}-tables`);
+        if (!metricsEl) return;
+        const cur = ch.current || {};
+        const deltas = ch.delta || {};
+        let html = '';
+        if (key === 'social') {
+            const fb = cur.fb || {};
+            const ig = cur.ig || {};
+            const socialMetrics = [
+                ['FB Reach', fb.page_impressions, null], ['FB Engagements', fb.page_engaged_users, null],
+                ['IG Reach', ig.reach, null], ['IG Impressions', ig.impressions, null],
+                ['IG Followers', ig.followers_count, null],
+            ];
+            socialMetrics.forEach(([label, val]) => {
+                if (val !== undefined) html += _metricCard(label, val, null, meta.color);
+            });
+        } else {
+            meta.metrics.forEach(m => {
+                if (cur[m] !== undefined) html += _metricCard(m.replace(/_/g, ' '), cur[m], deltas[m], meta.color);
+            });
+        }
+        metricsEl.innerHTML = html || '<span style="color:var(--text-muted); font-size:0.82rem;">No data available</span>';
+        let tableHtml = '';
+        if (ch.top_queries && ch.top_queries.length) {
+            tableHtml += '<div style="font-weight:600; font-size:0.82rem; margin-bottom:0.5rem; margin-top:0.5rem;">Top Queries</div>';
+            tableHtml += '<table style="width:100%; font-size:0.78rem; border-collapse:collapse;">';
+            tableHtml += '<tr style="border-bottom:2px solid var(--border-color);"><th style="text-align:left; padding:0.4rem;">Query</th><th>Clicks</th><th>Impr</th><th>CTR</th><th>Pos</th></tr>';
+            ch.top_queries.slice(0, 10).forEach(q => {
+                tableHtml += `<tr style="border-bottom:1px solid var(--border-color);"><td style="padding:0.4rem; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(q.query || q.keys?.[0] || '')}</td><td style="text-align:center;">${q.clicks || 0}</td><td style="text-align:center;">${q.impressions || 0}</td><td style="text-align:center;">${(q.ctr != null ? (q.ctr * 100).toFixed(1) + '%' : '-')}</td><td style="text-align:center;">${q.position != null ? q.position.toFixed(1) : '-'}</td></tr>`;
+            });
+            tableHtml += '</table>';
+        }
+        if (ch.top_pages && ch.top_pages.length) {
+            tableHtml += '<div style="font-weight:600; font-size:0.82rem; margin-bottom:0.5rem; margin-top:0.75rem;">Top Pages</div>';
+            tableHtml += '<table style="width:100%; font-size:0.78rem; border-collapse:collapse;">';
+            tableHtml += '<tr style="border-bottom:2px solid var(--border-color);"><th style="text-align:left; padding:0.4rem;">Page</th><th>Clicks</th><th>Impr</th></tr>';
+            ch.top_pages.slice(0, 10).forEach(p => {
+                const page = p.page || p.keys?.[0] || p.pagePath || '';
+                const short = page.replace(/^https?:\/\/[^/]+/, '').substring(0, 60);
+                tableHtml += `<tr style="border-bottom:1px solid var(--border-color);"><td style="padding:0.4rem; max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(page)}">${esc(short)}</td><td style="text-align:center;">${p.clicks || p.screenPageViews || 0}</td><td style="text-align:center;">${p.impressions || p.sessions || 0}</td></tr>`;
+            });
+            tableHtml += '</table>';
+        }
+        if (ch.traffic_sources && ch.traffic_sources.length) {
+            tableHtml += '<div style="font-weight:600; font-size:0.82rem; margin-bottom:0.5rem; margin-top:0.75rem;">Traffic Sources</div>';
+            tableHtml += '<table style="width:100%; font-size:0.78rem; border-collapse:collapse;">';
+            tableHtml += '<tr style="border-bottom:2px solid var(--border-color);"><th style="text-align:left; padding:0.4rem;">Channel</th><th>Sessions</th><th>Users</th></tr>';
+            ch.traffic_sources.slice(0, 8).forEach(s => {
+                tableHtml += `<tr style="border-bottom:1px solid var(--border-color);"><td style="padding:0.4rem;">${esc(s.channel || s.sessionDefaultChannelGroup || '')}</td><td style="text-align:center;">${s.sessions || 0}</td><td style="text-align:center;">${s.users || s.totalUsers || 0}</td></tr>`;
+            });
+            tableHtml += '</table>';
+        }
+        if (ch.campaigns && ch.campaigns.length) {
+            tableHtml += '<div style="font-weight:600; font-size:0.82rem; margin-bottom:0.5rem; margin-top:0.5rem;">Campaigns</div>';
+            tableHtml += '<table style="width:100%; font-size:0.78rem; border-collapse:collapse;">';
+            tableHtml += '<tr style="border-bottom:2px solid var(--border-color);"><th style="text-align:left; padding:0.4rem;">Campaign</th><th>Spend</th><th>Clicks</th><th>Impr</th></tr>';
+            ch.campaigns.slice(0, 10).forEach(c => {
+                tableHtml += `<tr style="border-bottom:1px solid var(--border-color);"><td style="padding:0.4rem; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(c.campaign_name || c.name || '')}</td><td style="text-align:center;">₹${formatNum(c.spend || 0)}</td><td style="text-align:center;">${c.clicks || 0}</td><td style="text-align:center;">${c.impressions || 0}</td></tr>`;
+            });
+            tableHtml += '</table>';
+        }
+        if (tablesEl) tablesEl.innerHTML = tableHtml;
+    });
+}
+
+function _renderInsights(insights) {
+    const el = document.getElementById('insights-reasons');
+    if (!insights || !insights.length) {
+        el.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><p>No specific insights for this period.</p></div>';
+        return;
+    }
+    const icons = {
+        warning: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+        opportunity: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>',
+        info: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0EA5E9" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+    };
+    el.innerHTML = insights.map(i => `
+        <div style="padding:1rem; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-card);">
+            <div style="display:flex; align-items:flex-start; gap:0.75rem;">
+                ${icons[i.type] || icons.info}
+                <div>
+                    <div style="font-weight:600; font-size:0.85rem; color:var(--text-primary); margin-bottom:0.25rem;">${esc(i.title)}</div>
+                    <div style="font-size:0.82rem; color:var(--text-secondary); line-height:1.5;">${esc(i.description)}</div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function _renderNextSteps(steps) {
+    const el = document.getElementById('next-steps');
+    if (!steps || !steps.length) {
+        el.innerHTML = '<div class="empty-state"><p>No recommendations available.</p></div>';
+        return;
+    }
+    el.innerHTML = steps.map((s, i) => `
+        <div style="display:flex; align-items:center; gap:0.75rem; padding:0.75rem 1rem; border:1px solid var(--border-color); border-radius:8px; margin-bottom:0.5rem; background:var(--bg-card);">
+            <span style="flex:1; font-size:0.85rem; color:var(--text-primary); line-height:1.4;">${esc(s)}</span>
+            <button class="btn-export" onclick="_copyToClipboard(this.closest('div').querySelector('span').textContent)" title="Copy" style="padding:0.3rem 0.6rem; border-radius:6px; font-size:0.72rem; flex-shrink:0;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+            <label style="display:flex; align-items:center; gap:4px; font-size:0.72rem; color:var(--text-muted); cursor:pointer; white-space:nowrap; flex-shrink:0;">
+                <input type="checkbox" checked data-step-include="${i}" style="accent-color:#7C3AED; width:13px; height:13px;"> Include
+            </label>
+            <input type="text" placeholder="Internal note..." data-step-note="${i}" style="height:28px; width:140px; font-size:0.75rem; padding:0 0.5rem; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-secondary); flex-shrink:0;">
+        </div>
+    `).join('');
+}
+
 async function generateReport() {
     const start = document.getElementById('rep-start').value;
     const end = document.getElementById('rep-end').value;
     const dom = _repDomain();
-    const el = document.getElementById('rep-result');
-    el.innerHTML = '<div class="empty-state"><p>Generating report…</p></div>';
+    const compare = document.getElementById('rep-comparison')?.value || 'previous_period';
+    const channels = _getSelectedChannels();
+    const btn = document.getElementById('btn-generate-report');
+    const preview = document.getElementById('report-preview');
+    const repResult = document.getElementById('rep-result');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px; animation:spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-dasharray="31" stroke-dashoffset="10"/></svg> Generating…'; }
+    repResult.innerHTML = '';
+    repResult.style.display = 'none';
     try {
-        const qs = `?period=${repPeriod}&domain=${dom}&start=${start}&end=${end}`;
-        const r = await api(`/api/reports/generate${qs}`);
-        let html = `<div class="section-label">${esc(r.label)} — ${esc(r.period)} (${esc(r.start)} to ${esc(r.end)})</div>`;
-        const sections = [
-            { key: 'gsc', title: 'Search Console', color: '#7C3AED' },
-            { key: 'ga4', title: 'Google Analytics', color: '#0EA5E9' },
-            { key: 'meta', title: 'Meta Ads', color: '#10B981' },
-            { key: 'social_fb', title: 'Facebook', color: '#1877F2' },
-            { key: 'social_ig', title: 'Instagram', color: '#E4405F' },
-        ];
-        sections.forEach(s => {
-            const v = r[s.key];
-            if (!v || typeof v !== 'object' || v.error) return;
-            html += `<div class="section"><div class="section-label" style="color:${s.color};">${s.title}</div><div class="metrics-grid">`;
-            Object.entries(v).slice(0, 8).forEach(([k, val]) => {
-                if (typeof val === 'object') return;
-                html += `<div class="metric-card"><div class="accent-strip" style="background:${s.color}"></div><div class="metric-label">${esc(k)}</div><div class="metric-value">${formatNum(val)}</div></div>`;
-            });
-            html += '</div></div>';
+        const qs = `?domain=${dom}&start=${start}&end=${end}&compare=${compare}&channels=${channels}`;
+        _roomData = await api(`/api/reports/room${qs}`);
+        preview.style.display = 'block';
+        _renderHighlights(_roomData.highlights);
+        _renderChannelBreakdown(_roomData.channels);
+        _renderInsights(_roomData.insights);
+        if (_roomData.next_steps) _renderNextSteps(_roomData.next_steps);
+        document.querySelectorAll('.channel-section').forEach(sec => {
+            const chKey = sec.dataset.channel;
+            const mappedKey = chKey === 'seo' ? 'gsc' : chKey;
+            if (!_roomData.channels?.[mappedKey]) { sec.style.display = 'none'; }
+            else { sec.style.display = ''; sec.classList.add('expanded'); }
         });
-        el.innerHTML = html;
+        // Auto-generate AI summary
+        generateExecSummary();
     } catch (e) {
-        el.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
+        preview.style.display = 'none';
+        repResult.style.display = 'block';
+        repResult.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Generate Report'; }
     }
+}
+
+async function generateExecSummary() {
+    const el = document.getElementById('exec-summary');
+    if (!_roomData) return;
+    const setField = (id, text) => {
+        const e = document.getElementById(id);
+        if (e) { const inner = e.querySelector('div:last-child'); if (inner) inner.textContent = text || '--'; }
+    };
+    try {
+        const start = document.getElementById('rep-start').value;
+        const end = document.getElementById('rep-end').value;
+        const dom = _repDomain();
+        const compare = document.getElementById('rep-comparison')?.value || 'previous_period';
+        const channels = _getSelectedChannels();
+        const qs = `?domain=${dom}&start=${start}&end=${end}&compare=${compare}&channels=${channels}`;
+        const resp = await api(`/api/reports/room/summary${qs}`, { method: 'POST' });
+        const summary = resp.summary || resp;
+        const s = typeof summary === 'object' && summary.items ? summary.items : summary;
+        setField('exec-improved', s.what_improved);
+        setField('exec-dropped', s.what_dropped);
+        setField('exec-stable', s.what_stable);
+        setField('exec-main-win', s.main_win);
+        setField('exec-main-concern', s.main_concern);
+        setField('exec-key-opportunity', s.key_opportunity);
+        setField('exec-recommended-focus', s.recommended_focus);
+        if (s.next_steps && s.next_steps.length) {
+            _renderNextSteps(s.next_steps);
+        }
+    } catch (e) {
+        console.error('Failed to generate exec summary', e);
+    }
+}
+
+function setExportMode(mode) {
+    _exportMode = mode;
+    document.querySelectorAll('[data-export-mode]').forEach(b => b.classList.toggle('active', b.dataset.exportMode === mode));
 }
 
 function exportReportFmt(fmt) {

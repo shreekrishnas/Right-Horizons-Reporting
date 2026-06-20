@@ -58,7 +58,7 @@
             </button>
             <button class="sidebar-item" data-view="reports" onclick="switchView('reports')">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                <span class="sidebar-tooltip">Reports & Analytics</span>
+                <span class="sidebar-tooltip">Reporting Room</span>
             </button>
             <button class="sidebar-item" data-view="settings" onclick="switchView('settings')" style="margin-top:auto;">
                 <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
@@ -603,18 +603,27 @@
             <!-- ═══ Reports view ═══ -->
             <div id="view-reports" style="display:none">
                 <div class="section page-enter">
-                    <div class="section-label">Reports & Analytics</div>
+                    <div class="section-label">Reporting Room</div>
+
+                    <!-- ── BUILD REPORT card ── -->
                     <div class="glass-card-static" style="padding:1.5rem; margin-bottom:1.5rem;">
-                        <!-- Row 1: Period + Domain -->
+
+                        <!-- Row 1: Domain | Report type | Comparison -->
                         <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center; margin-bottom:1rem;">
+                            <select id="rep-domain" class="date-input" style="height:36px; min-width:180px; font-size:0.82rem; padding:0 0.75rem; border-radius:8px; background:var(--bg-card); border:1px solid var(--border-color); color:var(--text-primary); cursor:pointer; appearance:none; -webkit-appearance:none; background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239CA3AF%22 stroke-width=%222.5%22><polyline points=%226 9 12 15 18 9%22/></svg>'); background-repeat:no-repeat; background-position:right 10px center;">
+                            </select>
                             <div class="date-range-group">
                                 <button class="dr-btn active" data-rep-period="weekly" onclick="setRepPeriod('weekly')">Weekly</button>
                                 <button class="dr-btn" data-rep-period="monthly" onclick="setRepPeriod('monthly')">Monthly</button>
                             </div>
-                            <select id="rep-domain" class="date-input" style="height:36px; min-width:180px; font-size:0.82rem; padding:0 0.75rem; border-radius:8px; background:var(--glass-bg); border:1px solid var(--border-color); color:var(--text-primary); cursor:pointer; appearance:none; -webkit-appearance:none; background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239CA3AF%22 stroke-width=%222.5%22><polyline points=%226 9 12 15 18 9%22/></svg>'); background-repeat:no-repeat; background-position:right 10px center;">
+                            <select id="rep-comparison" class="date-input" style="height:36px; min-width:180px; font-size:0.82rem; padding:0 0.75rem; border-radius:8px; background:var(--bg-card); border:1px solid var(--border-color); color:var(--text-primary); cursor:pointer; appearance:none; -webkit-appearance:none; background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239CA3AF%22 stroke-width=%222.5%22><polyline points=%226 9 12 15 18 9%22/></svg>'); background-repeat:no-repeat; background-position:right 10px center;">
+                                <option value="previous_period">Previous Period</option>
+                                <option value="previous_month">Previous Month</option>
+                                <option value="none">No Comparison</option>
                             </select>
                         </div>
-                        <!-- Row 2: Date range with smart presets -->
+
+                        <!-- Row 2: Date presets -->
                         <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:1rem;">
                             <div class="date-range-group">
                                 <button class="dr-btn" data-rep-range="7d" onclick="setRepRange('7d')">Last 7D</button>
@@ -625,7 +634,9 @@
                                 <button class="dr-btn" data-rep-range="lastmonth" onclick="setRepRange('lastmonth')">Last Month</button>
                             </div>
                         </div>
-                        <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
+
+                        <!-- Row 3: Custom FROM/TO dates -->
+                        <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center; margin-bottom:1rem;">
                             <div style="display:flex; align-items:center; gap:0.5rem;">
                                 <label style="font-size:0.75rem; font-weight:600; color:var(--text-muted); letter-spacing:0.04em;">FROM</label>
                                 <input type="date" class="date-input" id="rep-start" style="height:36px; border-radius:8px;">
@@ -634,23 +645,276 @@
                                 <label style="font-size:0.75rem; font-weight:600; color:var(--text-muted); letter-spacing:0.04em;">TO</label>
                                 <input type="date" class="date-input" id="rep-end" style="height:36px; border-radius:8px;">
                             </div>
-                            <button class="btn-export" onclick="generateReport()" style="padding:0.5rem 1.25rem; border-radius:8px;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px; vertical-align:-2px;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                                Generate
+                        </div>
+
+                        <!-- Row 4: Channel toggles -->
+                        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:1rem;">
+                            <span style="font-size:0.75rem; font-weight:600; color:var(--text-muted); letter-spacing:0.04em; margin-right:0.25rem;">CHANNELS</span>
+                            <label class="dr-btn active" style="cursor:pointer; display:flex; align-items:center; gap:6px; padding:0.35rem 0.85rem;">
+                                <input type="checkbox" id="ch-seo" data-channel="seo" checked style="accent-color:#7C3AED; width:14px; height:14px; cursor:pointer;"> SEO/GSC
+                            </label>
+                            <label class="dr-btn active" style="cursor:pointer; display:flex; align-items:center; gap:6px; padding:0.35rem 0.85rem;">
+                                <input type="checkbox" id="ch-ga4" data-channel="ga4" checked style="accent-color:#7C3AED; width:14px; height:14px; cursor:pointer;"> GA4
+                            </label>
+                            <label class="dr-btn active" style="cursor:pointer; display:flex; align-items:center; gap:6px; padding:0.35rem 0.85rem;">
+                                <input type="checkbox" id="ch-meta" data-channel="meta" checked style="accent-color:#7C3AED; width:14px; height:14px; cursor:pointer;"> Meta Ads
+                            </label>
+                            <label class="dr-btn active" style="cursor:pointer; display:flex; align-items:center; gap:6px; padding:0.35rem 0.85rem;">
+                                <input type="checkbox" id="ch-social" data-channel="social" checked style="accent-color:#7C3AED; width:14px; height:14px; cursor:pointer;"> Social
+                            </label>
+                            <label class="dr-btn active" style="cursor:pointer; display:flex; align-items:center; gap:6px; padding:0.35rem 0.85rem;">
+                                <input type="checkbox" id="ch-youtube" data-channel="youtube" checked style="accent-color:#7C3AED; width:14px; height:14px; cursor:pointer;"> YouTube
+                            </label>
+                        </div>
+
+                        <!-- Row 5: Generate + Export -->
+                        <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
+                            <button class="btn-export" id="btn-generate-report" onclick="generateReport()" style="flex:1; min-width:200px; padding:0.65rem 1.25rem; border-radius:8px; background:linear-gradient(135deg,#7C3AED,#6D28D9); color:#fff; border:none; font-weight:700; font-size:0.85rem; letter-spacing:0.04em; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                                Generate Report
                             </button>
-                            <span style="margin-left:auto;"></span>
-                            <div style="display:flex; gap:0.5rem;">
-                                <button class="btn-export" onclick="exportReportFmt('html')" style="padding:0.5rem 1rem; border-radius:8px; background:linear-gradient(135deg,#7C3AED,#6D28D9); color:#fff; border:none; font-weight:700; font-size:0.78rem; letter-spacing:0.04em; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                            <div style="position:relative;">
+                                <button class="btn-export" id="btn-quick-export" onclick="document.getElementById('quick-export-dropdown').style.display=document.getElementById('quick-export-dropdown').style.display==='none'?'block':'none'" style="padding:0.5rem 1rem; border-radius:8px; font-size:0.78rem; display:flex; align-items:center; gap:4px;">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                    HTML Report
+                                    Export
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
                                 </button>
-                                <button class="btn-export" onclick="exportReportFmt('excel')" style="padding:0.5rem 1rem; border-radius:8px; font-size:0.78rem;">Excel</button>
-                                <button class="btn-export" onclick="exportReportFmt('csv')" style="padding:0.5rem 1rem; border-radius:8px; font-size:0.78rem;">CSV</button>
-                                <button class="btn-export" onclick="exportReportFmt('pdf')" style="padding:0.5rem 1rem; border-radius:8px; font-size:0.78rem;">PDF</button>
+                                <div id="quick-export-dropdown" style="display:none; position:absolute; top:100%; right:0; margin-top:4px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px; padding:0.5rem; z-index:50; min-width:120px; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+                                    <button class="btn-export" onclick="exportReportFmt('html')" style="width:100%; padding:0.4rem 0.75rem; border-radius:6px; font-size:0.78rem; text-align:left; margin-bottom:2px;">HTML</button>
+                                    <button class="btn-export" onclick="exportReportFmt('excel')" style="width:100%; padding:0.4rem 0.75rem; border-radius:6px; font-size:0.78rem; text-align:left; margin-bottom:2px;">Excel</button>
+                                    <button class="btn-export" onclick="exportReportFmt('csv')" style="width:100%; padding:0.4rem 0.75rem; border-radius:6px; font-size:0.78rem; text-align:left; margin-bottom:2px;">CSV</button>
+                                    <button class="btn-export" onclick="exportReportFmt('pdf')" style="width:100%; padding:0.4rem 0.75rem; border-radius:6px; font-size:0.78rem; text-align:left;">PDF</button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div id="rep-result"><div class="empty-state"><p>Choose a period and date range, then click Generate or download directly as HTML.</p></div></div>
+
+                    <!-- Backward-compatible result container -->
+                    <div id="rep-result"></div>
+
+                    <!-- ── REPORT PREVIEW (shown after generate) ── -->
+                    <div id="report-preview" style="display:none;">
+
+                        <!-- Executive Summary -->
+                        <div class="glass-card-static" style="padding:1.5rem; margin-bottom:1.5rem; background:linear-gradient(135deg, rgba(124,58,237,0.08), transparent); position:relative;">
+                            <div class="accent-strip" style="position:absolute; left:0; top:0; bottom:0; width:4px; border-radius:4px 0 0 4px; background:linear-gradient(180deg,#7C3AED,#6D28D9);"></div>
+                            <h3 style="font-size:1rem; font-weight:700; color:var(--text-primary); margin:0 0 1rem 0.5rem;">Executive Summary</h3>
+                            <div id="exec-summary" style="padding-left:0.5rem;">
+                                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:1rem; margin-bottom:1rem;">
+                                    <div id="exec-improved" style="padding:0.75rem 1rem; border-radius:8px; border-left:3px solid #10B981; background:rgba(16,185,129,0.06);">
+                                        <div style="font-size:0.75rem; font-weight:700; color:#10B981; letter-spacing:0.04em; margin-bottom:0.35rem;">WHAT IMPROVED</div>
+                                        <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5;">--</div>
+                                    </div>
+                                    <div id="exec-dropped" style="padding:0.75rem 1rem; border-radius:8px; border-left:3px solid #EF4444; background:rgba(239,68,68,0.06);">
+                                        <div style="font-size:0.75rem; font-weight:700; color:#EF4444; letter-spacing:0.04em; margin-bottom:0.35rem;">WHAT DROPPED</div>
+                                        <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5;">--</div>
+                                    </div>
+                                    <div id="exec-stable" style="padding:0.75rem 1rem; border-radius:8px; border-left:3px solid #F59E0B; background:rgba(245,158,11,0.06);">
+                                        <div style="font-size:0.75rem; font-weight:700; color:#F59E0B; letter-spacing:0.04em; margin-bottom:0.35rem;">WHAT STAYED STABLE</div>
+                                        <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5;">--</div>
+                                    </div>
+                                </div>
+                                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:0.75rem;">
+                                    <div id="exec-main-win" class="metric-card" style="padding:0.75rem;">
+                                        <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); letter-spacing:0.04em;">MAIN WIN</div>
+                                        <div style="font-size:0.85rem; color:var(--text-primary); margin-top:0.25rem;">--</div>
+                                    </div>
+                                    <div id="exec-main-concern" class="metric-card" style="padding:0.75rem;">
+                                        <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); letter-spacing:0.04em;">MAIN CONCERN</div>
+                                        <div style="font-size:0.85rem; color:var(--text-primary); margin-top:0.25rem;">--</div>
+                                    </div>
+                                    <div id="exec-key-opportunity" class="metric-card" style="padding:0.75rem;">
+                                        <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); letter-spacing:0.04em;">KEY OPPORTUNITY</div>
+                                        <div style="font-size:0.85rem; color:var(--text-primary); margin-top:0.25rem;">--</div>
+                                    </div>
+                                    <div id="exec-recommended-focus" class="metric-card" style="padding:0.75rem;">
+                                        <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); letter-spacing:0.04em;">RECOMMENDED FOCUS</div>
+                                        <div style="font-size:0.85rem; color:var(--text-primary); margin-top:0.25rem;">--</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Performance Highlights -->
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
+                            <div id="highlights-improved" class="glass-card-static" style="padding:1.25rem; border-left:4px solid #10B981;">
+                                <h4 style="font-size:0.85rem; font-weight:700; color:#10B981; margin:0 0 0.75rem;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" style="vertical-align:-2px; margin-right:4px;"><polyline points="18 15 12 9 6 15"/></svg>
+                                    What Improved
+                                </h4>
+                                <div style="font-size:0.82rem; color:var(--text-secondary); line-height:1.6;">--</div>
+                            </div>
+                            <div id="highlights-dropped" class="glass-card-static" style="padding:1.25rem; border-left:4px solid #EF4444;">
+                                <h4 style="font-size:0.85rem; font-weight:700; color:#EF4444; margin:0 0 0.75rem;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.5" style="vertical-align:-2px; margin-right:4px;"><polyline points="6 9 12 15 18 9"/></svg>
+                                    What Dropped
+                                </h4>
+                                <div style="font-size:0.82rem; color:var(--text-secondary); line-height:1.6;">--</div>
+                            </div>
+                            <div id="highlights-stable" class="glass-card-static" style="padding:1.25rem; border-left:4px solid #F59E0B;">
+                                <h4 style="font-size:0.85rem; font-weight:700; color:#F59E0B; margin:0 0 0.75rem;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.5" style="vertical-align:-2px; margin-right:4px;"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="15 8 19 12 15 16"/></svg>
+                                    What Stayed Stable
+                                </h4>
+                                <div style="font-size:0.82rem; color:var(--text-secondary); line-height:1.6;">--</div>
+                            </div>
+                        </div>
+
+                        <!-- Channel Breakdown -->
+                        <div class="glass-card-static" style="padding:1.5rem; margin-bottom:1.5rem;">
+                            <h3 style="font-size:1rem; font-weight:700; color:var(--text-primary); margin:0 0 1rem;">Channel Breakdown</h3>
+                            <div id="channel-breakdown">
+                                <!-- SEO/GSC -->
+                                <div class="channel-section" data-channel="seo" style="border:1px solid var(--border-color); border-radius:8px; margin-bottom:0.75rem; overflow:hidden;">
+                                    <button onclick="this.parentElement.classList.toggle('expanded')" style="width:100%; padding:0.75rem 1rem; display:flex; align-items:center; justify-content:space-between; background:transparent; border:none; color:var(--text-primary); cursor:pointer; font-size:0.85rem; font-weight:600;">
+                                        <span>SEO / Google Search Console</span>
+                                        <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
+                                    </button>
+                                    <div class="channel-content" style="display:none; padding:0.75rem 1rem 1rem;">
+                                        <div class="metrics-grid" id="seo-metrics"></div>
+                                        <div id="seo-tables" style="margin-top:0.75rem;"></div>
+                                    </div>
+                                </div>
+                                <!-- GA4 -->
+                                <div class="channel-section" data-channel="ga4" style="border:1px solid var(--border-color); border-radius:8px; margin-bottom:0.75rem; overflow:hidden;">
+                                    <button onclick="this.parentElement.classList.toggle('expanded')" style="width:100%; padding:0.75rem 1rem; display:flex; align-items:center; justify-content:space-between; background:transparent; border:none; color:var(--text-primary); cursor:pointer; font-size:0.85rem; font-weight:600;">
+                                        <span>Google Analytics 4</span>
+                                        <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
+                                    </button>
+                                    <div class="channel-content" style="display:none; padding:0.75rem 1rem 1rem;">
+                                        <div class="metrics-grid" id="ga4-metrics"></div>
+                                        <div id="ga4-tables" style="margin-top:0.75rem;"></div>
+                                    </div>
+                                </div>
+                                <!-- Meta Ads -->
+                                <div class="channel-section" data-channel="meta" style="border:1px solid var(--border-color); border-radius:8px; margin-bottom:0.75rem; overflow:hidden;">
+                                    <button onclick="this.parentElement.classList.toggle('expanded')" style="width:100%; padding:0.75rem 1rem; display:flex; align-items:center; justify-content:space-between; background:transparent; border:none; color:var(--text-primary); cursor:pointer; font-size:0.85rem; font-weight:600;">
+                                        <span>Meta Ads</span>
+                                        <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
+                                    </button>
+                                    <div class="channel-content" style="display:none; padding:0.75rem 1rem 1rem;">
+                                        <div class="metrics-grid" id="meta-metrics"></div>
+                                        <div id="meta-tables" style="margin-top:0.75rem;"></div>
+                                    </div>
+                                </div>
+                                <!-- Social -->
+                                <div class="channel-section" data-channel="social" style="border:1px solid var(--border-color); border-radius:8px; margin-bottom:0.75rem; overflow:hidden;">
+                                    <button onclick="this.parentElement.classList.toggle('expanded')" style="width:100%; padding:0.75rem 1rem; display:flex; align-items:center; justify-content:space-between; background:transparent; border:none; color:var(--text-primary); cursor:pointer; font-size:0.85rem; font-weight:600;">
+                                        <span>Social</span>
+                                        <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
+                                    </button>
+                                    <div class="channel-content" style="display:none; padding:0.75rem 1rem 1rem;">
+                                        <div class="metrics-grid" id="social-metrics"></div>
+                                        <div id="social-tables" style="margin-top:0.75rem;"></div>
+                                    </div>
+                                </div>
+                                <!-- YouTube -->
+                                <div class="channel-section" data-channel="youtube" style="border:1px solid var(--border-color); border-radius:8px; overflow:hidden;">
+                                    <button onclick="this.parentElement.classList.toggle('expanded')" style="width:100%; padding:0.75rem 1rem; display:flex; align-items:center; justify-content:space-between; background:transparent; border:none; color:var(--text-primary); cursor:pointer; font-size:0.85rem; font-weight:600;">
+                                        <span>YouTube</span>
+                                        <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
+                                    </button>
+                                    <div class="channel-content" style="display:none; padding:0.75rem 1rem 1rem;">
+                                        <div class="metrics-grid" id="youtube-metrics"></div>
+                                        <div id="youtube-tables" style="margin-top:0.75rem;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Insights & Reasons -->
+                        <div class="glass-card-static" style="padding:1.5rem; margin-bottom:1.5rem;">
+                            <h3 style="font-size:1rem; font-weight:700; color:var(--text-primary); margin:0 0 1rem;">Insights &amp; Reasons</h3>
+                            <div id="insights-reasons" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:1rem;">
+                                <!-- JS will populate insight cards like:
+                                <div style="padding:1rem; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-card);">
+                                    <div style="display:flex; align-items:flex-start; gap:0.75rem;">
+                                        <svg (lightbulb|warning|info icon)></svg>
+                                        <div>
+                                            <div style="font-weight:600; color:var(--text-primary); margin-bottom:0.25rem;">Title</div>
+                                            <div style="font-size:0.82rem; color:var(--text-secondary); line-height:1.5;">Description</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                -->
+                                <div class="empty-state" style="grid-column:1/-1;"><p>Insights will appear after report generation.</p></div>
+                            </div>
+                        </div>
+
+                        <!-- Recommended Next Steps -->
+                        <div class="glass-card-static" style="padding:1.5rem; margin-bottom:1.5rem;">
+                            <h3 style="font-size:1rem; font-weight:700; color:var(--text-primary); margin:0 0 1rem;">Recommended Next Steps</h3>
+                            <div id="next-steps">
+                                <!-- JS will populate items like:
+                                <div style="display:flex; align-items:center; gap:0.75rem; padding:0.75rem 1rem; border:1px solid var(--border-color); border-radius:8px; margin-bottom:0.5rem; background:var(--bg-card);">
+                                    <span style="flex:1; font-size:0.85rem; color:var(--text-primary);">Step text</span>
+                                    <button class="btn-export" onclick="copyStep(this)" title="Copy" style="padding:0.3rem 0.5rem; border-radius:6px; font-size:0.72rem;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                                    </button>
+                                    <label style="display:flex; align-items:center; gap:4px; font-size:0.72rem; color:var(--text-muted); cursor:pointer; white-space:nowrap;">
+                                        <input type="checkbox" checked data-step-include style="accent-color:#7C3AED; width:13px; height:13px;">
+                                        Include
+                                    </label>
+                                    <input type="text" placeholder="Internal note..." data-step-note style="height:28px; width:140px; font-size:0.75rem; padding:0 0.5rem; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-secondary);">
+                                </div>
+                                -->
+                                <div class="empty-state"><p>Next steps will appear after report generation.</p></div>
+                            </div>
+                        </div>
+
+                        <!-- Internal Notes -->
+                        <div class="glass-card-static" style="padding:1.5rem; margin-bottom:1.5rem;">
+                            <h3 style="font-size:1rem; font-weight:700; color:var(--text-primary); margin:0 0 1rem;">Internal Notes</h3>
+                            <div id="internal-notes">
+                                <textarea id="report-internal-notes" placeholder="Add internal notes, observations, or context for the team..." style="width:100%; min-height:100px; padding:0.75rem; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-primary); font-size:0.85rem; font-family:inherit; resize:vertical; line-height:1.5;" oninput="document.getElementById('notes-char-count').textContent=this.value.length+' characters'"></textarea>
+                                <div style="display:flex; align-items:center; justify-content:space-between; margin-top:0.5rem;">
+                                    <label style="display:flex; align-items:center; gap:6px; font-size:0.78rem; color:var(--text-muted); cursor:pointer;">
+                                        <input type="checkbox" id="notes-include-in-report" style="accent-color:#7C3AED; width:14px; height:14px;">
+                                        Include in client report
+                                    </label>
+                                    <span id="notes-char-count" style="font-size:0.72rem; color:var(--text-muted);">0 characters</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Export Controls -->
+                        <div class="glass-card-static" style="padding:1.5rem; margin-bottom:1.5rem;">
+                            <h3 style="font-size:1rem; font-weight:700; color:var(--text-primary); margin:0 0 1rem;">Export Controls</h3>
+                            <div id="export-controls">
+                                <!-- Export mode selector -->
+                                <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
+                                    <button class="dr-btn active" data-export-mode="client" onclick="setExportMode('client')" style="padding:0.45rem 1rem;">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:3px;"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                                        Client Report
+                                    </button>
+                                    <button class="dr-btn" data-export-mode="internal" onclick="setExportMode('internal')" style="padding:0.45rem 1rem;">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:3px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                        Internal Report
+                                    </button>
+                                    <button class="dr-btn" data-export-mode="leadership" onclick="setExportMode('leadership')" style="padding:0.45rem 1rem;">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:3px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                                        Leadership Summary
+                                    </button>
+                                    <button class="dr-btn" data-export-mode="raw" onclick="setExportMode('raw')" style="padding:0.45rem 1rem;">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:3px;"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                        Raw Data Export
+                                    </button>
+                                </div>
+                                <!-- Format buttons -->
+                                <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+                                    <button class="btn-export" onclick="exportReportFmt('html')" style="padding:0.5rem 1.25rem; border-radius:8px; background:linear-gradient(135deg,#7C3AED,#6D28D9); color:#fff; border:none; font-weight:700; font-size:0.78rem; letter-spacing:0.04em; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                        HTML
+                                    </button>
+                                    <button class="btn-export" onclick="exportReportFmt('excel')" style="padding:0.5rem 1.25rem; border-radius:8px; font-size:0.78rem;">Excel</button>
+                                    <button class="btn-export" onclick="exportReportFmt('csv')" style="padding:0.5rem 1.25rem; border-radius:8px; font-size:0.78rem;">CSV</button>
+                                    <button class="btn-export" onclick="exportReportFmt('pdf')" style="padding:0.5rem 1.25rem; border-radius:8px; font-size:0.78rem;">PDF</button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div><!-- /report-preview -->
+
                 </div>
             </div>
 
