@@ -914,6 +914,80 @@ def calendar_save(payload: dict = Body(...)):
     return {"ok": True}
 
 
+def _parse_rh_calendar_xlsx(content: bytes) -> list:
+    """Parse the RH SM Calendar Excel format with columns:
+    DATE, DAY, Approval Status, POST TYPE, Aligned Swimlane, CAPTION/Image Copy,
+    Design Notes, DESCRIPTION, HASHTAGS, REFERENCES, IMAGE, DESIGN NOTES, CLIENT FEEDBACK
+    """
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return []
+
+    header = [str(c or "").strip().lower() for c in rows[0]]
+
+    def col(*names):
+        for n in names:
+            for i, h in enumerate(header):
+                if n.lower() in h:
+                    return i
+        return -1
+
+    idx = {
+        "date": col("date"),
+        "day": col("day"),
+        "status": col("approval"),
+        "type": col("post type"),
+        "swimlane": col("swimlane"),
+        "caption": col("caption"),
+        "design_notes": col("design notes"),
+        "description": col("description"),
+        "hashtags": col("hashtags"),
+        "references": col("references"),
+        "client_feedback": col("client feedback"),
+    }
+
+    items = []
+    for r in rows[1:]:
+        if not r or len(r) <= idx["date"]:
+            continue
+        d = r[idx["date"]] if idx["date"] >= 0 else None
+        post_type = r[idx["type"]] if idx["type"] >= 0 else None
+        if not post_type or not str(post_type).strip():
+            continue
+
+        date_str = ""
+        if isinstance(d, (datetime, date)):
+            date_str = d.strftime("%Y-%m-%d") if isinstance(d, datetime) else d.isoformat()
+        elif d:
+            date_str = str(d).split(" ")[0]
+
+        def g(k):
+            i = idx.get(k, -1)
+            if i < 0 or i >= len(r):
+                return ""
+            v = r[i]
+            return str(v).strip() if v is not None else ""
+
+        items.append({
+            "date": date_str,
+            "day": g("day"),
+            "approval_status": g("status"),
+            "type": str(post_type).strip(),
+            "swimlane": g("swimlane"),
+            "caption": g("caption"),
+            "design_notes": g("design_notes"),
+            "description": g("description"),
+            "hashtags": g("hashtags"),
+            "references": g("references"),
+            "client_feedback": g("client_feedback"),
+            "platforms": ["instagram", "facebook", "linkedin"],
+        })
+    return items
+
+
 @app.post("/api/calendar/upload")
 async def calendar_upload(file: UploadFile = File(...), domain: str = Query("rh"), month: str = Query("")):
     if not month:
@@ -922,6 +996,18 @@ async def calendar_upload(file: UploadFile = File(...), domain: str = Query("rh"
     if not content:
         raise HTTPException(400, "Empty file")
     name = (file.filename or "").lower()
+
+    # Structured Excel upload: parse directly, no AI
+    if name.endswith(".xlsx") or name.endswith(".xls"):
+        try:
+            items = _parse_rh_calendar_xlsx(content)
+        except Exception as e:
+            raise HTTPException(422, f"Failed to parse Excel calendar: {e}")
+        if items:
+            _calendars[f"{domain}:{month}"] = items
+            return {"items": items, "month": month, "domain": domain, "source": "excel"}
+
+    # Otherwise, fall back to AI-driven generation from PDF/DOCX/text
     text = ""
     try:
         if name.endswith(".pdf"):
@@ -945,7 +1031,7 @@ async def calendar_upload(file: UploadFile = File(...), domain: str = Query("rh"
         if isinstance(items, dict) and "items" in items:
             items = items["items"]
         _calendars[f"{domain}:{month}"] = items
-        return {"items": items, "month": month, "domain": domain}
+        return {"items": items, "month": month, "domain": domain, "source": "ai"}
     except Exception as e:
         raise HTTPException(502, f"AI error: {e}")
 
