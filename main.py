@@ -1047,7 +1047,7 @@ def _generate_insights(channels_data: dict):
     if imp_d and click_d:
         if imp_d.get("direction") == "up" and click_d.get("direction") == "down":
             insights.append({"type": "warning", "title": "CTR needs attention",
-                             "description": "Search impressions are up but clicks declined. Review title tags and meta descriptions for better click-through."})
+                             "description": "Search impressions are up but clicks declined. Review title tags and meta descriptions for better click-through.", "severity": "medium"})
 
     # Clicks up but leads down
     meta_click_d = meta_d.get("clicks", {})
@@ -1055,7 +1055,7 @@ def _generate_insights(channels_data: dict):
     if meta_click_d and meta_lead_d:
         if meta_click_d.get("direction") == "up" and meta_lead_d.get("direction") == "down":
             insights.append({"type": "warning", "title": "Landing page review needed",
-                             "description": "Ad clicks are increasing but lead conversions dropped. Landing page experience may need optimization."})
+                             "description": "Ad clicks are increasing but lead conversions dropped. Landing page experience may need optimization.", "severity": "medium"})
 
     # Spend similar but CPL up
     spend_d = meta_d.get("spend", {})
@@ -1063,12 +1063,12 @@ def _generate_insights(channels_data: dict):
     if spend_d and cpl_d:
         if spend_d.get("direction") in ("stable", "up") and cpl_d.get("direction") == "up":
             insights.append({"type": "warning", "title": "Audience fatigue possible",
-                             "description": "Cost per lead is rising while spend is steady or increasing. Consider refreshing ad creatives or audiences."})
+                             "description": "Cost per lead is rising while spend is steady or increasing. Consider refreshing ad creatives or audiences.", "severity": "medium"})
 
     # High impressions but low CTR in SEO
     if gsc_c.get("impressions", 0) > 1000 and gsc_c.get("ctr", 0) < 2:
         insights.append({"type": "opportunity", "title": "Title/meta optimization opportunity",
-                         "description": "High search impressions with low CTR suggest title tags and meta descriptions could be improved to drive more clicks."})
+                         "description": "High search impressions with low CTR suggest title tags and meta descriptions could be improved to drive more clicks.", "severity": "low"})
 
     # GA4 sessions up but bounce rate also up
     sess_d = ga4_d.get("sessions", {})
@@ -1076,24 +1076,24 @@ def _generate_insights(channels_data: dict):
     if sess_d and bounce_d:
         if sess_d.get("direction") == "up" and bounce_d.get("direction") == "up":
             insights.append({"type": "warning", "title": "Traffic quality concern",
-                             "description": "Sessions are growing but bounce rate is also increasing. Review traffic sources for quality."})
+                             "description": "Sessions are growing but bounce rate is also increasing. Review traffic sources for quality.", "severity": "medium"})
 
     # GA4 users down
     users_d = ga4_d.get("users", {})
     if users_d and users_d.get("direction") == "down" and abs(users_d.get("pct", 0)) > 15:
-        insights.append({"type": "alert", "title": "Significant user decline",
-                         "description": f"Users dropped by {abs(users_d.get('pct', 0))}%. Investigate traffic source changes."})
+        insights.append({"type": "critical", "title": "Significant user decline",
+                         "description": f"Users dropped by {abs(users_d.get('pct', 0))}%. Investigate traffic source changes.", "severity": "high"})
 
     # Meta spend up but impressions down
     meta_imp_d = meta_d.get("impressions", {})
     if spend_d and meta_imp_d:
         if spend_d.get("direction") == "up" and meta_imp_d.get("direction") == "down":
             insights.append({"type": "warning", "title": "Ad efficiency declining",
-                             "description": "Ad spend is increasing but impressions are dropping. CPM may be rising due to competition or audience saturation."})
+                             "description": "Ad spend is increasing but impressions are dropping. CPM may be rising due to competition or audience saturation.", "severity": "medium"})
 
     if not insights:
         insights.append({"type": "info", "title": "Stable performance",
-                         "description": "No major anomalies detected. Performance is generally consistent with the comparison period."})
+                         "description": "No major anomalies detected. Performance is generally consistent with the comparison period.", "severity": "low"})
     return insights
 
 
@@ -1251,7 +1251,9 @@ def reports_room_summary(
         "- main_concern: string describing the biggest concern\n"
         "- key_opportunity: string describing the top opportunity to act on\n"
         "- recommended_focus: string describing what to prioritize next\n"
-        "- next_steps: array of 3-5 actionable next step strings\n"
+        "- executive_summary: string with a 2-3 sentence overall summary\n"
+        "- confidence_score: integer 0-100 representing overall performance health\n"
+        "- next_steps: array of 3-5 objects each with 'title' and 'description' fields\n"
         "Be concise, specific, and data-driven. Reference actual numbers where possible."
     )
     import json

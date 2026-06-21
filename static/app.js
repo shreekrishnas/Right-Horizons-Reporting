@@ -2053,7 +2053,8 @@ function _renderHighlights(highlights) {
 
     const setCount = (id, items) => {
         const el = document.getElementById(id);
-        if (el) el.textContent = (items && items.length) || 0;
+        const n = (items && items.length) || 0;
+        if (el) el.textContent = `${n} item${n !== 1 ? 's' : ''}`;
     };
     setCount('rr-improved-count', highlights.improved);
     setCount('rr-dropped-count', highlights.dropped);
@@ -2070,6 +2071,7 @@ function _renderChannelBreakdown(channels) {
         meta: { title: 'Meta Ads', color: 'green', metrics: ['spend', 'impressions', 'clicks', 'ctr', 'leads', 'cpl'] },
         social: { title: 'Social', color: 'amber', metrics: [] },
         youtube: { title: 'YouTube', color: 'red', metrics: ['views', 'subscribers', 'estimatedMinutesWatched', 'likes', 'comments'] },
+        linkedin: { title: 'LinkedIn', color: 'blue', metrics: ['impressions', 'clicks', 'engagement_rate', 'followers'] },
     };
 
     let html = '';
@@ -2247,7 +2249,6 @@ async function generateExecSummary() {
 function setExportMode(mode) {
     _exportMode = mode;
     document.querySelectorAll('.rr-mode').forEach(b => b.classList.toggle('active', b.dataset.exportMode === mode));
-    document.querySelectorAll('.rr-export-tile').forEach(t => t.classList.remove('active'));
 }
 
 function exportReportFmt(fmt) {
