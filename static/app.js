@@ -2121,7 +2121,7 @@ function resetIdeaLab() {
 }
 
 function copyIdeaLabBrief() {
-    _copyToClipboard('Idea Lab generates usable idea cards with title, format, audience, hook, CTA, why it works, visual direction, compliance reminder, score, detail view, webinar repurposing, SEO ideas, and saved library.');
+    _copyToClipboard('Idea Lab generates usable idea cards with title, format, audience, hook, CTA, visual direction, compliance reminder, score, detail view, webinar repurposing, SEO ideas, and saved library.');
     _ilToast('Section brief copied');
 }
 
