@@ -350,14 +350,14 @@ def social_fb_comprehensive(start: str = "", end: str = "", domain: str = "rh"):
 
 
 @app.get("/api/social/trend")
-def social_trend(period: str = "weekly", periods: int = 5, domain: str = "rh"):
+def social_trend(period: str = "weekly", periods: int = 5, domain: str = "rh", end_date: str = ""):
     token, page_id = _meta_creds(domain)
     if not token:
         raise HTTPException(400, "Meta Social token not configured")
     if not page_id:
         raise HTTPException(400, "META_PAGE_ID not configured")
 
-    today = _today_ist()
+    anchor = date.fromisoformat(end_date) if end_date else _today_ist()
     days_per = 7 if period == "weekly" else 30
     ig_id = None
     try:
@@ -367,7 +367,7 @@ def social_trend(period: str = "weekly", periods: int = 5, domain: str = "rh"):
 
     results = []
     for i in range(periods):
-        p_end = today - timedelta(days=i * days_per)
+        p_end = anchor - timedelta(days=i * days_per)
         p_start = p_end - timedelta(days=days_per - 1)
         ps = p_start.isoformat()
         pe = p_end.isoformat()
@@ -488,18 +488,18 @@ def social_ig_media(ig_id: str, limit: int = 10, domain: str = "rh"):
 # ── SEO Trend ────────────────────────────────────────────────────────────────
 
 @app.get("/api/seo/trend")
-def seo_trend(domain: str = "rh", period: str = "weekly", periods: int = 5):
+def seo_trend(domain: str = "rh", period: str = "weekly", periods: int = 5, end_date: str = ""):
     d = _domain(domain)
     try:
         creds = get_credentials()
     except Exception as e:
         raise HTTPException(502, f"Auth error: {e}")
 
-    today = _today_ist()
+    anchor = date.fromisoformat(end_date) if end_date else _today_ist()
     days_per = 7 if period == "weekly" else 30
     results = []
     for i in range(periods):
-        p_end = today - timedelta(days=i * days_per)
+        p_end = anchor - timedelta(days=i * days_per)
         p_start = p_end - timedelta(days=days_per - 1)
         ws = p_start.isoformat()
         we = p_end.isoformat()
@@ -760,7 +760,9 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
                 except Exception:
                     pass
             try:
-                html_data["seo_trend"] = seo_trend(domain, period, 5)
+                days_per = 7 if period == "weekly" else 30
+                num_periods = max(1, (date.fromisoformat(end) - date.fromisoformat(start)).days // days_per)
+                html_data["seo_trend"] = seo_trend(domain, period, num_periods, end_date=end)
             except Exception:
                 pass
         except Exception:
@@ -784,7 +786,9 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
             except Exception:
                 pass
             try:
-                html_data["social_trend"] = social_trend(period, 5, domain)
+                s_days_per = 7 if period == "weekly" else 30
+                s_num_periods = max(1, (date.fromisoformat(end) - date.fromisoformat(start)).days // s_days_per)
+                html_data["social_trend"] = social_trend(period, s_num_periods, domain, end_date=end)
             except Exception:
                 pass
 
