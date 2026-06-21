@@ -1,10 +1,7 @@
 """
-Premium HTML marketing report — matches the Excel template exactly:
-Sheet 1: Performance Overview (This Week summary + key wins/notes)
-Sheet 2: SEO Trend (5-week: Traffic, Engagement, Search Console, Indexing)
-Sheet 3: SMM Trend (5-week: Instagram, Facebook, LinkedIn)
-Sheet 4: Ads (Platform Performance + Campaign detail by ICP)
-Sheet 5: Executive Summary (data-driven)
+Premium HTML marketing report — matches the final.html template exactly:
+Hero header, nav anchors, Executive Summary with pills,
+KPI Snapshot, Performance Overview, SEO Trend, SMM Trend, Ads, Metrics Index.
 """
 from datetime import datetime, timezone, timedelta
 
@@ -51,6 +48,18 @@ def _delta(curr, prev):
         return '—', '—'
 
 
+CSS = """\
+:root{--ink:#172033;--muted:#64748b;--soft:#f6f8fb;--line:#e5e7eb;--brand:#165e83;--brand2:#0ea5a4;--warn:#b45309;--danger:#b91c1c;--good:#047857;--card:#ffffff;--lav:#eef2ff}*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#f3f6fb;color:var(--ink);line-height:1.45}.wrap{max-width:1360px;margin:0 auto;padding:28px}.hero{background:linear-gradient(135deg,#0f2b46,#165e83 52%,#0ea5a4);color:#fff;border-radius:24px;padding:28px;box-shadow:0 24px 70px rgba(15,43,70,.25);position:relative;overflow:hidden}.hero:after{content:"";position:absolute;right:-120px;top:-120px;width:420px;height:420px;background:rgba(255,255,255,.12);border-radius:50%}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.12em;font-weight:800;opacity:.85}.hero h1{font-size:36px;margin:8px 0 8px;line-height:1.08}.hero p{max-width:820px;margin:0;color:rgba(255,255,255,.86);font-size:15px}.hero-grid{display:grid;grid-template-columns:2fr 1fr;gap:18px;align-items:end}.period-card{position:relative;z-index:1;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);border-radius:18px;padding:16px}.period-card b{display:block;font-size:20px}.period-card span{display:block;color:rgba(255,255,255,.75);font-size:12px;margin-top:4px}.nav{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}.nav a{background:#fff;border:1px solid var(--line);border-radius:999px;padding:10px 14px;color:#334155;text-decoration:none;font-weight:800;font-size:13px;box-shadow:0 8px 20px rgba(15,23,42,.05)}.nav a:hover{border-color:#165e83;color:#165e83}.section{margin:20px 0 34px}.section-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin-bottom:12px}.section h2{font-size:24px;margin:0}.section .sub{color:var(--muted);font-size:13px}.card{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 12px 35px rgba(15,23,42,.07);padding:18px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.kpi{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.05)}.kpi .label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:900}.kpi .value{font-size:26px;font-weight:900;margin-top:6px}.kpi .meta{font-size:12px;color:var(--muted);margin-top:6px}.pill{display:inline-flex;align-items:center;border-radius:999px;padding:4px 9px;font-size:11px;font-weight:900;background:#eef2ff;color:#3730a3}.pill.good{background:#dcfce7;color:#166534}.pill.warn{background:#ffedd5;color:#9a3412}.pill.bad{background:#fee2e2;color:#991b1b}.summary-block{white-space:pre-line;background:#fff;border-left:5px solid #0ea5a4;border-radius:14px;border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:16px;color:#334155}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:16px;background:#fff}.report-table{border-collapse:collapse;width:100%;font-size:12px;min-width:920px}.report-table th,.report-table td{border-bottom:1px solid #eef2f7;border-right:1px solid #eef2f7;padding:8px 10px;vertical-align:top}.report-table th{background:#eff6ff;color:#0f2b46;text-align:left;font-weight:900;white-space:nowrap;position:sticky;top:0;z-index:2}.report-table td:first-child,.report-table th:first-child{position:sticky;left:0;background:#fff;z-index:1;min-width:240px;font-weight:800;color:#1e293b}.report-table th:first-child{background:#eff6ff;z-index:3}.report-table tr.group td{background:#f8fafc!important;color:#165e83;font-weight:900;text-transform:uppercase;letter-spacing:.04em}.report-table td.num{text-align:right;font-variant-numeric:tabular-nums}.report-table td.note{min-width:360px;color:#475569}.metric-index{columns:3;column-gap:28px}.metric-index div{break-inside:avoid;background:#fff;border:1px solid #eef2f7;border-radius:10px;padding:7px 9px;margin:0 0 8px;font-size:12px}.page-break{page-break-before:always}.tiny{font-size:11px;color:var(--muted)}.toolbar{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin:14px 0}.btn{border:0;background:#165e83;color:#fff;border-radius:999px;padding:10px 14px;font-weight:900;cursor:pointer}.btn.secondary{background:#fff;color:#165e83;border:1px solid #bae6fd}@media(max-width:900px){.hero-grid,.cards{grid-template-columns:1fr}.metric-index{columns:1}.wrap{padding:16px}.hero h1{font-size:28px}}@media print{body{background:#fff}.wrap{max-width:none;padding:0}.nav,.toolbar{display:none}.card,.kpi,.hero{box-shadow:none}.table-wrap{overflow:visible}.report-table{font-size:9px;min-width:0}.report-table th,.report-table td{padding:5px}.page-break{page-break-before:always}}
+"""
+
+
+def _esc(s):
+    """HTML-escape a string."""
+    if not isinstance(s, str):
+        return str(s) if s is not None else '—'
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;')
+
+
 def generate_html_report(data: dict, start: str, end: str, domain: str) -> str:
     data = data or {}
     ts = datetime.now(_IST).strftime('%d %b %Y, %I:%M %p IST')
@@ -63,279 +72,306 @@ def generate_html_report(data: dict, start: str, end: str, domain: str) -> str:
     smm_trend = data.get('social_trend') or []
     seo_trend = data.get('seo_trend') or []
 
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{domain} — Marketing Report</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<style>{CSS}</style>
-</head>
-<body>
+    # AI summary data (if present)
+    ai_summary = data.get('ai_summary') or data.get('executive_summary') or {}
 
-{_header(domain, start, end)}
-{_perf_overview(gsc, ga4, fb, ig, ads)}
-{_seo_sheet(seo_trend, gsc, ga4)}
-{_smm_sheet(smm_trend)}
-{_ads_sheet(ads)}
-{_exec_summary(gsc, ga4, fb, ig, ads)}
+    hero = _hero(domain, start, end)
+    toolbar = _toolbar()
+    nav = _nav()
+    exec_summary = _exec_summary_section(ai_summary, gsc, ga4, fb, ig, ads)
+    kpi_snapshot = _kpi_snapshot(gsc, ga4, fb, ig, ads, seo_trend, smm_trend)
+    perf_overview = _perf_overview(gsc, ga4, fb, ig, ads)
+    seo_section = _seo_trend_section(seo_trend, gsc, ga4)
+    smm_section = _smm_trend_section(smm_trend)
+    ads_section = _ads_section(ads)
+    metrics_index = _metrics_index()
 
-<footer class="footer">
-  <span>Generated {ts}</span>
-  <span>Right Horizons — Confidential</span>
-</footer>
-</body></html>"""
-
-
-def _header(domain, start, end):
-    return f"""
-<header class="hdr">
-  <div class="hdr-l">
-    <div class="hdr-logo">RH</div>
-    <div><div class="hdr-t">Marketing Weekly Report — Performance Overview</div>
-    <div class="hdr-sub">{domain}</div></div>
-  </div>
-  <div class="hdr-r">
-    <div class="hdr-badge">Reporting Period: {start} to {end}</div>
-    <div class="hdr-dept">Department: Marketing</div>
-  </div>
-</header>"""
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{_esc(domain)} — Marketing Report</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"><style>
+{CSS}</style></head><body><div class="wrap">
+{hero}
+{toolbar}
+{nav}
+{exec_summary}
+{kpi_snapshot}
+{perf_overview}
+{seo_section}
+{smm_section}
+{ads_section}
+{metrics_index}
+</div></body></html>"""
 
 
-def _perf_overview(gsc, ga4, fb, ig, ads):
+# ---------------------------------------------------------------------------
+# Hero header
+# ---------------------------------------------------------------------------
+def _hero(domain, start, end):
+    return f"""<div class="hero"><div class="hero-grid"><div><div class="eyebrow">Reporting Room &middot; {_esc(domain)}</div><h1>Weekly / Monthly Full Metrics Report</h1><p>Detailed workbook-style weekly/monthly report covering SEO, Social Media, and Paid Ads performance.</p></div><div class="period-card"><span>Reporting period</span><b>{_esc(start)} &ndash; {_esc(end)}</b><span>Generated for {_esc(domain)}</span></div></div></div>"""
+
+
+# ---------------------------------------------------------------------------
+# Toolbar
+# ---------------------------------------------------------------------------
+def _toolbar():
+    return """<div class="toolbar"><button class="btn" onclick="window.print()">Print / Save PDF</button></div>"""
+
+
+# ---------------------------------------------------------------------------
+# Navigation anchors
+# ---------------------------------------------------------------------------
+def _nav():
+    return """<div class="nav"><a href="#summary">Executive Summary</a><a href="#quick-kpis">KPI Snapshot</a><a href="#performance-overview">Performance Overview</a><a href="#seo-trend">SEO Trend</a><a href="#smm-trend">SMM Trend</a><a href="#ads">Ads</a><a href="#metrics-index">All Metrics Index</a></div>"""
+
+
+# ---------------------------------------------------------------------------
+# Executive Summary with pill badges
+# ---------------------------------------------------------------------------
+def _exec_summary_section(ai_summary, gsc, ga4, fb, ig, ads):
+    headline = _g(ai_summary, 'headline') or _g(ai_summary, 'the_headline') or '—'
+    working = _g(ai_summary, 'whats_working') or _g(ai_summary, 'working') or '—'
+    attention = _g(ai_summary, 'needs_attention') or _g(ai_summary, 'attention') or '—'
+    actions = _g(ai_summary, 'recommended_actions') or _g(ai_summary, 'actions') or '—'
+
+    return f"""<section class="section" id="summary"><div class="section-head"><div><h2>Executive Summary</h2><div class="sub">AI-generated executive summary for the reporting period.</div></div></div>
+<div class="card" style="margin-bottom:12px"><span class="pill">The Headline</span><div class="summary-block" style="margin-top:12px">{headline}</div></div>
+<div class="card" style="margin-bottom:12px"><span class="pill good">What&#x27;s Working</span><div class="summary-block" style="margin-top:12px">{working}</div></div>
+<div class="card" style="margin-bottom:12px"><span class="pill warn">What Needs Attention</span><div class="summary-block" style="margin-top:12px">{attention}</div></div>
+<div class="card" style="margin-bottom:12px"><span class="pill bad">Recommended Actions</span><div class="summary-block" style="margin-top:12px">{actions}</div></div>
+</section>"""
+
+
+# ---------------------------------------------------------------------------
+# KPI Snapshot cards (4 columns)
+# ---------------------------------------------------------------------------
+def _kpi_snapshot(gsc, ga4, fb, ig, ads, seo_trend, smm_trend):
     ig_r = _g(ig, 'reach', 0) or 0
     fb_r = _g(fb, 'reach', 0) or 0
     ig_e = _g(ig, 'engagements', 0) or 0
     fb_e = _g(fb, 'engagements', 0) or 0
-    gsc_i = _g(gsc, 'impressions', 0) or 0
     ig_v = _g(ig, 'views', 0) or 0
     fb_v = _g(fb, 'views', 0) or 0
-    org = _g(ga4, 'organic_sessions', 0) or 0
+    org = _g(ga4, 'organic_sessions', 0) or _g(ga4, 'sessions', 0) or 0
     ai = sum(int(_g(c, 'impressions', 0) or 0) for c in ads)
     ac = sum(int(_g(c, 'clicks', 0) or 0) for c in ads)
     al = sum(int(_g(c, 'leads', 0) or 0) for c in ads)
 
     total_reach = ig_r + fb_r
-    total_imp = gsc_i + ig_v + fb_v
+    total_imp = ig_v + fb_v
+    total_eng = ig_e + fb_e
+    eng_rate = (total_eng / total_reach * 100) if total_reach > 0 else 0
+    ctr = (ac / ai * 100) if ai > 0 else 0
+
+    # Try to get previous-period values from trend data
+    prev_reach = '—'
+    prev_imp = '—'
+    prev_eng = '—'
+    prev_eng_rate = '—'
+    prev_org = '—'
+    prev_ai = '—'
+    prev_ac = '—'
+
+    if len(seo_trend) >= 2:
+        prev_org = _f(_g(seo_trend[-2], 'sessions') or _g(seo_trend[-2], 'organic_sessions'))
+
+    kpis = [
+        ('Total Reach (all platforms)', _f(total_reach or None), prev_reach),
+        ('Total Impressions (all platforms)', _f(total_imp or None), prev_imp),
+        ('Total Engagements', _f(total_eng or None), prev_eng),
+        ('Avg. Engagement Rate (%)', f"{eng_rate:.2f}%" if eng_rate else '—', prev_eng_rate),
+        ('Organic Sessions (SEO)', _f(org or None), prev_org),
+        ('Total Ad Impressions', _f(ai or None), prev_ai),
+        ('Total Ad Clicks', _f(ac or None), prev_ac),
+        ('Total Leads', _f(al or None), '—'),
+    ]
+
+    cards = ''
+    for label, value, prev in kpis:
+        meta = f'<div class="meta">Last period: {prev}</div>' if prev != '—' else ''
+        cards += f'<div class="kpi"><div class="label">{label}</div><div class="value">{value}</div>{meta}</div>'
+
+    return f"""<section class="section" id="quick-kpis"><div class="section-head"><div><h2>Current Period KPI Snapshot</h2><div class="sub">High-level cards from Performance Overview.</div></div></div><div class="cards">{cards}</div></section>"""
+
+
+# ---------------------------------------------------------------------------
+# Performance Overview table
+# ---------------------------------------------------------------------------
+def _perf_overview(gsc, ga4, fb, ig, ads):
+    ig_r = _g(ig, 'reach', 0) or 0
+    fb_r = _g(fb, 'reach', 0) or 0
+    ig_e = _g(ig, 'engagements', 0) or 0
+    fb_e = _g(fb, 'engagements', 0) or 0
+    ig_v = _g(ig, 'views', 0) or 0
+    fb_v = _g(fb, 'views', 0) or 0
+    org = _g(ga4, 'organic_sessions', 0) or _g(ga4, 'sessions', 0) or 0
+    ai = sum(int(_g(c, 'impressions', 0) or 0) for c in ads)
+    ac = sum(int(_g(c, 'clicks', 0) or 0) for c in ads)
+    al = sum(int(_g(c, 'leads', 0) or 0) for c in ads)
+    total_reach = ig_r + fb_r
+    total_imp = ig_v + fb_v
     total_eng = ig_e + fb_e
     eng_rate = (total_eng / total_reach * 100) if total_reach > 0 else 0
     ctr = (ac / ai * 100) if ai > 0 else 0
 
     rows = [
-        ('Total Reach (all platforms)', _f(total_reach or None), '#7C3AED'),
-        ('Total Impressions (all platforms)', _f(total_imp or None), '#0EA5E9'),
-        ('Total Engagements', _f(total_eng or None), '#10B981'),
-        ('Avg. Engagement Rate (%)', _f(eng_rate, pct=True) if eng_rate else '—', '#F59E0B'),
-        ('Organic Sessions (SEO)', _f(org or None), '#6366F1'),
-        ('Total Ad Impressions', _f(ai or None), '#EF4444'),
-        ('Total Ad Clicks', _f(ac or None), '#EC4899'),
-        ('Overall Ad CTR (%)', _f(ctr, pct=True) if ctr else '—', '#F97316'),
-        ('Total Leads', _f(al or None), '#14B8A6'),
+        ('Total Reach (all platforms)', _f(total_reach or None)),
+        ('Total Impressions (all platforms)', _f(total_imp or None)),
+        ('Total Engagements', _f(total_eng or None)),
+        ('Avg. Engagement Rate (%)', f"{eng_rate:.2f}%" if eng_rate else '—'),
+        ('Organic Sessions (SEO)', _f(org or None)),
+        ('Total Ad Impressions', _f(ai or None)),
+        ('Total Ad Clicks', _f(ac or None)),
+        ('Overall Ad CTR (%)', f"{ctr:.2f}%" if ctr else '—'),
+        ('Total Leads', _f(al or None)),
     ]
 
-    cards = ''.join(f"""
-    <div class="kpi">
-      <div class="kpi-bar" style="background:{c}"></div>
-      <div class="kpi-v">{v}</div>
-      <div class="kpi-l">{l}</div>
-    </div>""" for l, v, c in rows)
+    trs = ''
+    for label, val in rows:
+        trs += f'<tr><td>{label}</td><td class="num">{val}</td></tr>'
 
-    return f"""
-<section class="sheet">
-  <div class="sh-t"><span class="sh-i">📊</span> Performance Summary — All Channels</div>
-  <div class="kpi-grid">{cards}</div>
-</section>"""
+    return f"""<section class="section page-break" id="performance-overview"><div class="section-head"><div><h2>Performance Overview — Full Sheet Metrics</h2><div class="sub">All metric names and current period values.</div></div><span class="pill">{len(rows)} rows</span></div><div class="table-wrap"><table class="report-table"><tr class="group"><td colspan="2">PERFORMANCE SUMMARY — ALL CHANNELS</td></tr><tr><th>Metric</th><th>This Period</th></tr>{trs}</table></div></section>"""
 
 
-def _seo_sheet(seo_trend, gsc, ga4):
+# ---------------------------------------------------------------------------
+# SEO Trend (5-week with WoW delta)
+# ---------------------------------------------------------------------------
+def _seo_trend_section(seo_trend, gsc, ga4):
     if not seo_trend and not gsc and not ga4:
         return ''
 
-    periods = [t.get('period', '') for t in seo_trend] if seo_trend else []
+    if not seo_trend:
+        # Fallback: single-column table from GSC/GA4 data
+        metrics = [
+            ('Organic Sessions', _f(_g(ga4, 'organic_sessions') or _g(ga4, 'sessions'))),
+            ('Organic Users', _f(_g(ga4, 'organic_users') or _g(ga4, 'users'))),
+            ('Bounce Rate', _f(_g(ga4, 'bounce_rate'), pct=True)),
+            ('GSC Clicks', _f(_g(gsc, 'clicks'))),
+            ('GSC Impressions', _f(_g(gsc, 'impressions'))),
+            ('Avg. Position', _f(_g(gsc, 'position'))),
+        ]
+        trs = ''.join(f'<tr><td>{l}</td><td class="num">{v}</td></tr>' for l, v in metrics)
+        return f"""<section class="section page-break" id="seo-trend"><div class="section-head"><div><h2>SEO Trend</h2><div class="sub">Current period data (no weekly trend available).</div></div></div><div class="table-wrap"><table class="report-table"><tr><th>Metric</th><th>Value</th></tr>{trs}</table></div></section>"""
+
+    # Build period headers from trend data
+    periods = []
+    for t in seo_trend:
+        ps = t.get('period_start', '')
+        pe = t.get('period_end', '')
+        if ps and pe:
+            periods.append(f"{ps} &ndash; {pe}")
+        else:
+            periods.append(t.get('period', ''))
+
     n = len(periods)
+    ph = ''.join(f'<th>{p}</th>' for p in periods)
+    wow_h = '<th>WoW &Delta;</th><th>WoW %</th>' if n >= 2 else ''
 
-    # Fallback values when no trend data
-    _fallback = {}
-    _fallback.update({
-        'organic_sessions': _g(ga4, 'organic_sessions') or _g(ga4, 'sessions'),
-        'organic_users': _g(ga4, 'organic_users') or _g(ga4, 'users'),
-        'leads': _g(ga4, 'leads', 0),
-        'avg_session_duration': _g(ga4, 'avg_session') or _g(ga4, 'avgSessionDuration'),
-        'bounce_rate': _g(ga4, 'bounce_rate') or _g(ga4, 'bounceRate'),
-        'gsc_clicks': _g(gsc, 'clicks'),
-        'gsc_impressions': _g(gsc, 'impressions'),
-        'gsc_position': _g(gsc, 'position'),
-    })
-
-    def _trend_section(title, accent, metrics_def):
-        if not seo_trend:
-            rows = ''.join(f'<tr><td class="mn">{label}</td><td class="mv">{_f(_fallback.get(key), pct=is_pct)}</td></tr>'
-                          for label, key, is_pct in metrics_def)
-            return f"""
-            <div class="sec-h {accent}">{title}</div>
-            <table class="dt"><thead><tr><th class="tl">Metric</th><th class="tr">Value</th></tr></thead>
-            <tbody>{rows}</tbody></table>"""
-
-        ph = ''.join(f'<th class="tc">{p}</th>' for p in periods)
-        wow_h = '<th class="tc">WoW Δ</th><th class="tc">WoW %</th>' if n >= 2 else ''
-        rows = ''
-        for label, key, is_pct in metrics_def:
-            vals = [t.get(key, 0) or 0 for t in seo_trend]
-            d_str, p_str = _delta(vals[-1] if vals else 0, vals[-2] if len(vals) >= 2 else 0)
-            cells = ''.join(f'<td class="mv">{_f(v, pct=is_pct)}</td>' for v in vals)
-            wow = ''
-            if n >= 2:
-                d_cls = 'delta-up' if d_str.startswith('+') else ('delta-down' if d_str.startswith('-') else '')
-                wow = f'<td class="mv {d_cls}">{d_str}</td><td class="mv {d_cls}">{p_str}</td>'
-            rows += f'<tr><td class="mn">{label}</td>{wow}{cells}</tr>'
-        return f"""
-        <div class="sec-h {accent}">{title}</div>
-        <table class="dt"><thead><tr><th class="tl">Metric</th>{wow_h}{ph}</tr></thead>
-        <tbody>{rows}</tbody></table>"""
-
-    traffic = _trend_section('TRAFFIC', 'a-blue', [
-        ('Organic Sessions', 'organic_sessions', False),
-        ('Organic Users', 'organic_users', False),
+    seo_metrics = [
+        ('TRAFFIC', None),
+        ('Organic Sessions', 'sessions', False),
+        ('Organic Users', 'users', False),
         ('Website Leads', 'leads', False),
-    ])
-
-    engagement = _trend_section('ENGAGEMENT', 'a-green', [
+        ('ENGAGEMENT', None),
         ('Avg. Session Duration (sec)', 'avg_session_duration', False),
         ('Bounce Rate', 'bounce_rate', True),
-    ])
-
-    search_console = _trend_section('SEARCH CONSOLE', 'a-purple', [
-        ('Google Search Console Clicks', 'gsc_clicks', False),
-        ('Google Search Console Impressions', 'gsc_impressions', False),
-        ('Avg. Position', 'gsc_position', False),
-    ])
-
-    # Top Queries table
-    queries_html = ''
-    queries = _g(gsc, 'queries') or []
-    if queries:
-        qr = ''.join(f"""<tr><td class="mn" style="font-weight:500">{i}.</td>
-            <td class="mn">{q.get('query','—')}</td>
-            <td class="mv">{_f(q.get('clicks'))}</td>
-            <td class="mv">{_f(q.get('impressions'))}</td>
-            <td class="mv">{_f(q.get('ctr'), pct=True)}</td>
-            <td class="mv">{_f(q.get('position'))}</td></tr>"""
-            for i, q in enumerate(queries[:20], 1))
-        queries_html = f"""
-        <div class="sec-h a-amber">TOP QUERIES</div>
-        <table class="dt"><thead><tr><th class="tl">#</th><th class="tl">Query</th>
-        <th class="tr">Clicks</th><th class="tr">Impressions</th><th class="tr">CTR</th><th class="tr">Position</th>
-        </tr></thead><tbody>{qr}</tbody></table>"""
-
-    # Top Pages
-    pages_html = ''
-    pages = _g(gsc, 'pages') or _g(ga4, 'pages') or []
-    if pages:
-        pr = ''
-        for i, p in enumerate(pages[:15], 1):
-            if isinstance(p, dict):
-                url = p.get('page', p.get('pagePath', ''))
-                if len(url) > 55:
-                    url = url[:52] + '…'
-                pr += f"""<tr><td class="mn">{i}.</td><td class="mn" style="font-size:0.72rem">{url}</td>
-                    <td class="mv">{_f(p.get('clicks', p.get('sessions')))}</td>
-                    <td class="mv">{_f(p.get('impressions', p.get('users')))}</td></tr>"""
-        if pr:
-            pages_html = f"""
-            <div class="sec-h a-amber">TOP PAGES</div>
-            <table class="dt"><thead><tr><th class="tl">#</th><th class="tl">Page</th>
-            <th class="tr">Clicks</th><th class="tr">Impressions</th></tr></thead><tbody>{pr}</tbody></table>"""
-
-    return f"""
-<section class="sheet">
-  <div class="sh-t"><span class="sh-i">🔍</span> SEO Weekly Performance — 5 Week Trend</div>
-  {traffic}
-  {engagement}
-  {search_console}
-  {queries_html}
-  {pages_html}
-</section>"""
-
-
-def _smm_sheet(smm_trend):
-    if not smm_trend:
-        return """
-<section class="sheet">
-  <div class="sh-t"><span class="sh-i">📱</span> Social Media Marketing — 5 Week Trend</div>
-  <p class="empty-n">No social media trend data available for this period.</p>
-</section>"""
-
-    periods = [t.get('period', '') for t in smm_trend]
-    n = len(periods)
-    ph = ''.join(f'<th class="tc">{p}</th>' for p in periods)
-    wow_h = '<th class="tc">WoW Δ</th><th class="tc">WoW %</th>' if n >= 2 else ''
-    col_span = n + 1 + (2 if n >= 2 else 0)
-
-    metrics = [
-        ('Followers / Page Likes', ['followers'], False),
-        ('New Followers (net)', ['new_followers'], False),
-        ('Reach', ['reach'], False),
-        ('Views', ['views'], False),
-        ('Engagements (total)', ['engagements'], False),
-        ('Engagement Rate (%)', ['engagement_rate'], True),
-        ('Posts Published', ['posts_published'], False),
-        ('Stories / Reels', ['reels_stories'], False),
-        ('Video Views', ['video_views'], False),
-        ('Link Clicks', ['link_clicks'], False),
-        ('Profile Visits / Page Views', ['profile_visits', 'profile_views'], False),
-        ('Saves / Shares', ['saves_shares'], False),
+        ('SEARCH CONSOLE', None),
+        ('Google Search Console Clicks', 'clicks', False),
+        ('Google Search Console Impressions', 'impressions', False),
+        ('Avg. Position', 'position', False),
+        ('INDEXING &amp; AUTHORITY', None),
+        ('Pages Indexed', 'pages_indexed', False),
+        ('Backlinks (total)', 'backlinks', False),
+        ('Domain Rating', 'domain_rating', False),
     ]
 
-    def _plat_block(key, label, color, icon):
-        hdr = f"""<tr><td colspan="{col_span}" class="plat-h" style="background:{color}0D; color:{color}; border-left:4px solid {color}">
-            {icon} {label}</td></tr>"""
-        rows = ''
-        for mlabel, mkeys, is_pct in metrics:
+    trs = ''
+    for item in seo_metrics:
+        if item[1] is None:
+            # Group header row
+            trs += f'<tr class="group"><td colspan="{n + 1 + (2 if n >= 2 else 0)}">  {item[0]}</td></tr>'
+            continue
+        label, key, is_pct = item
+        vals = [t.get(key) for t in seo_trend]
+        cells = ''.join(f'<td class="num">{_f(v, pct=is_pct)}</td>' for v in vals)
+        wow = ''
+        if n >= 2:
+            d_str, p_str = _delta(vals[-1], vals[-2] if len(vals) >= 2 else None)
+            wow = f'<td class="num">{d_str}</td><td class="num">{p_str}</td>'
+        trs += f'<tr><td>{label}</td>{wow}{cells}</tr>'
+
+    return f"""<section class="section page-break" id="seo-trend"><div class="section-head"><div><h2>SEO Trend — Full Sheet Metrics</h2><div class="sub">All metric names, period columns, and notes from the workbook are included here.</div></div><span class="pill">{len([m for m in seo_metrics if m[1] is not None])} rows</span></div><div class="table-wrap"><table class="report-table"><tr><td colspan="{n + 1 + (2 if n >= 2 else 0)}">SEO Weekly Performance — {n} Week Trend</td></tr><tr><th>Metric</th>{wow_h}{ph}</tr>{trs}</table></div></section>"""
+
+
+# ---------------------------------------------------------------------------
+# SMM Trend (Instagram, Facebook, LinkedIn with 5-week trend)
+# ---------------------------------------------------------------------------
+def _smm_trend_section(smm_trend):
+    if not smm_trend:
+        return f"""<section class="section page-break" id="smm-trend"><div class="section-head"><div><h2>SMM Trend — Full Sheet Metrics</h2><div class="sub">No social media trend data available for this period.</div></div></div></section>"""
+
+    periods = []
+    for t in smm_trend:
+        ps = t.get('period_start', '')
+        pe = t.get('period_end', '')
+        if ps and pe:
+            periods.append(f"{ps} &ndash; {pe}")
+        else:
+            periods.append(t.get('period', ''))
+
+    n = len(periods)
+    ph = ''.join(f'<th>{p}</th>' for p in periods)
+    wow_h = '<th>WoW &Delta;</th><th>WoW %</th>' if n >= 2 else ''
+    col_span = n + 1 + (2 if n >= 2 else 0) + 1  # +1 for notes
+
+    smm_metrics = [
+        ('Followers / Page Likes', 'followers'),
+        ('New Followers (net)', 'new_followers'),
+        ('Reach', 'reach'),
+        ('Views', 'views'),
+        ('Engagements (total)', 'engagements'),
+        ('Posts Published', 'posts'),
+        ('Link Clicks', 'link_clicks'),
+        ('Profile Visits / Page Views', 'profile_visits'),
+    ]
+
+    platform_configs = [
+        ('ig', 'INSTAGRAM'),
+        ('fb', 'FACEBOOK'),
+        ('li', 'LINKEDIN'),
+    ]
+
+    trs = ''
+    for plat_key, plat_label in platform_configs:
+        # Check if any data exists for this platform
+        has_data = any(t.get(plat_key) for t in smm_trend)
+        if not has_data and plat_key == 'li':
+            continue  # Skip LinkedIn if no data
+
+        trs += f'<tr class="group"><td colspan="{col_span}">  {plat_label}</td></tr>'
+
+        for mlabel, mkey in smm_metrics:
             vals = []
             for t in smm_trend:
-                src = t.get(key) or {}
-                v = None
-                for k in mkeys:
-                    v = src.get(k)
-                    if v is not None:
-                        break
-                vals.append(v)
-            cells = ''.join(f'<td class="mv">{_f(v, pct=is_pct)}</td>' for v in vals)
+                src = t.get(plat_key) or {}
+                vals.append(src.get(mkey))
+            cells = ''.join(f'<td class="num">{_f(v)}</td>' for v in vals)
             wow = ''
             if n >= 2:
-                d_str, p_str = _delta(vals[-1], vals[-2])
-                d_cls = 'delta-up' if d_str.startswith('+') else ('delta-down' if d_str.startswith('-') else '')
-                wow = f'<td class="mv {d_cls}">{d_str}</td><td class="mv {d_cls}">{p_str}</td>'
-            rows += f'<tr><td class="mn">{mlabel}</td>{wow}{cells}</tr>'
-        return hdr + rows
+                d_str, p_str = _delta(vals[-1], vals[-2] if len(vals) >= 2 else None)
+                wow = f'<td class="num">{d_str}</td><td class="num">{p_str}</td>'
+            trs += f'<tr><td>{plat_label[:2]} {mlabel}</td>{wow}{cells}<td class="note"></td></tr>'
 
-    ig_block = _plat_block('ig', 'INSTAGRAM', '#E4405F', '📷')
-    fb_block = _plat_block('fb', 'FACEBOOK', '#1877F2', '👥')
-    li_block = ''
-    if any(t.get('li') for t in smm_trend):
-        li_block = _plat_block('li', 'LINKEDIN', '#0A66C2', '💼')
+    total_rows = sum(len(smm_metrics) for pk, _ in platform_configs if any(t.get(pk) for t in smm_trend))
 
-    return f"""
-<section class="sheet">
-  <div class="sh-t"><span class="sh-i">📱</span> Social Media Marketing — 5 Week Trend</div>
-  <div class="table-scroll">
-  <table class="dt trend">
-    <thead><tr><th class="tl" style="min-width:200px">Metric</th>{wow_h}{ph}</tr></thead>
-    <tbody>{ig_block}{fb_block}{li_block}</tbody>
-  </table>
-  </div>
-</section>"""
+    return f"""<section class="section page-break" id="smm-trend"><div class="section-head"><div><h2>SMM Trend — Full Sheet Metrics</h2><div class="sub">All metric names, period columns, and notes from the workbook are included here.</div></div><span class="pill">{total_rows} rows</span></div><div class="table-wrap"><table class="report-table"><tr><td colspan="{col_span}">Social Media Marketing — {n} Week Trend</td></tr><tr><th>Metric</th>{wow_h}{ph}<th>Notes</th></tr>{trs}</table></div></section>"""
 
 
-def _ads_sheet(ads):
+# ---------------------------------------------------------------------------
+# Ads (Meta + LinkedIn platform performance)
+# ---------------------------------------------------------------------------
+def _ads_section(ads):
     if not ads:
-        return """
-<section class="sheet">
-  <div class="sh-t"><span class="sh-i">🎯</span> Paid Ads — Performance</div>
-  <p class="empty-n">No ad campaign data available for this period.</p>
-</section>"""
+        return f"""<section class="section page-break" id="ads"><div class="section-head"><div><h2>Ads — Full Sheet Metrics</h2><div class="sub">No ad campaign data available for this period.</div></div></div></section>"""
 
+    # Platform-level aggregation
     ti = sum(int(_g(c, 'impressions', 0) or 0) for c in ads)
     tc = sum(int(_g(c, 'clicks', 0) or 0) for c in ads)
     tl = sum(int(_g(c, 'leads', 0) or 0) for c in ads)
@@ -344,186 +380,60 @@ def _ads_sheet(ads):
     ctr = (tc / ti * 100) if ti > 0 else 0
     cpl = (ts / tl) if tl > 0 else 0
 
-    summary_items = [
-        ('Impressions', _f(ti), '#7C3AED'),
-        ('Clicks', _f(tc), '#0EA5E9'),
-        ('Leads', _f(tl), '#10B981'),
-        ('CTR', _f(ctr, pct=True), '#F59E0B'),
-        ('Reach', _f(tr_), '#6366F1'),
-        ('Spend', _f(ts, cur=True), '#EF4444'),
-        ('CPL', _f(cpl, cur=True), '#EC4899'),
-    ]
+    # Platform performance summary rows
+    platform_rows = f"""<tr><td>Total Impressions</td><td class="num">{_f(ti or None)}</td></tr>
+<tr><td>Total Clicks</td><td class="num">{_f(tc or None)}</td></tr>
+<tr><td>Total Leads</td><td class="num">{_f(tl or None)}</td></tr>
+<tr><td>CTR</td><td class="num">{f'{ctr:.2f}%' if ctr else '—'}</td></tr>
+<tr><td>Total Reach</td><td class="num">{_f(tr_ or None)}</td></tr>
+<tr><td>CPL</td><td class="num">{_f(cpl, cur=True) if cpl else '—'}</td></tr>
+<tr><td>Total Spend</td><td class="num">{_f(ts, cur=True) if ts else '—'}</td></tr>"""
 
-    cards = ''.join(f"""<div class="kpi">
-        <div class="kpi-bar" style="background:{c}"></div>
-        <div class="kpi-v">{v}</div><div class="kpi-l">{l}</div></div>"""
-        for l, v, c in summary_items)
-
+    # Campaign detail rows
     camp_rows = ''
     for c in ads:
         name = c.get('campaign_name', c.get('name', '—'))
-        status = c.get('status', '—')
-        sc = '#10B981' if status == 'ACTIVE' else '#94A3B8'
-        camp_rows += f"""<tr>
-            <td class="mn" style="font-size:0.73rem; max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{name}</td>
-            <td><span class="status-pill" style="background:{sc}15; color:{sc}">{status}</span></td>
-            <td class="mv">{_f(_g(c,'impressions'))}</td>
-            <td class="mv">{_f(_g(c,'clicks'))}</td>
-            <td class="mv">{_f(_g(c,'ctr'), pct=True)}</td>
-            <td class="mv">{_f(_g(c,'reach'))}</td>
-            <td class="mv">{_f(_g(c,'leads'))}</td>
-            <td class="mv">{_f(float(_g(c,'spend',0) or 0), cur=True)}</td>
-            <td class="mv">{_f(float(_g(c,'cpc',0) or 0), cur=True)}</td></tr>"""
+        camp_rows += f"""<tr><td>{_esc(name)}</td><td class="num">{_f(_g(c,'impressions'))}</td><td class="num">{_f(_g(c,'clicks'))}</td><td class="num">{_f(_g(c,'ctr'), pct=True)}</td><td class="num">{_f(_g(c,'reach'))}</td><td class="num">{_f(_g(c,'leads'))}</td><td class="num">{_f(float(_g(c,'spend',0) or 0), cur=True)}</td><td class="num">{_f(float(_g(c,'cpl',0) or 0), cur=True)}</td></tr>"""
 
-    return f"""
-<section class="sheet">
-  <div class="sh-t"><span class="sh-i">🎯</span> Paid Ads — Performance</div>
-  <div class="sec-h a-purple">PLATFORM PERFORMANCE — SUMMARY</div>
-  <div class="kpi-grid">{cards}</div>
+    return f"""<section class="section page-break" id="ads"><div class="section-head"><div><h2>Ads — Full Sheet Metrics</h2><div class="sub">Platform performance and campaign detail.</div></div><span class="pill">{len(ads)} campaigns</span></div>
+<div class="table-wrap"><table class="report-table"><tr class="group"><td colspan="2">PLATFORM PERFORMANCE — ALL ICPs</td></tr><tr><th>Metric</th><th>Value</th></tr>{platform_rows}</table></div>
 
-  <div class="sec-h a-green">CAMPAIGN PERFORMANCE — DETAIL</div>
-  <div class="table-scroll">
-  <table class="dt">
-    <thead><tr><th class="tl">Campaign</th><th class="tr">Status</th><th class="tr">Impressions</th>
-    <th class="tr">Clicks</th><th class="tr">CTR</th><th class="tr">Reach</th>
-    <th class="tr">Leads</th><th class="tr">Spend</th><th class="tr">CPC</th></tr></thead>
-    <tbody>{camp_rows}</tbody>
-  </table>
-  </div>
-</section>"""
+<div class="table-wrap" style="margin-top:14px"><table class="report-table"><tr class="group"><td colspan="8">CAMPAIGN PERFORMANCE</td></tr><tr><th>Campaign Name</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>Reach</th><th>Leads</th><th>Spend</th><th>CPL</th></tr>{camp_rows}</table></div></section>"""
 
 
-def _exec_summary(gsc, ga4, fb, ig, ads):
-    points = []
-    org = _g(ga4, 'organic_sessions')
-    if org and isinstance(org, (int, float)) and org > 0:
-        points.append(f"Organic sessions reached <strong>{_f(int(org))}</strong> for the reporting period.")
-    gc = _g(gsc, 'clicks')
-    gi = _g(gsc, 'impressions')
-    if gc and gi:
-        points.append(f"Search Console: <strong>{_f(int(gc))}</strong> clicks from <strong>{_f(int(gi))}</strong> impressions.")
-    ir = _g(ig, 'reach', 0) or 0
-    fr = _g(fb, 'reach', 0) or 0
-    if ir + fr > 0:
-        points.append(f"Total social reach: <strong>{_f(ir + fr)}</strong> (IG: {_f(ir)}, FB: {_f(fr)}).")
-    ie = _g(ig, 'engagements', 0) or 0
-    fe = _g(fb, 'engagements', 0) or 0
-    if ie + fe > 0:
-        points.append(f"Combined social engagements: <strong>{_f(ie + fe)}</strong>.")
-    ifl = _g(ig, 'followers', 0) or 0
-    ffl = _g(fb, 'followers', 0) or 0
-    if ifl or ffl:
-        points.append(f"Current followers — Instagram: <strong>{_f(ifl)}</strong>, Facebook: <strong>{_f(ffl)}</strong>.")
-    spend = sum(float(_g(c, 'spend', 0) or 0) for c in ads)
-    leads = sum(int(_g(c, 'leads', 0) or 0) for c in ads)
-    if spend > 0:
-        cpl = spend / leads if leads > 0 else 0
-        txt = f"Ad spend: <strong>{_f(spend, cur=True)}</strong> → <strong>{_f(leads)}</strong> leads"
-        if cpl > 0:
-            txt += f" at <strong>{_f(cpl, cur=True)}</strong> CPL"
-        points.append(txt + ".")
-
-    if not points:
-        return ''
-
-    bullets = ''.join(f'<li>{p}</li>' for p in points)
-
-    summary_cards = [
-        ('Social Reach', _f((ir + fr) or None), '#7C3AED'),
-        ('Engagements', _f((ie + fe) or None), '#0EA5E9'),
-        ('Organic Sessions', _f(org), '#10B981'),
-        ('Ad Leads', _f(leads or None), '#F59E0B'),
-        ('Ad Spend', _f(spend, cur=True) if spend else '—', '#EF4444'),
-        ('GSC Clicks', _f(gc), '#6366F1'),
+# ---------------------------------------------------------------------------
+# Metrics Index
+# ---------------------------------------------------------------------------
+def _metrics_index():
+    sections = [
+        ('Performance Overview', [
+            'Total Reach (all platforms)', 'Total Impressions (all platforms)',
+            'Total Engagements', 'Avg. Engagement Rate (%)',
+            'Organic Sessions (SEO)', 'Total Ad Impressions',
+            'Total Ad Clicks', 'Overall Ad CTR (%)', 'Total Leads',
+        ]),
+        ('SEO Trend', [
+            'Organic Sessions', 'Organic Users', 'Website Leads',
+            'Avg. Session Duration (sec)', 'Bounce Rate',
+            'Google Search Console Clicks', 'Google Search Console Impressions',
+            'Avg. Position', 'Pages Indexed', 'Backlinks (total)', 'Domain Rating',
+        ]),
+        ('SMM Trend', [
+            'Followers / Page Likes', 'New Followers (net)', 'Reach', 'Views',
+            'Engagements (total)', 'Posts Published', 'Link Clicks',
+            'Profile Visits / Page Views',
+        ]),
+        ('Ads', [
+            'Meta Impressions', 'Meta Clicks', 'Meta Leads', 'Meta CTR',
+            'Meta Reach', 'Meta CPL', 'Meta Spend',
+            'LinkedIn Sends', 'LinkedIn Opens', 'LinkedIn Leads',
+            'LinkedIn Open Rate', 'LinkedIn Clicks', 'LinkedIn CPL', 'LinkedIn Spend',
+        ]),
     ]
-    sc = ''.join(f"""<div class="kpi">
-        <div class="kpi-bar" style="background:{c}"></div>
-        <div class="kpi-v">{v}</div><div class="kpi-l">{l}</div></div>"""
-        for l, v, c in summary_cards)
 
-    return f"""
-<section class="sheet">
-  <div class="sh-t"><span class="sh-i">📌</span> Executive Summary</div>
-  <div class="sec-h a-amber">THE HEADLINE</div>
-  <ul class="exec-list">{bullets}</ul>
-  <div class="sec-h a-green">KEY METRICS AT A GLANCE</div>
-  <div class="kpi-grid">{sc}</div>
-</section>"""
+    cards = ''
+    for title, labels in sections:
+        items = ''.join(f'<div><b>&middot;</b> {l}</div>' for l in labels)
+        cards += f'<div class="card" style="margin-bottom:14px"><h3>{title}</h3><div class="metric-index">{items}</div></div>'
 
-
-CSS = """
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:#F0F2F8;color:#0F172A;font-size:.82rem;line-height:1.55}
-
-/* ─ Header ─ */
-.hdr{background:linear-gradient(135deg,#4C1D95 0%,#6D28D9 40%,#7C3AED 100%);color:#fff;padding:2.25rem 2.5rem;display:flex;justify-content:space-between;align-items:center;position:relative;overflow:hidden}
-.hdr::after{content:'';position:absolute;top:-60px;right:-60px;width:200px;height:200px;background:rgba(255,255,255,.06);border-radius:50%}
-.hdr::before{content:'';position:absolute;bottom:-40px;left:30%;width:160px;height:160px;background:rgba(255,255,255,.04);border-radius:50%}
-.hdr-l{display:flex;align-items:center;gap:1.1rem;z-index:1}
-.hdr-logo{width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.15);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1.15rem;letter-spacing:.05em;border:1px solid rgba(255,255,255,.2)}
-.hdr-t{font-size:1.25rem;font-weight:800;letter-spacing:-.02em}
-.hdr-sub{font-size:.85rem;opacity:.75;font-weight:500;margin-top:2px}
-.hdr-r{text-align:right;z-index:1}
-.hdr-badge{font-size:.8rem;font-weight:700;background:rgba(255,255,255,.14);padding:.4rem 1.1rem;border-radius:10px;display:inline-block;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.15);margin-bottom:.3rem}
-.hdr-dept{font-size:.72rem;opacity:.6;font-weight:500}
-
-/* ─ Sheets ─ */
-.sheet{background:#fff;margin:1.1rem 1.75rem;border-radius:14px;padding:2rem 2.25rem;box-shadow:0 1px 4px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.03);page-break-inside:avoid}
-.sh-t{font-size:1.1rem;font-weight:800;color:#0F172A;margin-bottom:1.5rem;display:flex;align-items:center;gap:.55rem;padding-bottom:.9rem;border-bottom:2px solid #F1F5F9;letter-spacing:-.01em}
-.sh-i{font-size:1.15rem}
-
-/* ─ Section headers ─ */
-.sec-h{font-weight:800;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;padding:.55rem 1rem;border-radius:8px;margin:1.5rem 0 .85rem 0}
-.sec-h:first-child,.sec-h:first-of-type{margin-top:0}
-.a-purple{background:#F5F3FF;color:#7C3AED;border-left:4px solid #7C3AED}
-.a-blue{background:#EFF6FF;color:#2563EB;border-left:4px solid #2563EB}
-.a-green{background:#ECFDF5;color:#059669;border-left:4px solid #059669}
-.a-amber{background:#FFFBEB;color:#D97706;border-left:4px solid #D97706}
-.a-red{background:#FEF2F2;color:#DC2626;border-left:4px solid #DC2626}
-
-/* ─ KPI Cards ─ */
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.75rem;margin-bottom:.5rem}
-.kpi{background:#FAFBFE;border:1px solid #E8ECF4;border-radius:10px;padding:1rem .85rem;text-align:center;position:relative;overflow:hidden;transition:transform .12s}
-.kpi-bar{position:absolute;top:0;left:0;right:0;height:3.5px;border-radius:10px 10px 0 0}
-.kpi-v{font-size:1.35rem;font-weight:800;color:#0F172A;margin-top:.3rem;font-variant-numeric:tabular-nums}
-.kpi-l{font-size:.62rem;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.08em;margin-top:.3rem;line-height:1.3}
-
-/* ─ Tables ─ */
-.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.dt{width:100%;border-collapse:separate;border-spacing:0;margin-bottom:.6rem;font-size:.78rem}
-.dt thead th{background:#F8FAFC;color:#475569;font-weight:700;font-size:.65rem;letter-spacing:.07em;text-transform:uppercase;padding:.65rem .7rem;border-bottom:2px solid #E2E8F0;position:sticky;top:0}
-.tl{text-align:left}.tr{text-align:right}.tc{text-align:center;white-space:nowrap;min-width:90px;font-size:.6rem!important}
-.dt tbody tr{border-bottom:1px solid #F1F5F9;transition:background .1s}
-.dt tbody tr:nth-child(even){background:#FAFBFD}
-.dt tbody tr:hover{background:#F1F5F9}
-.dt td{padding:.5rem .7rem;border-bottom:1px solid #F1F5F9}
-.mn{font-weight:600;color:#1E293B;white-space:nowrap}
-.mv{text-align:right;font-variant-numeric:tabular-nums;color:#0F172A;font-weight:500}
-.trend .mv{text-align:center;font-size:.74rem}
-.trend .mn{font-size:.76rem}
-.plat-h{font-weight:800!important;font-size:.68rem!important;letter-spacing:.1em;padding:.65rem 1rem!important;border-bottom:none!important}
-
-/* ─ Delta colors ─ */
-.delta-up{color:#059669!important;font-weight:700!important}
-.delta-down{color:#DC2626!important;font-weight:700!important}
-
-/* ─ Status pill ─ */
-.status-pill{font-size:.65rem;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.04em;white-space:nowrap}
-
-/* ─ Executive ─ */
-.exec-list{padding:.85rem 1.5rem .85rem 2rem;line-height:2;color:#1E293B;font-size:.84rem}
-.exec-list li{margin-bottom:.2rem}
-.exec-list strong{color:#7C3AED;font-weight:700}
-
-/* ─ Footer ─ */
-.footer{display:flex;justify-content:space-between;padding:1.15rem 2.25rem;font-size:.68rem;color:#94A3B8;margin:0 1.75rem .75rem}
-.empty-n{color:#94A3B8;font-style:italic;padding:1.25rem 0;font-size:.84rem}
-
-/* ─ Print ─ */
-@media print{
-  body{background:#fff;font-size:.72rem}
-  .sheet{box-shadow:none;margin:.6rem 0;border:1px solid #E2E8F0;page-break-inside:avoid}
-  .hdr,.sec-h,.plat-h,.kpi,.kpi-bar,.dt tbody tr:nth-child(even),.status-pill{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .hdr::after,.hdr::before{display:none}
-}
-"""
+    return f"""<section class="section page-break" id="metrics-index"><div class="section-head"><div><h2>All Metrics Index</h2><div class="sub">Exact metric labels used in this report.</div></div></div>{cards}</section>"""
