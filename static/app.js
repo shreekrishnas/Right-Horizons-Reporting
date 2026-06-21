@@ -2049,7 +2049,7 @@ async function generateILWebinarIdeas() {
 
     // Fallback
     const items = [
-        ['LinkedIn post', 'Top 3 takeaways from the webinar — with ₹ impact', 'Extract the 3 most actionable insights. Lead with a bold stat (₹ figure or %). Write as speaker's POV thought-leadership post. End with Right Horizons webinar CTA.'],
+        ['LinkedIn post', 'Top 3 takeaways from the webinar — with ₹ impact', 'Extract the 3 most actionable insights. Lead with a bold stat (₹ figure or %). Write as speaker\\\'s POV thought-leadership post. End with Right Horizons webinar CTA.'],
         ['Carousel', '7-step checklist derived from webinar key points', 'Convert the webinar into a numbered checklist carousel (8 slides). Use ₹ examples, Indian tax references, and a final CTA slide with consultation booking link.'],
         ['Short video', '45-sec explainer: the one insight most viewers missed', 'Pick the most surprising data point from the webinar. Create a speaker-led Reel with on-screen ₹ figures, captions, and RH branding. Hook in first 3 seconds.'],
         ['Blog', 'In-depth guide: everything covered in the webinar (2000+ words)', 'Long-form SEO article with H2/H3 structure, ₹ comparison tables, FAQ section targeting Google PAA, internal links to Right Horizons services. Add SEBI disclaimer.'],
