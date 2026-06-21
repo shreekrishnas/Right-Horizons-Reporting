@@ -4,8 +4,8 @@ import requests
 from config import OPENROUTER_API_KEY
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "anthropic/claude-3.5-sonnet"
-FALLBACK_MODEL = "anthropic/claude-3-haiku"
+MODEL = "anthropic/claude-sonnet-4"
+FALLBACK_MODEL = "anthropic/claude-haiku-4"
 
 
 def _headers():
