@@ -1671,7 +1671,7 @@ def ideas_lab_generate(
         "You are a senior content strategist at Right Horizons, an Indian SEBI-registered financial services firm "
         "(Investment Advisory, PMS, AIF). You create content for Indian investors — HNIs, NRIs, salaried professionals, "
         "and business families. All currency references MUST use Indian Rupees (₹ symbol or INR), never dollars.\n\n"
-        "Generate 6 highly specific, production-ready content idea cards as a JSON array. Each idea must have:\n"
+        "Generate 8 highly specific, production-ready content idea cards as a JSON array. Each idea must have:\n"
         "- title: specific, punchy title (not generic — include numbers, audience, or outcome)\n"
         "- format: content format\n"
         "- group: one of Social, Video, Blog, Seasonal\n"
@@ -1778,6 +1778,114 @@ def ideas_lab_seo(body: dict = Body(...)):
         items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=4000)
         items = _unwrap_items(items)
         return {"ideas": items, "domain": domain}
+    except Exception as e:
+        raise HTTPException(502, f"AI error: {e}")
+
+
+@app.post("/api/ideas/lab/expand")
+def ideas_lab_expand(body: dict = Body(...)):
+    if not ai_mod:
+        raise HTTPException(503, "AI module not available")
+    idea = body.get("idea", {})
+    output_type = body.get("output_type", "brief")
+    domain = body.get("domain", "rh")
+    domain_label = DOMAINS.get(domain, {}).get("label", domain)
+
+    type_prompts = {
+        "brief": (
+            "Create a comprehensive production brief as a JSON object with keys:\n"
+            "- overview: 2-3 sentence creative direction\n"
+            "- target_audience: detailed persona description (age, income in ₹, location, pain points)\n"
+            "- key_messages: array of 4-5 key messages to convey\n"
+            "- content_structure: array of objects {heading, description, word_count} — full content outline\n"
+            "- visual_mood: detailed visual/design direction (colors, typography, imagery style)\n"
+            "- distribution: array of {channel, timing, format_notes} — where and when to publish\n"
+            "- metrics: array of KPIs to track for this content\n"
+            "- internal_links: array of Right Horizons pages/services to link to\n"
+            "- seo_notes: target keywords, meta description, featured snippet opportunity\n"
+            "- estimated_time: production time estimate"
+        ),
+        "carousel": (
+            "Create a full carousel/slide deck as a JSON object with keys:\n"
+            "- slide_count: number of slides\n"
+            "- slides: array of objects {slide_number, headline, body_text, visual_note, speaker_note}\n"
+            "  — body_text should be the ACTUAL text for each slide (not a description), 20-40 words per slide\n"
+            "  — visual_note describes what the slide looks like\n"
+            "- design_system: {primary_color, accent_color, font_pairing, layout_style}\n"
+            "- caption: ready-to-post LinkedIn/Instagram caption (150-200 words) with hashtags\n"
+            "All ₹ amounts, Indian context only."
+        ),
+        "blog": (
+            "Create a full blog outline as a JSON object with keys:\n"
+            "- meta_title: SEO title (60-70 chars)\n"
+            "- meta_description: SEO meta description (150-160 chars)\n"
+            "- word_count: target word count\n"
+            "- sections: array of objects {heading, subheadings: [], key_points: [], word_count}\n"
+            "- faq: array of {question, answer_outline} for FAQ schema\n"
+            "- internal_links: suggested Right Horizons pages to link\n"
+            "- cta_placement: where to place CTAs within the article\n"
+            "- featured_snippet: the paragraph/list/table to target for position zero\n"
+            "All ₹ amounts, Indian tax/financial context."
+        ),
+        "caption": (
+            "Create ready-to-post social media captions as a JSON object with keys:\n"
+            "- linkedin: {caption, hashtags} — professional tone, 150-250 words\n"
+            "- instagram: {caption, hashtags} — engaging tone, 100-150 words with emoji\n"
+            "- twitter: {tweets: []} — thread of 3-5 tweets, each under 280 chars\n"
+            "- email_subject_lines: array of 3 A/B test subject lines\n"
+            "All ₹ amounts, Indian context."
+        ),
+    }
+
+    sys_prompt = (
+        f"You are a senior content strategist at {domain_label}, an Indian SEBI-registered financial services firm. "
+        "All currency in ₹ (INR). Indian financial context only.\n\n"
+        f"{type_prompts.get(output_type, type_prompts['brief'])}"
+    )
+    user_msg = (
+        f"Expand this idea into a full {output_type}:\n"
+        f"Title: {idea.get('title', '')}\nFormat: {idea.get('format', '')}\n"
+        f"Audience: {idea.get('audience', '')}\nHook: {idea.get('hook', '')}\n"
+        f"Angle: {idea.get('angle', '')}\nCTA: {idea.get('cta', '')}\n"
+        f"Visual direction: {idea.get('visual', '')}"
+    )
+    try:
+        result = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=4000)
+        return {"expanded": result, "output_type": output_type}
+    except Exception as e:
+        raise HTTPException(502, f"AI error: {e}")
+
+
+@app.get("/api/ideas/lab/seasonal")
+def ideas_lab_seasonal(domain: str = "rh", month: int = 0):
+    if not ai_mod:
+        raise HTTPException(503, "AI module not available")
+    domain_label = DOMAINS.get(domain, {}).get("label", domain)
+    current_month = month or _today_ist().month
+    month_names = ["", "January", "February", "March", "April", "May", "June",
+                   "July", "August", "September", "October", "November", "December"]
+    current_name = month_names[current_month] if 1 <= current_month <= 12 else "this month"
+
+    sys_prompt = (
+        f"You are a content calendar strategist at {domain_label}, an Indian SEBI-registered financial services firm "
+        "(Investment Advisory, PMS, AIF). All currency in ₹ (INR).\n\n"
+        f"Generate 8 seasonal content ideas relevant to {current_name} and the coming 2 months in India.\n"
+        "Consider: Indian festivals, tax deadlines, market events, regulatory dates, cultural moments, "
+        "financial year milestones, NRI-relevant dates, budget season, etc.\n\n"
+        "Return a JSON array. Each item:\n"
+        "- title: specific, punchy title with ₹ amounts or numbers\n"
+        "- format: content format (Blog + carousel / Social creative / Email + LinkedIn / Webinar promo / Video series / Infographic)\n"
+        "- occasion: the seasonal trigger (festival, deadline, event)\n"
+        "- timing: when to publish relative to the occasion\n"
+        "- description: detailed production brief (60+ words) — angle, ₹ examples, specific audience, CTA\n"
+        "- audience: specific Indian investor segment\n"
+        "- urgency: high / medium / low — based on time-sensitivity"
+    )
+    user_msg = f"Generate seasonal ideas for {current_name} and the next 2 months for {domain_label}."
+    try:
+        items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=3000)
+        items = _unwrap_items(items)
+        return {"ideas": items, "month": current_name, "domain": domain}
     except Exception as e:
         raise HTTPException(502, f"AI error: {e}")
 

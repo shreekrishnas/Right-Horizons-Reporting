@@ -1809,7 +1809,7 @@ function switchILTab(tab) {
     const panel = document.getElementById('il-tab-' + tab);
     if (panel) panel.classList.add('il-active');
     if (tab === 'library') _ilRenderLibrary();
-    if (tab === 'seasonal') _ilRenderSeasonal();
+    if (tab === 'seasonal') generateILSeasonalAI();
 }
 
 function setILFilter(f) {
@@ -1841,11 +1841,11 @@ function _ilRenderIdeas() {
     if (metricFit) metricFit.textContent = (document.getElementById('il-type')?.value || '--').replace('LinkedIn ', '');
 
     if (!filtered.length) {
-        grid.innerHTML = '<div class="il-empty-state" style="grid-column:1/-1">Click "Generate usable ideas" to get structured content directions.</div>';
+        grid.innerHTML = '<div class="il-empty-state" style="grid-column:1/-1">Set your brief and click "Generate ideas" to get production-ready content directions.</div>';
         return;
     }
     grid.innerHTML = filtered.map(x => `
-        <article class="il-idea-card ${_ilSelectedId === x.id ? 'selected' : ''}" onclick="selectILIdea('${x.id}')">
+        <article class="il-idea-card" data-group="${esc(x.group)}" onclick="openILDrawer('${x.id}')">
             <div class="il-card-top">
                 <span class="il-badge il-badge-purple">${esc(x.format)}</span>
                 <div class="il-score" style="--score:${x.score}"><strong>${x.score}</strong><span>score</span></div>
@@ -1854,27 +1854,32 @@ function _ilRenderIdeas() {
             <p>${esc(x.hook)}</p>
             <div class="il-idea-meta">
                 <span class="il-badge il-badge-green">${esc(x.angle)}</span>
-                <span class="il-badge il-badge-blue">${esc(x.audience)}</span>
-            </div>
-            <div class="il-info-list">
-                <div class="il-info-row"><b>CTA</b><span>${esc(x.cta)}</span></div>
-                <div class="il-info-row"><b>Why</b><span>${esc(x.why)}</span></div>
             </div>
             <div class="il-card-actions" onclick="event.stopPropagation()">
-                <button class="il-btn il-btn-small" onclick="copyILIdea('${x.id}')">Copy</button>
                 <button class="il-btn il-btn-small" onclick="saveILIdea('${x.id}')">Save</button>
-                <button class="il-btn il-btn-small" onclick="copyILGenerated('caption','${x.id}')">Caption</button>
-                <button class="il-btn il-btn-small" onclick="copyILGenerated('outline','${x.id}')">Outline</button>
+                <button class="il-btn il-btn-small" onclick="copyILIdea('${x.id}')">Copy</button>
+                <button class="il-btn il-btn-small" onclick="openILDrawer('${x.id}')">View brief</button>
             </div>
         </article>
     `).join('');
 }
 
-function selectILIdea(id) {
+function openILDrawer(id) {
     _ilSelectedId = id;
-    _ilRenderIdeas();
     const x = _ilIdeas.find(i => i.id === id) || _ilSavedIdeas.find(i => i.id === id);
     _ilRenderDetail(x);
+    document.getElementById('il-drawer-backdrop')?.classList.add('open');
+    document.getElementById('il-drawer')?.classList.add('open');
+}
+
+function closeILDrawer() {
+    document.getElementById('il-drawer-backdrop')?.classList.remove('open');
+    document.getElementById('il-drawer')?.classList.remove('open');
+    _ilSelectedId = null;
+}
+
+function selectILIdea(id) {
+    openILDrawer(id);
 }
 
 function _ilRenderDetail(x) {
@@ -1896,9 +1901,17 @@ function _ilRenderDetail(x) {
         <div class="il-detail-block"><div class="il-card-actions">
             <button class="il-btn il-btn-small" onclick="copyILIdea('${x.id}')">Copy idea</button>
             <button class="il-btn il-btn-small" onclick="saveILIdea('${x.id}')">Save to library</button>
-            <button class="il-btn il-btn-small" onclick="copyILGenerated('carousel','${x.id}')">Carousel outline</button>
-            <button class="il-btn il-btn-small" onclick="copyILGenerated('blog','${x.id}')">Blog outline</button>
         </div></div>
+        <div class="il-expand-section">
+            <h4>Expand with AI</h4>
+            <div class="il-expand-btns">
+                <button class="il-btn il-btn-primary il-btn-small" onclick="expandILIdea('${x.id}','brief')">✦ Full brief</button>
+                <button class="il-btn il-btn-small" onclick="expandILIdea('${x.id}','carousel')">Carousel slides</button>
+                <button class="il-btn il-btn-small" onclick="expandILIdea('${x.id}','blog')">Blog outline</button>
+                <button class="il-btn il-btn-small" onclick="expandILIdea('${x.id}','caption')">Captions</button>
+            </div>
+            <div id="il-expand-result-${x.id}" style="margin-top:12px"></div>
+        </div>
     `;
 }
 
@@ -1912,7 +1925,7 @@ async function generateILIdeas() {
     const context = document.getElementById('il-context')?.value?.trim() || '';
 
     const grid = document.getElementById('il-idea-grid');
-    if (grid) grid.innerHTML = '<div class="il-empty-state" style="grid-column:1/-1">Generating ideas…</div>';
+    if (grid) grid.innerHTML = Array(6).fill('<div class="il-skeleton"></div>').join('');
 
     try {
         const qs = `?domain=${client}&topic=${encodeURIComponent(topic)}&audience=${encodeURIComponent(audience)}&content_type=${encodeURIComponent(type)}&goal=${encodeURIComponent(goal)}&source=${encodeURIComponent(source)}&context=${encodeURIComponent(context)}`;
@@ -2032,7 +2045,7 @@ async function generateILWebinarIdeas() {
     if (!text) { _ilToast('Paste webinar content first'); return; }
     const kpis = document.getElementById('il-webinar-kpis');
     const grid = document.getElementById('il-webinar-grid');
-    if (grid) grid.innerHTML = '<div class="il-empty-state" style="grid-column:1/-1">Generating repurposing pack…</div>';
+    if (grid) grid.innerHTML = Array(4).fill('<div class="il-skeleton"></div>').join('');
 
     try {
         const data = await api('/api/ideas/lab/webinar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, domain: document.getElementById('il-client')?.value || 'rh' }) });
@@ -2065,7 +2078,7 @@ async function generateILSeoIdeas() {
     const text = document.getElementById('il-seo-text')?.value?.trim();
     if (!text) { _ilToast('Enter SEO keywords first'); return; }
     const grid = document.getElementById('il-seo-grid');
-    if (grid) grid.innerHTML = '<div class="il-empty-state" style="grid-column:1/-1">Generating SEO ideas…</div>';
+    if (grid) grid.innerHTML = Array(4).fill('<div class="il-skeleton"></div>').join('');
 
     try {
         const data = await api('/api/ideas/lab/seo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keywords: text, domain: document.getElementById('il-client')?.value || 'rh' }) });
@@ -2124,6 +2137,87 @@ function resetIdeaLab() {
 function copyIdeaLabBrief() {
     _copyToClipboard('Idea Lab generates usable idea cards with title, format, audience, hook, CTA, visual direction, compliance reminder, score, detail view, webinar repurposing, SEO ideas, and saved library.');
     _ilToast('Section brief copied');
+}
+
+async function expandILIdea(id, outputType) {
+    const x = _ilIdeas.find(i => i.id === id) || _ilSavedIdeas.find(i => i.id === id);
+    if (!x) return;
+    const resultEl = document.getElementById('il-expand-result-' + id);
+    if (!resultEl) return;
+    resultEl.innerHTML = '<div class="il-skeleton" style="height:120px"></div>';
+    try {
+        const data = await api('/api/ideas/lab/expand', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idea: x, output_type: outputType, domain: document.getElementById('il-client')?.value || 'rh' })
+        });
+        const expanded = data.expanded || {};
+        resultEl.innerHTML = `<div class="il-expand-content">${_ilFormatExpanded(expanded, outputType)}</div>
+            <button class="il-btn il-btn-small" style="margin-top:8px" onclick="_copyToClipboard(document.getElementById('il-expand-result-${id}').querySelector('.il-expand-content').textContent);_ilToast('Copied')">Copy expanded brief</button>`;
+        _ilToast(outputType + ' generated');
+    } catch (e) {
+        resultEl.innerHTML = '<div class="il-empty-state" style="padding:12px;font-size:12px">Failed to expand. Try again.</div>';
+    }
+}
+
+function _ilFormatExpanded(obj, type) {
+    if (typeof obj === 'string') return esc(obj);
+    let out = '';
+    const renderVal = (val, indent) => {
+        indent = indent || '';
+        if (Array.isArray(val)) {
+            return val.map((v, i) => {
+                if (typeof v === 'object' && v !== null) {
+                    return indent + (i + 1) + '. ' + Object.entries(v).map(([k2, v2]) => k2 + ': ' + (typeof v2 === 'string' ? v2 : JSON.stringify(v2))).join(' | ');
+                }
+                return indent + '• ' + v;
+            }).join('\n');
+        }
+        if (typeof val === 'object' && val !== null) {
+            return Object.entries(val).map(([k2, v2]) => indent + k2 + ': ' + (typeof v2 === 'string' ? v2 : renderVal(v2, indent + '  '))).join('\n');
+        }
+        return String(val);
+    };
+    for (const [key, val] of Object.entries(obj)) {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        out += label + ':\n' + renderVal(val, '  ') + '\n\n';
+    }
+    return esc(out.trim());
+}
+
+async function generateILSeasonalAI() {
+    const grid = document.getElementById('il-seasonal-grid');
+    if (!grid) return;
+    grid.innerHTML = Array(6).fill('<div class="il-skeleton"></div>').join('');
+    const client = document.getElementById('il-client')?.value || 'rh';
+    try {
+        const data = await api(`/api/ideas/lab/seasonal?domain=${client}`);
+        const items = data.ideas || [];
+        if (items.length) {
+            grid.innerHTML = items.map(x => {
+                const urgClass = (x.urgency || '').toLowerCase() === 'high' ? 'il-urgency-high' : (x.urgency || '').toLowerCase() === 'medium' ? 'il-urgency-medium' : 'il-urgency-low';
+                return `<article class="il-seasonal-card">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
+                        <span class="il-badge il-badge-orange">${esc(x.format || '')}</span>
+                        <span class="il-urgency ${urgClass}">${esc(x.urgency || 'medium')}</span>
+                    </div>
+                    <h3 style="font-size:14px;margin:0 0 6px;font-weight:700;line-height:1.3">${esc(x.title || '')}</h3>
+                    <p style="font-size:12px;color:var(--text-muted);margin:0 0 6px;line-height:1.5">${esc(x.description || '')}</p>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+                        ${x.occasion ? `<span class="il-badge il-badge-blue">${esc(x.occasion)}</span>` : ''}
+                        ${x.timing ? `<span class="il-badge il-badge-green">${esc(x.timing)}</span>` : ''}
+                    </div>
+                    <div class="il-card-actions">
+                        <button class="il-btn il-btn-small" data-angle="${esc(x.title || '')}" onclick="document.getElementById('il-topic').value=this.dataset.angle;switchILTab('generate');_ilToast('Topic loaded')">Use as topic</button>
+                        <button class="il-btn il-btn-small" data-copy-text="${esc(x.title + ': ' + (x.description || ''))}" onclick="_copyToClipboard(this.dataset.copyText);_ilToast('Copied')">Copy</button>
+                    </div>
+                </article>`;
+            }).join('');
+            _ilToast('Seasonal ideas refreshed for ' + (data.month || 'this month'));
+            return;
+        }
+    } catch (e) {}
+    _ilRenderSeasonal();
 }
 
 let _ilToastTimer;

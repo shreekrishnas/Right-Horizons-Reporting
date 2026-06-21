@@ -574,13 +574,13 @@
 
                     <!-- TAB: Generate Ideas -->
                     <section id="il-tab-generate" class="il-tab-panel il-active">
-                        <div class="il-grid">
+                        <div class="il-grid-2col">
                             <!-- Left: Input Panel -->
                             <aside class="il-panel">
                                 <div class="il-panel-title">
                                     <div>
                                         <h2>Idea input</h2>
-                                        <p>Give the lab a goal, format, and topic. The output becomes usable idea cards, not plain titles.</p>
+                                        <p>Set your brief. AI generates production-ready idea cards.</p>
                                     </div>
                                 </div>
 
@@ -593,30 +593,31 @@
                                     </select>
                                 </div>
 
-                                <div class="il-field-group">
-                                    <label>Content Goal</label>
-                                    <select id="il-goal">
-                                        <option>Webinar registrations</option>
-                                        <option>Awareness</option>
-                                        <option>Lead generation</option>
-                                        <option>Engagement</option>
-                                        <option>SEO traffic</option>
-                                        <option>Thought leadership</option>
-                                        <option>YouTube growth</option>
-                                    </select>
-                                </div>
-
-                                <div class="il-field-group">
-                                    <label>Content Type</label>
-                                    <select id="il-type">
-                                        <option>LinkedIn carousel</option>
-                                        <option>Social post</option>
-                                        <option>Blog</option>
-                                        <option>Short video</option>
-                                        <option>YouTube video</option>
-                                        <option>Email</option>
-                                        <option>Ad creative</option>
-                                    </select>
+                                <div class="il-field-row">
+                                    <div class="il-field-group">
+                                        <label>Content Goal</label>
+                                        <select id="il-goal">
+                                            <option>Webinar registrations</option>
+                                            <option>Awareness</option>
+                                            <option>Lead generation</option>
+                                            <option>Engagement</option>
+                                            <option>SEO traffic</option>
+                                            <option>Thought leadership</option>
+                                            <option>YouTube growth</option>
+                                        </select>
+                                    </div>
+                                    <div class="il-field-group">
+                                        <label>Content Type</label>
+                                        <select id="il-type">
+                                            <option>LinkedIn carousel</option>
+                                            <option>Social post</option>
+                                            <option>Blog</option>
+                                            <option>Short video</option>
+                                            <option>YouTube video</option>
+                                            <option>Email</option>
+                                            <option>Ad creative</option>
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <div class="il-field-group">
@@ -638,40 +639,37 @@
                                         <button class="il-chip" onclick="document.getElementById('il-topic').value='Tax saving for NRIs'">Tax saving</button>
                                         <button class="il-chip" onclick="document.getElementById('il-topic').value='Retirement planning for NRIs'">Retirement</button>
                                         <button class="il-chip" onclick="document.getElementById('il-topic').value='PMS for HNIs'">PMS</button>
+                                        <button class="il-chip" onclick="document.getElementById('il-topic').value='ESOP taxation India'">ESOP</button>
                                     </div>
                                 </div>
 
                                 <div class="il-field-group">
                                     <label>Audience</label>
-                                    <input class="il-input" id="il-audience" value="" placeholder="e.g. Middle East NRIs" />
+                                    <input class="il-input" id="il-audience" value="" placeholder="e.g. Middle East NRIs earning ₹30L+" />
                                 </div>
 
                                 <div class="il-field-group">
                                     <label>Extra Context</label>
-                                    <textarea id="il-context" class="il-textarea" placeholder="Paste webinar notes, campaign angle, competitor reference, or any specific direction."></textarea>
+                                    <textarea id="il-context" class="il-textarea" placeholder="Campaign angle, competitor reference, webinar notes, or any specific direction..."></textarea>
                                 </div>
 
-                                <button class="il-btn il-btn-primary" style="width:100%" onclick="generateILIdeas()">✦ Generate usable ideas</button>
+                                <button class="il-btn il-btn-primary" style="width:100%" onclick="generateILIdeas()">✦ Generate ideas</button>
                                 <div class="il-input-footer">
-                                    <button class="il-btn il-btn-small" onclick="loadILWebinarPreset()">Use webinar preset</button>
-                                    <button class="il-btn il-btn-small" onclick="loadILSeoPreset()">Use SEO preset</button>
+                                    <button class="il-btn il-btn-small" onclick="loadILWebinarPreset()">Webinar preset</button>
+                                    <button class="il-btn il-btn-small" onclick="loadILSeoPreset()">SEO preset</button>
                                 </div>
                             </aside>
 
                             <!-- Center: Ideas Grid -->
                             <main class="il-content-area">
                                 <div class="il-hero-metrics">
-                                    <div class="il-metric"><span>Ideas generated</span><strong id="il-metric-generated">0</strong><small>from current brief</small></div>
-                                    <div class="il-metric"><span>Strongest score</span><strong id="il-metric-score">--</strong><small>best idea quality</small></div>
-                                    <div class="il-metric"><span>Saved ideas</span><strong id="il-metric-saved">0</strong><small>local library</small></div>
-                                    <div class="il-metric"><span>Best fit</span><strong id="il-metric-fit">--</strong><small>for selected goal</small></div>
+                                    <div class="il-metric"><span>Ideas</span><strong id="il-metric-generated">0</strong><small>generated</small></div>
+                                    <div class="il-metric"><span>Top score</span><strong id="il-metric-score">--</strong><small>quality</small></div>
+                                    <div class="il-metric"><span>Saved</span><strong id="il-metric-saved">0</strong><small>in library</small></div>
+                                    <div class="il-metric"><span>Best fit</span><strong id="il-metric-fit">--</strong><small>format</small></div>
                                 </div>
 
                                 <div class="il-toolbar">
-                                    <div class="il-section-title">
-                                        <h2>Generated idea directions</h2>
-                                        <p>Use filters to review by format. Click any card to open the detailed creative brief.</p>
-                                    </div>
                                     <div class="il-filters" id="il-format-filters">
                                         <button class="il-chip active" data-il-filter="All" onclick="setILFilter('All')">All</button>
                                         <button class="il-chip" data-il-filter="Social" onclick="setILFilter('Social')">Social</button>
@@ -681,16 +679,20 @@
                                     </div>
                                 </div>
                                 <div class="il-idea-grid" id="il-idea-grid">
-                                    <div class="il-empty-state" style="grid-column:1/-1">Click "Generate usable ideas" to get structured content directions.</div>
+                                    <div class="il-empty-state" style="grid-column:1/-1">Set your brief and click "Generate ideas" to get production-ready content directions.</div>
                                 </div>
                             </main>
-
-                            <!-- Right: Detail Panel -->
-                            <aside class="il-side-panel" id="il-detail-panel">
-                                <div class="il-detail-empty">Select an idea card to see the full brief, slide flow, caption direction, visual direction, CTA, and scoring breakdown.</div>
-                            </aside>
                         </div>
                     </section>
+
+                    <!-- Slide-over Detail Drawer -->
+                    <div class="il-drawer-backdrop" id="il-drawer-backdrop" onclick="closeILDrawer()"></div>
+                    <aside class="il-drawer" id="il-drawer">
+                        <div class="il-drawer-header">
+                            <button class="il-btn il-btn-small" onclick="closeILDrawer()">✕ Close</button>
+                        </div>
+                        <div id="il-detail-panel"></div>
+                    </aside>
 
                     <!-- TAB: Idea Library -->
                     <section id="il-tab-library" class="il-tab-panel">
@@ -708,9 +710,12 @@
                     <!-- TAB: Seasonal Ideas -->
                     <section id="il-tab-seasonal" class="il-tab-panel">
                         <div class="il-full-panel">
-                            <div class="il-section-title">
-                                <h2>Seasonal Ideas</h2>
-                                <p>Use recurring moments as content hooks without making every idea festival-generic.</p>
+                            <div class="il-toolbar" style="margin-bottom:14px">
+                                <div class="il-section-title" style="margin-bottom:0">
+                                    <h2>Seasonal Ideas</h2>
+                                    <p>AI-generated content hooks based on Indian festivals, tax deadlines, market events, and cultural moments.</p>
+                                </div>
+                                <button class="il-btn il-btn-primary" onclick="generateILSeasonalAI()">✦ Refresh with AI</button>
                             </div>
                             <div class="il-seasonal-grid" id="il-seasonal-grid">
                                 <div class="il-empty-state" style="grid-column:1/-1">Loading seasonal ideas...</div>
