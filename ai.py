@@ -1,5 +1,6 @@
 import json
 import re
+import time
 import requests
 from config import OPENROUTER_API_KEY
 
@@ -19,29 +20,43 @@ def _headers():
     }
 
 
-def _post(payload: dict, timeout: int = 120) -> str:
-    resp = requests.post(OPENROUTER_URL, headers=_headers(), json=payload, timeout=timeout)
-    if not resp.ok:
-        body = resp.text[:500]
-        if resp.status_code in (400, 404) and ("model" in body.lower() or "response_format" in body.lower()):
-            payload.pop("response_format", None)
-            payload["model"] = FALLBACK_MODEL
+def _post(payload: dict, timeout: int = 120, _retries: int = 2) -> str:
+    last_err = None
+    for attempt in range(_retries + 1):
+        try:
             resp = requests.post(OPENROUTER_URL, headers=_headers(), json=payload, timeout=timeout)
             if not resp.ok:
-                raise RuntimeError(f"OpenRouter error {resp.status_code}: {resp.text[:500]}")
-        else:
-            raise RuntimeError(f"OpenRouter error {resp.status_code}: {body}")
-    data = resp.json()
-    try:
-        return data["choices"][0]["message"]["content"] or ""
-    except (KeyError, IndexError):
-        raise RuntimeError(f"Unexpected response: {json.dumps(data)[:500]}")
+                body = resp.text[:500]
+                if resp.status_code in (400, 404) and ("model" in body.lower() or "response_format" in body.lower()):
+                    payload.pop("response_format", None)
+                    payload["model"] = FALLBACK_MODEL
+                    resp = requests.post(OPENROUTER_URL, headers=_headers(), json=payload, timeout=timeout)
+                    if not resp.ok:
+                        raise RuntimeError(f"OpenRouter error {resp.status_code}: {resp.text[:500]}")
+                elif resp.status_code in (429, 500, 502, 503, 529) and attempt < _retries:
+                    time.sleep(2 ** attempt)
+                    continue
+                else:
+                    raise RuntimeError(f"OpenRouter error {resp.status_code}: {body}")
+            data = resp.json()
+            try:
+                return data["choices"][0]["message"]["content"] or ""
+            except (KeyError, IndexError):
+                raise RuntimeError(f"Unexpected response: {json.dumps(data)[:500]}")
+        except (requests.ConnectionError, requests.Timeout) as e:
+            last_err = e
+            if attempt < _retries:
+                time.sleep(2 ** attempt)
+                continue
+            raise RuntimeError(f"OpenRouter connection failed after {_retries + 1} attempts: {e}")
+    raise RuntimeError(f"OpenRouter failed: {last_err}")
 
 
-def chat(system: str, user: str, max_tokens: int = 2000) -> str:
+def chat(system: str, user: str, max_tokens: int = 2000, temperature: float = 0.7) -> str:
     payload = {
         "model": MODEL,
         "max_tokens": max_tokens,
+        "temperature": temperature,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -132,7 +147,7 @@ def _parse_json(text: str, max_tokens: int = 6000):
         raise RuntimeError("Unable to parse AI JSON response after all repair attempts")
 
 
-def chat_json(system: str, user: str, max_tokens: int = 4000):
+def chat_json(system: str, user: str, max_tokens: int = 4000, temperature: float = 0.7):
     sys_full = system + (
         "\n\nIMPORTANT: Respond with ONLY a valid JSON object of the form "
         '{"items": [...]} where items is the array described above. '
@@ -143,6 +158,7 @@ def chat_json(system: str, user: str, max_tokens: int = 4000):
     payload = {
         "model": MODEL,
         "max_tokens": max_tokens,
+        "temperature": temperature,
         "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": sys_full},

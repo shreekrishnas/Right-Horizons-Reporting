@@ -1886,17 +1886,24 @@ function _ilRenderDetail(x) {
     const host = document.getElementById('il-detail-panel');
     if (!host) return;
     if (!x) { host.innerHTML = '<div class="il-detail-empty">Select an idea card to see the full brief.</div>'; return; }
+    const pillar = x.content_pillar ? `<span class="il-badge il-badge-red">${esc(x.content_pillar)}</span>` : '';
+    const platformNotes = x.platform_notes ? `<div class="il-detail-block"><h4>Platform strategy</h4><p>${esc(x.platform_notes)}</p></div>` : '';
     host.innerHTML = `
         <div class="il-detail-title">
-            <div><h2>${esc(x.title)}</h2><p>${esc(x.format)} · ${esc(x.audience)}</p></div>
+            <div><h2>${esc(x.title)}</h2><p>${esc(x.format)} · ${esc(x.audience)}</p>
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+                <span class="il-badge il-badge-green">${esc(x.angle)}</span>
+                ${pillar}
+            </div></div>
             <div class="il-score" style="--score:${x.score}"><strong>${x.score}</strong><span>score</span></div>
         </div>
-        <div class="il-detail-block"><h4>Hook</h4><p>${esc(x.hook)}</p></div>
-        <div class="il-detail-block"><h4>Why this works</h4><p>${esc(x.why)}</p></div>
-        <div class="il-detail-block"><h4>Suggested flow</h4><ul class="il-steps">${x.slides.map((s, i) => `<li><span>${i + 1}</span>${esc(s)}</li>`).join('')}</ul></div>
+        <div class="il-detail-block"><h4>Hook</h4><p style="font-size:14px;font-weight:600;font-style:italic;color:var(--text-primary)">${esc(x.hook)}</p></div>
+        <div class="il-detail-block"><h4>Strategic rationale</h4><p>${esc(x.why)}</p></div>
+        <div class="il-detail-block"><h4>Content flow</h4><ul class="il-steps">${x.slides.map((s, i) => `<li><span>${i + 1}</span>${esc(s)}</li>`).join('')}</ul></div>
         <div class="il-detail-block"><h4>Visual direction</h4><p>${esc(x.visual)}</p></div>
-        <div class="il-detail-block"><h4>CTA</h4><p>${esc(x.cta)}</p></div>
-        <div class="il-detail-block"><h4>Compliance reminder</h4><p>${esc(x.compliance)}</p></div>
+        ${platformNotes}
+        <div class="il-detail-block"><h4>Call to action</h4><p style="font-weight:600">${esc(x.cta)}</p></div>
+        <div class="il-detail-block"><h4>Compliance</h4><p>${esc(x.compliance)}</p></div>
         <div class="il-detail-block"><h4>Score breakdown</h4><div class="il-score-bars">${Object.entries(x.scores).map(([k, v]) => `<div class="il-scorebar"><span>${k}</span><div class="il-track"><div class="il-fill" style="--w:${v}%"></div></div><b>${v}</b></div>`).join('')}</div></div>
         <div class="il-detail-block"><div class="il-card-actions">
             <button class="il-btn il-btn-small" onclick="copyILIdea('${x.id}')">Copy idea</button>
@@ -1944,9 +1951,11 @@ async function generateILIdeas() {
                 cta: it.cta || '',
                 visual: it.visual || it.visual_direction || '',
                 compliance: it.compliance || it.compliance_reminder || '',
-                why: it.why || it.why_it_works || `This idea works because it targets ${audience} with a clear ${it.angle || 'educational'} angle.`,
+                why: it.why || it.why_it_works || '',
                 slides: it.slides || it.slide_flow || ['Hook slide', 'Core problem', 'Insight 1', 'Insight 2', 'Expert tip', 'CTA'],
-                scores: it.scores || { 'Audience fit': 88, 'Clarity': 85, 'Platform fit': 82, 'Conversion potential': 84, 'Compliance safety': 90 }
+                scores: it.scores || { 'Audience fit': 88, 'Clarity': 85, 'Platform fit': 82, 'Conversion potential': 84, 'Compliance safety': 90 },
+                platform_notes: it.platform_notes || '',
+                content_pillar: it.content_pillar || ''
             }));
         } else {
             _ilGenerateFallbackIdeas(topic, audience, type, goal, source);
@@ -2054,7 +2063,14 @@ async function generateILWebinarIdeas() {
             const counts = {};
             items.forEach(it => { const f = it.format || 'Content'; counts[f] = (counts[f] || 0) + 1; });
             if (kpis) kpis.innerHTML = Object.entries(counts).map(([k, v]) => `<span class="il-kpi">${v} ${esc(k)}${v > 1 ? 's' : ''}</span>`).join('');
-            if (grid) grid.innerHTML = items.map(x => _ilMiniCard(x.title || '', x.format || '', x.description || x.hook || '', `<button class="il-btn il-btn-small" data-copy-text="${esc(x.title||'')}" onclick="_copyToClipboard(this.dataset.copyText)">Copy</button>`)).join('');
+            if (grid) grid.innerHTML = items.map(x => {
+                const badges = [
+                    x.funnel_stage ? `<span class="il-badge il-badge-blue">${esc(x.funnel_stage)}</span>` : '',
+                    x.priority ? `<span class="il-badge ${x.priority === 'high' ? 'il-badge-red' : x.priority === 'medium' ? 'il-badge-orange' : 'il-badge-green'}">${esc(x.priority)} priority</span>` : '',
+                    x.effort ? `<span class="il-badge il-badge-purple">${esc(x.effort)}</span>` : ''
+                ].filter(Boolean).join('');
+                return _ilMiniCardRich(x.title || '', x.format || '', x.description || x.hook || '', badges, x.key_insight || '', `<button class="il-btn il-btn-small" data-copy-text="${esc((x.title||'')+'\n'+(x.hook||'')+'\n'+(x.description||''))}" onclick="_copyToClipboard(this.dataset.copyText);_ilToast('Copied')">Copy</button>`);
+            }).join('');
             _ilToast('Webinar repurposing pack generated');
             return;
         }
@@ -2084,7 +2100,17 @@ async function generateILSeoIdeas() {
         const data = await api('/api/ideas/lab/seo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keywords: text, domain: document.getElementById('il-client')?.value || 'rh' }) });
         const items = data.ideas || data.items || [];
         if (items.length) {
-            if (grid) grid.innerHTML = items.map(x => _ilMiniCard(x.title || '', x.format || '', x.description || '', `<button class="il-btn il-btn-small" data-copy-text="${esc(x.title||'')}" onclick="_copyToClipboard(this.dataset.copyText)">Copy idea</button>`)).join('');
+            if (grid) grid.innerHTML = items.map(x => {
+                const badges = [
+                    x.search_intent ? `<span class="il-badge il-badge-blue">${esc(x.search_intent)}</span>` : '',
+                    x.difficulty_tier ? `<span class="il-badge ${x.difficulty_tier === 'high' ? 'il-badge-red' : x.difficulty_tier === 'medium' ? 'il-badge-orange' : 'il-badge-green'}">${esc(x.difficulty_tier)} difficulty</span>` : '',
+                    x.funnel_stage ? `<span class="il-badge il-badge-purple">${esc(x.funnel_stage)}</span>` : ''
+                ].filter(Boolean).join('');
+                const kw = x.keyword ? `Keyword: ${x.keyword}` : '';
+                const meta = x.meta_description || '';
+                const fullDesc = [x.description || '', meta ? `\nMeta: ${meta}` : '', x.long_tail_keywords ? `\nRelated: ${x.long_tail_keywords.join(', ')}` : ''].join('');
+                return _ilMiniCardRich(x.title || '', x.format || '', fullDesc, badges, kw, `<button class="il-btn il-btn-small" data-copy-text="${esc((x.title||'')+'\n'+(x.description||''))}" onclick="_copyToClipboard(this.dataset.copyText);_ilToast('Copied')">Copy</button>`);
+            }).join('');
             _ilToast('SEO ideas generated');
             return;
         }
@@ -2098,6 +2124,19 @@ async function generateILSeoIdeas() {
 
 function _ilMiniCard(title, type, desc, actions) {
     return `<article class="il-mini-card"><span class="il-badge il-badge-orange">${esc(type)}</span><h3>${esc(title)}</h3><p>${esc(desc)}</p><div class="il-card-actions">${actions || ''}</div></article>`;
+}
+
+function _ilMiniCardRich(title, type, desc, badges, insight, actions) {
+    return `<article class="il-mini-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+            <span class="il-badge il-badge-orange">${esc(type)}</span>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">${badges}</div>
+        </div>
+        <h3>${esc(title)}</h3>
+        ${insight ? `<p style="font-style:italic;font-size:12px;color:var(--accent-section,#7C3AED);margin:4px 0 8px">${esc(insight)}</p>` : ''}
+        <p>${esc(desc)}</p>
+        <div class="il-card-actions">${actions || ''}</div>
+    </article>`;
 }
 
 function loadILWebinarPreset() {

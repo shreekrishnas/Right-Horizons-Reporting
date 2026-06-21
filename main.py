@@ -1246,25 +1246,41 @@ def reports_room_summary(
         raise HTTPException(503, "AI module not available")
     room_data = reports_room(domain, start, end, compare, channels)
     sys_prompt = (
-        "You are a senior digital marketing analyst. Given the report room data below, "
-        "produce an executive summary as JSON with these exact fields:\n"
-        "- what_improved: string summarizing metrics that improved\n"
-        "- what_dropped: string summarizing metrics that dropped\n"
-        "- what_stable: string summarizing stable metrics\n"
-        "- main_win: string describing the biggest positive takeaway\n"
-        "- main_concern: string describing the biggest concern\n"
-        "- key_opportunity: string describing the top opportunity to act on\n"
-        "- recommended_focus: string describing what to prioritize next\n"
-        "- executive_summary: string with a 2-3 sentence overall summary\n"
-        "- confidence_score: integer 0-100 representing overall performance health\n"
-        "- next_steps: array of 3-5 objects each with 'title' and 'description' fields\n"
-        "Be concise, specific, and data-driven. Reference actual numbers where possible. "
-        "Use Indian Rupees (₹/INR) for all currency figures, never dollars."
+        "You are a senior digital marketing performance analyst for Indian financial services. "
+        "Given the report data below, produce a sharp, insight-driven executive summary as JSON.\n\n"
+        "ANALYSIS APPROACH:\n"
+        "- Compare current period vs previous period — calculate % changes mentally\n"
+        "- Identify the STORY behind the numbers, not just the numbers themselves\n"
+        "- Flag anomalies: sudden spikes/drops, unusual patterns, seasonal effects\n"
+        "- Connect dots across channels: did SEO gains correlate with social engagement?\n"
+        "- Think about ACTIONABILITY: what can the team actually DO with each insight?\n\n"
+        "JSON FIELDS (all required):\n"
+        "- what_improved: specific metrics that improved with actual numbers and % changes\n"
+        "- what_dropped: specific metrics that declined with actual numbers and % changes — include WHY if inferable\n"
+        "- what_stable: metrics that held steady — note if stability is good (retention) or concerning (stagnation)\n"
+        "- main_win: the single biggest positive takeaway — be specific about the metric, the magnitude, and the business impact\n"
+        "- main_concern: the single biggest concern — include what could happen if unaddressed\n"
+        "- key_opportunity: the highest-ROI action to take NOW — specific, not generic\n"
+        "- recommended_focus: what to prioritize in the next reporting period — tie to a specific channel/metric\n"
+        "- executive_summary: 2-3 sentence boardroom-ready summary — lead with the most important finding, quantify impact\n"
+        "- confidence_score: integer 0-100 — overall digital marketing health. "
+        "80+: strong momentum. 60-79: stable with opportunities. 40-59: needs attention. <40: urgent intervention.\n"
+        "- channel_grades: object with keys for each active channel (seo, social, ads, youtube, email) — "
+        "each is {grade: 'A'/'B'/'C'/'D'/'F', trend: 'improving'/'stable'/'declining', one_liner: string}\n"
+        "- next_steps: array of 4-5 objects each with 'title', 'description', 'priority' (high/medium/low), "
+        "'channel' (which channel this applies to), 'expected_impact' (what improvement to expect)\n"
+        "- risks: array of 1-3 risks to monitor with 'risk' and 'mitigation' fields\n\n"
+        "RULES:\n"
+        "- Reference ACTUAL numbers from the data — never make up metrics\n"
+        "- Use Indian Rupees (₹/INR) for all currency figures, never dollars\n"
+        "- If data is missing for a channel, say 'Data not available for this period' — don't fabricate\n"
+        "- Be a sharp analyst, not a cheerleader — call out problems clearly\n"
+        "- Use em dash (—) for missing values, not zeros"
     )
     import json
     user_msg = f"Report room data for {room_data.get('label', domain)} ({start} to {end}):\n\n{json.dumps(room_data, default=str)}"
     try:
-        summary = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=4000)
+        summary = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=5000, temperature=0.6)
         return {"domain": domain, "label": room_data.get("label"), "start": start, "end": end, "summary": summary}
     except Exception as e:
         raise HTTPException(502, f"AI summary generation failed: {e}")
@@ -1448,7 +1464,7 @@ def calendar_generate(req: CalendarRequest):
     if req.context:
         user += f"\n\nAdditional context:\n{req.context}"
     try:
-        items = ai_mod.chat_json(sys_prompt, user, max_tokens=8000)
+        items = ai_mod.chat_json(sys_prompt, user, max_tokens=8000, temperature=0.85)
         items = _unwrap_items(items)
         _calendars[f"{req.domain}:{req.month}"] = items
         _push_history(_calendar_history, req.domain, items if isinstance(items, list) else [], key_field="title")
@@ -1602,17 +1618,31 @@ async def calendar_upload(file: UploadFile = File(...), domain: str = Query("rh"
 # ── Creative Ideas ───────────────────────────────────────────────────────────
 
 IDEAS_SYSTEM = (
-    "You are the content strategist for Right Horizons (Indian wealth/PMS/AIF firm).\n\n"
+    "You are the content strategist for Right Horizons (Indian wealth/PMS/AIF firm). "
+    "You produce ideas that are SPECIFIC, DATA-DRIVEN, and IMMEDIATELY ACTIONABLE.\n\n"
     + RH_CONTENT_DNA +
     "\n\nTASK: Generate 10 fresh content ideas for category '{category}'. Every idea "
     "MUST align to one of the four swimlanes (Retirement Planning / NRI / ESOPs / "
     "Family Office). Match the observational, data-driven tone — no hype, no clickbait. "
-    "Include specific numbers and Indian financial context. If the category is 'all', "
-    "spread across all four swimlanes following the 35/27/15/12 distribution.\n\n"
-    "Output ONLY valid JSON array of "
-    "{title, type ('Carousel'/'Static Image'/'Reel'/'Poll'), swimlane, description "
-    "(2-3 sentence observational hook), hashtags: [12-15 educational tags including "
-    "#RightHorizons + #WealthManagement + swimlane tag], best_platform}."
+    "If the category is 'all', spread across all swimlanes following the 35/27/15/12 distribution.\n\n"
+    "EACH IDEA MUST HAVE:\n"
+    "- title: specific title with a number, ₹ amount, or audience callout — NEVER generic\n"
+    "- type: 'Carousel' / 'Static Image' / 'Reel' / 'Poll'\n"
+    "- swimlane: 'Retirement Planning' / 'NRI' / 'ESOPs' / 'Family Office'\n"
+    "- description: 3-4 sentence production brief — the hook, the insight, the audience angle, the visual direction. "
+    "Use the observational voice: 'A salaried professional turning 40 often discovers...', not 'Learn about...'\n"
+    "- hook: the EXACT opening line for the post — scroll-stopping, uses a specific ₹ figure or surprising stat\n"
+    "- hashtags: array of 12-15 educational hashtags including #RightHorizons + #WealthManagement + swimlane tag. "
+    "No generic hype tags.\n"
+    "- best_platform: 'LinkedIn' / 'Instagram' / 'Twitter/X' / 'YouTube' with a short WHY\n"
+    "- audience_persona: one-sentence description of the exact person this is for (age, income in ₹, situation)\n"
+    "- content_depth: 'foundational' / 'intermediate' / 'advanced' / 'niche'\n\n"
+    "QUALITY RULES:\n"
+    "- Every title must include a number, ₹ amount, or specific audience — 'Understanding wealth' is NOT acceptable, "
+    "'Why your ₹50L FD earns less than inflation — a real-terms calculator' IS\n"
+    "- Hooks must provoke curiosity or loss aversion — not generic statements\n"
+    "- Each idea must be different in angle, format, and swimlane where possible\n"
+    "- Reference 2024-2026 Indian financial context: new tax regime, LTCG at 12.5%, Budget changes, RBI rates"
 )
 
 
@@ -1634,7 +1664,7 @@ def ideas_generate(domain: str = "rh", category: str = "all"):
         user += "DO NOT REPEAT THESE PAST IDEAS (find a new angle, audience, or specific case):\n"
         user += past + "\n\nEvery idea must be NEW. Avoid the same titles, framings, or numerical examples.\n"
     try:
-        items = ai_mod.chat_json(sys_prompt, user, max_tokens=4000)
+        items = ai_mod.chat_json(sys_prompt, user, max_tokens=5000, temperature=0.85)
         items = _unwrap_items(items)
         _ideas_state["available"] = len(items) if isinstance(items, list) else 0
         _push_history(_ideas_history, f"ideas:{domain}", items if isinstance(items, list) else [], key_field="title")
@@ -1666,42 +1696,77 @@ def ideas_lab_generate(
 ):
     if not ai_mod:
         raise HTTPException(503, "AI module not available")
-    domain_label = DOMAINS.get(domain, {}).get("label", domain)
+    d = DOMAINS.get(domain, {})
+    domain_label = d.get("label", domain)
+    entity_type = "Investment Advisory" if domain == "rh" else ("PMS" if domain == "pms" else "AIF")
+
     sys_prompt = (
-        "You are a senior content strategist at Right Horizons, an Indian SEBI-registered financial services firm "
-        "(Investment Advisory, PMS, AIF). You create content for Indian investors — HNIs, NRIs, salaried professionals, "
-        "and business families. All currency references MUST use Indian Rupees (₹ symbol or INR), never dollars.\n\n"
-        "Generate 8 highly specific, production-ready content idea cards as a JSON array. Each idea must have:\n"
-        "- title: specific, punchy title (not generic — include numbers, audience, or outcome)\n"
-        "- format: content format\n"
+        f"You are the head of content strategy at {domain_label}, a SEBI-registered Indian {entity_type} firm. "
+        "You have deep expertise in Indian wealth management, tax planning, and investor psychology.\n\n"
+        + RH_CONTENT_DNA +
+        "\n\nYour job: generate 8 production-ready content idea cards as a JSON array.\n\n"
+        "EACH IDEA MUST INCLUDE ALL OF THESE FIELDS:\n"
+        "- title: specific, punchy, includes a number or ₹ figure or audience callout — NEVER generic\n"
+        "- format: exact content format (LinkedIn carousel / Instagram Reel / Blog article / YouTube explainer / Email drip / Social static / Twitter thread / Webinar)\n"
         "- group: one of Social, Video, Blog, Seasonal\n"
-        "- audience: specific Indian investor segment (e.g. 'NRIs in UAE earning ₹30L+', 'Salaried professionals 30-40 planning first ₹1Cr', 'HNI families with ₹5Cr+ portfolio')\n"
-        "- hook: scroll-stopping opening line a writer can use verbatim — specific, not generic\n"
-        "- angle: content angle (Educational, Problem-solution, Myth-busting, Checklist, Expert opinion, Comparison, Mistakes to avoid, Data-backed, Case-study)\n"
-        "- score: quality score 78-95 (vary realistically — not all ideas are 90+)\n"
-        "- cta: specific CTA tied to Right Horizons services (e.g. 'Book a free portfolio review call', 'Register for NRI tax planning webinar', 'Download the retirement corpus calculator')\n"
-        "- visual_direction: precise design brief — specify layout, color feel, typography hierarchy, chart type if any, number of slides for carousel\n"
-        "- compliance_reminder: specific SEBI/finance compliance caution relevant to the content (not generic)\n"
-        "- why_it_works: strategic rationale — why this resonates with THIS audience, what psychological trigger it uses, what gap it fills\n"
-        "- slide_flow: array of 5-7 slide/section titles (specific to the idea, not generic)\n"
-        "- scores: object with keys 'Audience fit', 'Clarity', 'Platform fit', 'Conversion potential', 'Compliance safety' each 70-95 (vary per idea)\n\n"
-        "QUALITY RULES:\n"
-        "- Use Indian financial context: ₹ amounts, SEBI regulations, Indian tax laws (80C, LTCG, NRI DTAA), Indian market benchmarks (Nifty, Sensex)\n"
-        "- Reference real Indian investor pain points: tax-saving confusion, NRI repatriation, retirement corpus (₹3-8 Cr range), ESOP taxation, HUF planning\n"
-        "- Each idea must be different in angle AND format — no two ideas should feel similar\n"
-        "- Hooks should provoke curiosity or urgency, not be bland statements\n"
-        "- CTAs should connect to a specific Right Horizons offering, not generic 'learn more'\n"
-        "- Make every idea strong enough for a content writer to start producing within 10 minutes"
+        "- audience: hyper-specific Indian investor persona with income bracket in ₹ and life stage "
+        "(e.g. 'Tech professionals 28-35 with ₹15-25L CTC and unexercised ESOPs', "
+        "'NRI couples in UAE with ₹80L-2Cr in Indian FDs earning <3% real return', "
+        "'Retired govt officers 60+ with ₹30L pension corpus worried about healthcare inflation')\n"
+        "- hook: the EXACT opening line — scroll-stopping, uses a specific stat, question, or contrarian take. "
+        "Must work as the first thing someone reads. Not a description of a hook — the actual words.\n"
+        "- angle: one of Educational, Problem-solution, Myth-busting, Checklist, Expert opinion, Comparison, "
+        "Mistakes to avoid, Data-backed, Case-study, Contrarian, Calculator, Framework\n"
+        "- score: quality score 75-96 — vary realistically. A niche idea with small audience scores lower on 'Audience fit' but higher on 'Conversion potential'. Not every idea is 88+.\n"
+        "- cta: specific, actionable CTA tied to a real Right Horizons offering — "
+        "'Book a 15-min NRI tax review call (free)', 'Register: live webinar on ESOP tax planning — June 28', "
+        "'Use our retirement corpus calculator at righthorizons.com/tools', 'Download the NRI repatriation checklist (PDF)'\n"
+        "- visual_direction: precise design brief a designer can execute — specify: number of slides (for carousel), "
+        "color palette (hex or description), typography hierarchy, chart types, imagery style, layout pattern, "
+        "brand elements to include. Not vague — specific.\n"
+        "- compliance_reminder: the SPECIFIC SEBI/finance compliance issue for THIS content — "
+        "which disclaimer to use, which claims to avoid, which entity registration to display. "
+        "Reference actual SEBI circular numbers or sections where relevant.\n"
+        "- why_it_works: strategic rationale with psychological depth — name the cognitive bias or emotional trigger "
+        "(loss aversion, social proof, authority bias, urgency, anchoring), explain the content gap this fills, "
+        "and why this audience is underserved by current content.\n"
+        "- slide_flow: array of 6-8 specific slide/section titles that a designer can directly use — "
+        "not generic ('Introduction', 'Key points') but specific ('Slide 1: The ₹15L tax trap most NRIs walk into', "
+        "'Slide 2: DTAA Article 4 — your residency shield')\n"
+        "- scores: object with keys 'Audience fit' (how large/accessible), 'Clarity' (how easy to produce), "
+        "'Platform fit' (how well it suits the format), 'Conversion potential' (likelihood of generating leads), "
+        "'Compliance safety' (how easy to keep SEBI-safe) — each 68-96, VARIED per idea based on real tradeoffs\n"
+        "- platform_notes: which platform(s) this works best on and WHY — posting time, algorithm considerations, "
+        "format preferences (e.g. 'LinkedIn algorithm favors carousels with 8-12 slides posted Tue-Thu 8-10am IST')\n"
+        "- content_pillar: which swimlane this maps to (Retirement Planning / NRI / ESOPs / Family Office)\n\n"
+        "CREATIVITY RULES:\n"
+        "- Each idea MUST have a different angle AND format — zero overlap in approach\n"
+        "- At least 2 ideas must use contrarian or myth-busting angles\n"
+        "- At least 1 idea must reference a CURRENT event or recent regulatory change (2024-2026)\n"
+        "- At least 1 idea must be a calculator/framework/tool-based content\n"
+        "- Hooks must provoke — use specific ₹ amounts, percentages, or surprising facts\n"
+        "- Avoid bland corporate language — write like a sharp financial journalist, not a compliance officer\n"
+        "- Every CTA must feel like a natural next step, not a sales push\n"
+        "- Think about what content is MISSING in Indian fintech/wealth social media — fill gaps, don't repeat what everyone posts"
     )
+
     user_msg = (
-        f"Client: {domain_label}\nGoal: {goal}\nContent type: {content_type}\n"
-        f"Topic source: {source}\nTopic: {topic}\nAudience: {audience}\n"
+        f"Client: {domain_label} ({entity_type})\n"
+        f"Campaign goal: {goal}\nPreferred format: {content_type}\n"
+        f"Topic source: {source}\nCore topic: {topic or '(open — pick the strongest angles)'}\n"
+        f"Target audience: {audience or '(pick the most underserved segments for this topic)'}\n"
     )
     if context:
-        user_msg += f"Extra context: {context}\n"
+        user_msg += f"\nAdditional context from the user:\n{context}\n"
+
+    past = _history_context(_ideas_history, f"ideas_lab:{domain}", limit=40)
+    if past:
+        user_msg += f"\nAVOID REPEATING these previously generated ideas — find fresh angles:\n{past}\n"
+
     try:
-        items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=4000)
+        items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=6000, temperature=0.85)
         items = _unwrap_items(items)
+        _push_history(_ideas_history, f"ideas_lab:{domain}", items if isinstance(items, list) else [], key_field="title")
         return {"ideas": items, "domain": domain, "topic": topic}
     except Exception as e:
         raise HTTPException(502, f"AI error: {e}")
@@ -1715,29 +1780,47 @@ def ideas_lab_webinar(body: dict = Body(...)):
     domain = body.get("domain", "rh")
     domain_label = DOMAINS.get(domain, {}).get("label", domain)
     sys_prompt = (
-        "You are a content repurposing strategist at Right Horizons, an Indian SEBI-registered financial services firm. "
-        "Given a webinar transcript or key points, generate a content repurposing pack as a JSON array.\n\n"
-        "Create 15-20 diverse, production-ready content pieces:\n"
-        "- 3-4 LinkedIn posts (thought leadership, data highlights, myth-busting from the webinar)\n"
-        "- 2-3 carousel ideas (step-by-step breakdowns, key stats, checklists derived from webinar)\n"
-        "- 3-4 short video/Reels/Shorts ideas (30-60 sec clips with specific timestamp suggestions)\n"
-        "- 1-2 long-form blog articles (SEO-optimized with H2/H3 structure)\n"
-        "- 2-3 email sequences (not just subject lines — include angle and key message)\n"
-        "- 2-3 quote card/social graphic ideas (with exact quote text from the content)\n\n"
-        "Each item must have:\n"
-        "- title: specific piece title\n"
-        "- format: LinkedIn post / Carousel / Short video / Blog / Email / Quote card\n"
-        "- description: detailed, actionable production direction (50+ words) — what to include, what angle, what visual approach\n"
-        "- hook: opening line for the piece\n\n"
+        f"You are a content repurposing expert at {domain_label}, an Indian SEBI-registered financial services firm. "
+        "Your job: take ONE webinar and extract MAXIMUM value — turn it into a full content engine.\n\n"
+        + RH_CONTENT_DNA +
+        "\n\nANALYSIS FIRST: Before generating content, mentally extract from the webinar:\n"
+        "- The 3-5 strongest data points or statistics mentioned\n"
+        "- The most quotable statements from the speaker\n"
+        "- The key audience pain points addressed\n"
+        "- Any frameworks, models, or step-by-step processes described\n"
+        "- Surprising or contrarian insights that would stop a scroll\n\n"
+        "Generate 15-18 diverse, production-ready content pieces as a JSON array.\n\n"
+        "CONTENT MIX (follow this distribution):\n"
+        "- 3-4 LinkedIn posts: thought leadership, data highlights, myth-busting. Use the EXACT voice from Content DNA.\n"
+        "- 3 carousels: step-by-step breakdowns (8-10 slides each), key stats visualized, checklists.\n"
+        "- 3 short video/Reels (30-60 sec): speaker clips with on-screen stats, myth-bust moments, 'one thing you need to know'.\n"
+        "- 2 blog articles: SEO-optimized with full H2/H3 structure, 1500-2000 words each.\n"
+        "- 2 email sequences: not just subject lines — full nurture angle with 3-email arc.\n"
+        "- 2 quote cards: exact quotes with visual treatment direction.\n\n"
+        "EACH ITEM MUST HAVE:\n"
+        "- title: specific, compelling title (not 'Webinar recap' — something a reader would click)\n"
+        "- format: LinkedIn post / Carousel / Short video / Blog / Email sequence / Quote card\n"
+        "- funnel_stage: TOFU (awareness) / MOFU (consideration) / BOFU (decision)\n"
+        "- priority: high / medium / low — based on potential impact and ease of production\n"
+        "- effort: quick (< 1 hour) / moderate (1-3 hours) / substantial (3+ hours)\n"
+        "- description: detailed, actionable production brief (80+ words) including:\n"
+        "  • Exact data points/quotes to use from the webinar\n"
+        "  • Visual approach and design notes\n"
+        "  • Platform-specific optimization tips\n"
+        "  • CTA appropriate to the funnel stage\n"
+        "- hook: the EXACT opening line — ready to copy-paste, not a description\n"
+        "- key_insight: the core insight from the webinar this piece is built around\n"
+        "- compliance_note: specific SEBI compliance consideration for this piece\n\n"
         "RULES:\n"
-        "- All currency in ₹ (INR), all context Indian financial market\n"
-        "- Extract specific data points, quotes, and insights from the webinar — don't genericize\n"
-        "- Each piece should stand alone and be immediately producible\n"
-        "- Include SEBI compliance reminders where investment claims are made"
+        "- All currency in ₹ (INR), Indian financial context exclusively\n"
+        "- Extract SPECIFIC data points, speaker quotes, and insights — never genericize\n"
+        "- Each piece must stand completely alone — someone who didn't watch the webinar should still find it valuable\n"
+        "- Vary the emotional tone: some educational, some urgent, some aspirational, some myth-busting\n"
+        "- Email sequences should have subject line A/B variants"
     )
-    user_msg = f"Client: {domain_label}\n\nWebinar content:\n{text[:6000]}"
+    user_msg = f"Client: {domain_label}\n\nWebinar content to repurpose:\n{text[:8000]}"
     try:
-        items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=4000)
+        items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=6000, temperature=0.8)
         items = _unwrap_items(items)
         return {"ideas": items, "domain": domain}
     except Exception as e:
@@ -1752,30 +1835,44 @@ def ideas_lab_seo(body: dict = Body(...)):
     domain = body.get("domain", "rh")
     domain_label = DOMAINS.get(domain, {}).get("label", domain)
     sys_prompt = (
-        "You are an SEO content strategist at Right Horizons, an Indian SEBI-registered financial services firm "
-        "(Investment Advisory, PMS, AIF). You create SEO content targeting Indian investors.\n\n"
-        "Given SEO keywords, generate content ideas as a JSON array. For each keyword, create 1-2 ideas.\n"
-        "Each item must have:\n"
-        "- title: SEO-optimized title with the keyword naturally included (60-70 chars)\n"
-        "- format: Blog / Carousel / Short video / LinkedIn post / FAQ / Pillar page / Comparison guide\n"
-        "- description: detailed production brief (80+ words) including:\n"
-        "  • Search intent (informational/transactional/navigational)\n"
-        "  • Suggested H2/H3 structure (at least 4 subheadings)\n"
-        "  • Internal linking opportunities to Right Horizons services\n"
-        "  • Specific ₹ figures, Indian tax sections, or SEBI references to include\n"
-        "  • CTA tied to Right Horizons (consultation, calculator, webinar, PMS/AIF inquiry)\n"
-        "  • Featured snippet opportunity (table, list, or definition to target)\n"
-        "  • Related long-tail keywords to weave in\n\n"
-        "RULES:\n"
-        "- All currency in ₹ (INR), Indian financial/tax context only\n"
-        "- Reference Indian tax laws (Section 80C, 80D, LTCG, STCG, DTAA for NRIs)\n"
-        "- Mention Indian benchmarks (Nifty 50, Sensex, category averages)\n"
-        "- Target Google India SERPs — consider 'People Also Ask' angles\n"
-        "- Each idea should be strong enough for a writer to produce a 1500+ word article"
+        f"You are a senior SEO strategist at {domain_label}, an Indian SEBI-registered financial services firm "
+        "(Investment Advisory, PMS, AIF). You combine deep SEO expertise with Indian financial domain knowledge.\n\n"
+        + RH_CONTENT_DNA +
+        "\n\nGiven SEO keywords, create a comprehensive content plan as a JSON array. For each keyword, create 2-3 ideas.\n\n"
+        "EACH ITEM MUST HAVE:\n"
+        "- title: SEO-optimized title with the keyword naturally included (55-65 chars for SERP)\n"
+        "- format: one of Blog pillar page / Blog cluster article / Comparison guide / Calculator page / FAQ hub / "
+        "LinkedIn carousel / YouTube explainer / Infographic / Tool/template page\n"
+        "- keyword: the primary keyword this targets\n"
+        "- search_intent: informational / transactional / commercial investigation / navigational\n"
+        "- difficulty_tier: low (long-tail, <1K monthly searches) / medium (moderate competition, 1K-10K) / high (competitive, 10K+)\n"
+        "- funnel_stage: TOFU / MOFU / BOFU\n"
+        "- description: detailed production brief (100+ words) including:\n"
+        "  • WHY this content will rank — what's the angle competitors are missing?\n"
+        "  • Full H2/H3 structure (6-8 subheadings minimum)\n"
+        "  • Specific ₹ calculations, tax sections, or regulatory references to include\n"
+        "  • Featured snippet target — the exact format (table/list/paragraph/definition) and content\n"
+        "  • 'People Also Ask' questions to answer inline\n"
+        "  • Internal linking strategy — which Right Horizons pages to link TO and FROM\n"
+        "  • Schema markup recommendation (FAQ, HowTo, Article, Calculator)\n"
+        "  • Content differentiation — what makes this better than current Page 1 results\n"
+        "- long_tail_keywords: array of 4-6 related keywords to naturally weave in\n"
+        "- meta_description: ready-to-use meta description (150-155 chars)\n"
+        "- cta: specific Right Horizons CTA appropriate to the search intent\n"
+        "- estimated_word_count: target word count\n"
+        "- content_pillar: which swimlane (Retirement / NRI / ESOPs / Family Office)\n\n"
+        "STRATEGY RULES:\n"
+        "- Think about TOPIC CLUSTERS — group keywords that should link to each other\n"
+        "- For high-difficulty keywords, suggest a pillar page + 3-4 cluster articles strategy\n"
+        "- All currency in ₹ (INR), Indian tax/regulatory context exclusively\n"
+        "- Reference: Section 80C/80D/80CCD, LTCG (12.5%), STCG (20%), NRI DTAA, FEMA, SEBI circulars\n"
+        "- Indian benchmarks: Nifty 50, Sensex, SBI FD rates, PPF rates, gold prices in ₹\n"
+        "- Target Google India SERPs — what do the current top 3 results look like and how can we beat them?\n"
+        "- Prioritize content that can earn backlinks naturally (data, calculators, definitive guides)"
     )
-    user_msg = f"Client: {domain_label}\n\nKeywords:\n{keywords[:3000]}"
+    user_msg = f"Client: {domain_label}\n\nTarget keywords:\n{keywords[:4000]}"
     try:
-        items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=4000)
+        items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=6000, temperature=0.75)
         items = _unwrap_items(items)
         return {"ideas": items, "domain": domain}
     except Exception as e:
@@ -1838,19 +1935,23 @@ def ideas_lab_expand(body: dict = Body(...)):
     }
 
     sys_prompt = (
-        f"You are a senior content strategist at {domain_label}, an Indian SEBI-registered financial services firm. "
-        "All currency in ₹ (INR). Indian financial context only.\n\n"
-        f"{type_prompts.get(output_type, type_prompts['brief'])}"
+        f"You are the head of content production at {domain_label}, an Indian SEBI-registered financial services firm. "
+        "You produce content that is immediately usable — not outlines, but actual production-ready material.\n\n"
+        + RH_CONTENT_DNA +
+        "\n\n" + type_prompts.get(output_type, type_prompts['brief'])
     )
     user_msg = (
-        f"Expand this idea into a full {output_type}:\n"
+        f"Expand this idea into a full, production-ready {output_type}:\n\n"
         f"Title: {idea.get('title', '')}\nFormat: {idea.get('format', '')}\n"
-        f"Audience: {idea.get('audience', '')}\nHook: {idea.get('hook', '')}\n"
-        f"Angle: {idea.get('angle', '')}\nCTA: {idea.get('cta', '')}\n"
-        f"Visual direction: {idea.get('visual', '')}"
+        f"Target audience: {idea.get('audience', '')}\nOpening hook: {idea.get('hook', '')}\n"
+        f"Content angle: {idea.get('angle', '')}\nCall to action: {idea.get('cta', '')}\n"
+        f"Visual direction: {idea.get('visual', idea.get('visual_direction', ''))}\n"
+        f"Content pillar: {idea.get('content_pillar', '')}\n"
+        f"Why it works: {idea.get('why', idea.get('why_it_works', ''))}\n"
+        f"Slide flow: {', '.join(idea.get('slides', idea.get('slide_flow', [])))}"
     )
     try:
-        result = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=4000)
+        result = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=5000, temperature=0.8)
         return {"expanded": result, "output_type": output_type}
     except Exception as e:
         raise HTTPException(502, f"AI error: {e}")
@@ -1861,29 +1962,48 @@ def ideas_lab_seasonal(domain: str = "rh", month: int = 0):
     if not ai_mod:
         raise HTTPException(503, "AI module not available")
     domain_label = DOMAINS.get(domain, {}).get("label", domain)
-    current_month = month or _today_ist().month
+    today = _today_ist()
+    current_month = month or today.month
+    current_year = today.year
     month_names = ["", "January", "February", "March", "April", "May", "June",
                    "July", "August", "September", "October", "November", "December"]
     current_name = month_names[current_month] if 1 <= current_month <= 12 else "this month"
+    next1 = month_names[(current_month % 12) + 1] if current_month < 12 else "January"
+    next2 = month_names[((current_month + 1) % 12) + 1] if current_month < 11 else month_names[((current_month + 1) % 12) + 1]
 
     sys_prompt = (
         f"You are a content calendar strategist at {domain_label}, an Indian SEBI-registered financial services firm "
         "(Investment Advisory, PMS, AIF). All currency in ₹ (INR).\n\n"
-        f"Generate 8 seasonal content ideas relevant to {current_name} and the coming 2 months in India.\n"
-        "Consider: Indian festivals, tax deadlines, market events, regulatory dates, cultural moments, "
-        "financial year milestones, NRI-relevant dates, budget season, etc.\n\n"
-        "Return a JSON array. Each item:\n"
-        "- title: specific, punchy title with ₹ amounts or numbers\n"
-        "- format: content format (Blog + carousel / Social creative / Email + LinkedIn / Webinar promo / Video series / Infographic)\n"
-        "- occasion: the seasonal trigger (festival, deadline, event)\n"
-        "- timing: when to publish relative to the occasion\n"
-        "- description: detailed production brief (60+ words) — angle, ₹ examples, specific audience, CTA\n"
-        "- audience: specific Indian investor segment\n"
-        "- urgency: high / medium / low — based on time-sensitivity"
+        + RH_CONTENT_DNA +
+        f"\n\nToday is {today.strftime('%B %d, %Y')}. Generate 10 seasonal content ideas for "
+        f"{current_name} {current_year}, {next1} {current_year}, and {next2} {current_year if current_month < 11 else current_year + 1}.\n\n"
+        "SEASONAL TRIGGERS TO CONSIDER:\n"
+        "- Indian festivals: Diwali, Holi, Dussehra, Ganesh Chaturthi, Onam, Pongal, Eid, Christmas, Dhanteras, Raksha Bandhan, Independence Day, Republic Day\n"
+        "- Tax deadlines: March 31 (FY end), July 31 (ITR due), advance tax (Jun 15, Sep 15, Dec 15, Mar 15), TDS filing dates\n"
+        "- Market events: Union Budget (Feb), RBI monetary policy (bi-monthly), quarterly results season, Nifty rebalancing\n"
+        "- NRI-specific: Summer India visits (Jun-Aug), Diwali NRI return, academic year abroad, remittance peaks\n"
+        "- Life events: appraisal season (Mar-Apr), bonus season, wedding season (Nov-Feb), new year financial resolutions\n"
+        "- Regulatory: SEBI circular deadlines, AMFI changes, new tax regime transitions, GST deadlines\n\n"
+        "EACH ITEM MUST HAVE:\n"
+        "- title: specific, punchy title with ₹ amounts or numbers — not generic festival wishes\n"
+        "- format: content format with platform (e.g. 'LinkedIn carousel + Instagram static', 'Blog + email sequence')\n"
+        "- occasion: the exact seasonal trigger with approximate date\n"
+        "- timing: exact publishing window (e.g. '2 weeks before March 31', 'Day of Budget announcement', 'Week after Diwali')\n"
+        "- description: detailed production brief (80+ words) — angle, ₹ examples, specific investor audience, CTA, "
+        "visual approach, and why this timing matters for engagement\n"
+        "- audience: specific Indian investor segment with income/life stage\n"
+        "- urgency: high (publish within 1-2 weeks) / medium (2-4 weeks runway) / low (plan ahead for next month)\n"
+        "- content_pillar: Retirement Planning / NRI / ESOPs / Family Office\n\n"
+        "RULES:\n"
+        "- Don't just say 'Happy Diwali' — tie every festival to a FINANCIAL angle with specific ₹ math\n"
+        "- Tax deadline content should include actual numbers (₹1.5L 80C, ₹50K NPS, ₹25K 80D)\n"
+        "- NRI ideas should reference DTAA, Form 13, NRE/NRO, FEMA\n"
+        "- Each idea must be content-led, not greeting-card style\n"
+        "- Sort by urgency (high first)"
     )
-    user_msg = f"Generate seasonal ideas for {current_name} and the next 2 months for {domain_label}."
+    user_msg = f"Generate seasonal ideas for {current_name}-{next2} {current_year} for {domain_label}. Today is {today.isoformat()}."
     try:
-        items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=3000)
+        items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=5000, temperature=0.8)
         items = _unwrap_items(items)
         return {"ideas": items, "month": current_name, "domain": domain}
     except Exception as e:
@@ -1927,26 +2047,51 @@ _RH_BRAND_GUIDELINES = """
 """
 
 VALIDATOR_TEXT_SYSTEM = (
-    "You are a senior content reviewer for Right Horizons (Indian wealth/PMS/AIF).\n\n"
+    "You are the chief content quality officer at Right Horizons. You review EVERY piece before it goes live. "
+    "You are meticulous, thorough, and specific. Your reviews save the brand from compliance violations and weak content.\n\n"
     "Review against BOTH the brand guidelines AND the content DNA below.\n\n"
     "=== BRAND GUIDELINES ===\n" + _RH_BRAND_GUIDELINES +
     "\n\n" + RH_CONTENT_DNA +
-    "\n\nCHECKS TO PERFORM:\n"
-    "1. SEBI compliance: correct entity disclaimer, SEBI reg number, no assured returns.\n"
-    "2. Swimlane alignment: does the content fit one of the 4 pillars cleanly?\n"
-    "3. Voice match: observational vs promotional? Concrete numbers used?\n"
-    "4. Hype words to flag: 'game-changing', 'secret', 'shocking', 'guaranteed',\n"
-    "   'limited time', 'don't miss', 'buy now', 'best returns', 'risk-free'.\n"
-    "5. Hashtag quality: 12-15 educational tags including #RightHorizons, swimlane tag?\n"
-    "6. Structure match for type (Carousel slides / Static bullets / Reel scenes).\n"
-    "7. Grammar, clarity, Indian financial context (SEBI/GIFT City/SWP/AIF lingo).\n"
-    "Output ONLY valid JSON: {score: 0-100, entity_detected: 'RH'|'PMS'|'AIF'|'unknown', "
-    "swimlane_detected: 'Retirement Planning'|'NRI'|'ESOPs'|'Family Office'|'unclear', "
-    "voice_match_score: 0-100, hype_words_found: [], "
-    "compliance_issues: [{issue, severity: 'critical'|'warning'|'info', guideline_ref}], "
-    "voice_issues: [{issue, suggestion}], grammar_issues: [{issue, suggestion}], "
-    "strengths: [], weaknesses: [], recommendations: [], missing_info: [], "
-    "publish_ready: boolean, summary: string}."
+    "\n\nPERFORM THESE CHECKS IN ORDER:\n"
+    "1. SEBI COMPLIANCE (critical — can result in regulatory action):\n"
+    "   - Correct entity disclaimer present? Match disclaimer text EXACTLY to the entity (RH/PMS/AIF)\n"
+    "   - SEBI registration number displayed?\n"
+    "   - No assured/guaranteed returns language? (even indirect: 'proven', 'consistently outperforming')\n"
+    "   - No forward-looking statements without disclaimers?\n"
+    "   - Past performance disclaimer when showing returns data?\n"
+    "   - No specific stock/fund recommendations without IA disclaimer?\n"
+    "2. SWIMLANE ALIGNMENT: does the content cleanly fit one of 4 pillars? Mixed/unclear hurts brand positioning.\n"
+    "3. VOICE & TONE MATCH:\n"
+    "   - Observational vs promotional? (RH voice is advisory, never salesy)\n"
+    "   - Concrete ₹ numbers used? (not vague 'significant returns')\n"
+    "   - Acknowledges complexity vs oversimplifies?\n"
+    "   - Calm, mature language vs hype/clickbait?\n"
+    "4. HYPE WORD SCAN: flag ALL instances of: 'game-changing', 'secret', 'shocking', 'guaranteed', "
+    "'risk-free', 'limited time', 'don't miss', 'buy now', 'best returns', 'huge returns', "
+    "'massive growth', 'once in a lifetime', 'sureshot', 'jackpot', '100% safe', 'double your money'.\n"
+    "5. HASHTAG QUALITY: 12-15 educational tags? Includes #RightHorizons + #WealthManagement + swimlane tag? "
+    "No generic hype tags (#trending, #viral, #moneygoals)?\n"
+    "6. STRUCTURE MATCH: Does the format match the type? Carousel has numbered slides? Static has bullets? Reel has scene directions?\n"
+    "7. GRAMMAR & CLARITY: Spelling, punctuation, sentence clarity. Indian English conventions.\n"
+    "8. ENGAGEMENT POTENTIAL: Will this actually perform? Is the hook strong? Is the CTA clear?\n\n"
+    "Output ONLY valid JSON: {\n"
+    "  score: 0-100 (overall publish-readiness),\n"
+    "  entity_detected: 'RH'|'PMS'|'AIF'|'unknown',\n"
+    "  swimlane_detected: 'Retirement Planning'|'NRI'|'ESOPs'|'Family Office'|'unclear',\n"
+    "  voice_match_score: 0-100 (how closely it matches RH Content DNA voice),\n"
+    "  engagement_score: 0-100 (predicted engagement potential),\n"
+    "  hype_words_found: [exact words found],\n"
+    "  compliance_issues: [{issue: string, severity: 'critical'|'warning'|'info', guideline_ref: string, fix: string}],\n"
+    "  voice_issues: [{issue: string, suggestion: string, example_rewrite: string}],\n"
+    "  grammar_issues: [{issue: string, suggestion: string}],\n"
+    "  strengths: [specific things done well],\n"
+    "  weaknesses: [specific things to improve],\n"
+    "  recommendations: [actionable improvements, ordered by impact],\n"
+    "  missing_info: [what's missing — disclaimers, SEBI reg, contact details, hashtags],\n"
+    "  rewrite_suggestions: [{original: string, suggested: string, reason: string}] (top 3 sentences to rewrite),\n"
+    "  publish_ready: boolean,\n"
+    "  summary: string (2-3 sentence verdict)\n"
+    "}."
 )
 
 VALIDATOR_IMAGE_SYSTEM = (
@@ -1976,7 +2121,7 @@ def validator_text(payload: dict = Body(...)):
     if not content:
         raise HTTPException(400, "content required")
     try:
-        return ai_mod.chat_json(VALIDATOR_TEXT_SYSTEM, f"Review this content:\n\n{content}", max_tokens=2500)
+        return ai_mod.chat_json(VALIDATOR_TEXT_SYSTEM, f"Review this content thoroughly:\n\n{content}", max_tokens=4000, temperature=0.5)
     except Exception as e:
         raise HTTPException(502, f"AI error: {e}")
 
