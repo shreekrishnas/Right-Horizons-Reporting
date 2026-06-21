@@ -1649,6 +1649,99 @@ def ideas_seen():
     return {"ok": True}
 
 
+@app.get("/api/ideas/lab/generate")
+def ideas_lab_generate(
+    domain: str = "rh",
+    topic: str = "",
+    audience: str = "",
+    content_type: str = "LinkedIn carousel",
+    goal: str = "Awareness",
+    source: str = "Manual topic",
+    context: str = "",
+):
+    if not ai_mod:
+        raise HTTPException(503, "AI module not available")
+    domain_label = DOMAINS.get(domain, {}).get("label", domain)
+    sys_prompt = (
+        "You are a senior content strategist for a financial services firm. "
+        "Generate 6 structured content idea cards as a JSON array. Each idea must have these exact fields:\n"
+        "- title: clear content idea title\n"
+        "- format: content format (e.g. LinkedIn carousel, Blog, Short video, YouTube video, Email, Social post, Ad creative)\n"
+        "- group: one of Social, Video, Blog, Seasonal\n"
+        "- audience: target audience\n"
+        "- hook: opening hook line that a writer can use immediately\n"
+        "- angle: content angle (e.g. Educational, Problem-solution, Myth-busting, Checklist, Expert opinion, Comparison, Mistakes to avoid)\n"
+        "- score: quality score 78-95\n"
+        "- cta: suggested call to action\n"
+        "- visual_direction: specific visual/design direction for the design team\n"
+        "- compliance_reminder: finance compliance caution\n"
+        "- why_it_works: why this idea is effective for the audience\n"
+        "- slide_flow: array of 5-6 slide/section titles\n"
+        "- scores: object with keys 'Audience fit', 'Clarity', 'Platform fit', 'Conversion potential', 'Compliance safety' each 75-95\n"
+        "Make ideas specific and actionable, not generic. Each idea should be strong enough for a content writer to start working immediately."
+    )
+    user_msg = (
+        f"Client: {domain_label}\nGoal: {goal}\nContent type: {content_type}\n"
+        f"Topic source: {source}\nTopic: {topic}\nAudience: {audience}\n"
+    )
+    if context:
+        user_msg += f"Extra context: {context}\n"
+    try:
+        items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=4000)
+        items = _unwrap_items(items)
+        return {"ideas": items, "domain": domain, "topic": topic}
+    except Exception as e:
+        raise HTTPException(502, f"AI error: {e}")
+
+
+@app.post("/api/ideas/lab/webinar")
+def ideas_lab_webinar(body: dict = Body(...)):
+    if not ai_mod:
+        raise HTTPException(503, "AI module not available")
+    text = body.get("text", "")
+    domain = body.get("domain", "rh")
+    domain_label = DOMAINS.get(domain, {}).get("label", domain)
+    sys_prompt = (
+        "You are a content repurposing expert. Given a webinar transcript or key points, "
+        "generate a content repurposing pack as a JSON array. Create diverse content pieces:\n"
+        "- 3-5 LinkedIn posts\n- 2-3 carousel ideas\n- 3-5 short video/Shorts ideas\n"
+        "- 1-2 blog ideas\n- 2-3 email subject lines\n- 3-5 quote card ideas\n\n"
+        "Each item must have: title, format (LinkedIn post/Carousel/Short video/Blog/Email/Quote card), "
+        "description (actionable direction), hook (if applicable).\n"
+        "Make each piece specific and usable, not generic."
+    )
+    user_msg = f"Client: {domain_label}\n\nWebinar content:\n{text[:6000]}"
+    try:
+        items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=4000)
+        items = _unwrap_items(items)
+        return {"ideas": items, "domain": domain}
+    except Exception as e:
+        raise HTTPException(502, f"AI error: {e}")
+
+
+@app.post("/api/ideas/lab/seo")
+def ideas_lab_seo(body: dict = Body(...)):
+    if not ai_mod:
+        raise HTTPException(503, "AI module not available")
+    keywords = body.get("keywords", "")
+    domain = body.get("domain", "rh")
+    domain_label = DOMAINS.get(domain, {}).get("label", domain)
+    sys_prompt = (
+        "You are an SEO content strategist. Given a list of SEO keywords, "
+        "generate content ideas as a JSON array. For each keyword, create 1-2 ideas.\n"
+        "Each item must have: title, format (Blog/Carousel/Short video/LinkedIn post/FAQ), "
+        "description (actionable direction including search intent, internal linking angle, and CTA suggestion).\n"
+        "Focus on search intent and topical authority."
+    )
+    user_msg = f"Client: {domain_label}\n\nKeywords:\n{keywords[:3000]}"
+    try:
+        items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=4000)
+        items = _unwrap_items(items)
+        return {"ideas": items, "domain": domain}
+    except Exception as e:
+        raise HTTPException(502, f"AI error: {e}")
+
+
 # ── Content Validator ────────────────────────────────────────────────────────
 
 _RH_BRAND_GUIDELINES = """

@@ -358,7 +358,7 @@ function switchView(view) {
         b.classList.toggle('active', b.dataset.view === view);
     });
     const subtitles = {
-        dashboard: 'Dashboard', analytics: 'Analytics', calendar: 'Content Calendar', ideas: 'Creative Ideas',
+        dashboard: 'Dashboard', analytics: 'Analytics', calendar: 'Content Calendar', ideas: 'Idea Lab',
         validator: 'Content Validator', reports: 'Reports & Analytics', settings: 'Settings'
     };
     const sub = document.getElementById('topbar-sub');
@@ -1793,34 +1793,346 @@ function renderCalendarTable(items) {
     });
 }
 
-// ── Ideas ──
-function setIdeaCat(c) {
-    ideaCat = c;
-    document.querySelectorAll('[data-ideacat]').forEach(b => b.classList.toggle('active', b.dataset.ideacat === c));
+// ── Idea Lab ──
+let _ilIdeas = [];
+let _ilSavedIdeas = [];
+let _ilSelectedId = null;
+let _ilFilter = 'All';
+const IL_LS_KEY = 'idea_lab_saved_ideas';
+
+try { _ilSavedIdeas = JSON.parse(localStorage.getItem(IL_LS_KEY) || '[]'); } catch(e) { _ilSavedIdeas = []; }
+function _ilPersistSaved() { localStorage.setItem(IL_LS_KEY, JSON.stringify(_ilSavedIdeas)); }
+
+function switchILTab(tab) {
+    document.querySelectorAll('.il-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.ilTab === tab));
+    document.querySelectorAll('.il-tab-panel').forEach(p => p.classList.remove('il-active'));
+    const panel = document.getElementById('il-tab-' + tab);
+    if (panel) panel.classList.add('il-active');
+    if (tab === 'library') _ilRenderLibrary();
+    if (tab === 'seasonal') _ilRenderSeasonal();
 }
 
-async function generateIdeas() {
-    const grid = document.getElementById('ideas-grid');
-    grid.innerHTML = '<div class="empty-state"><p>Generating ideas…</p></div>';
-    try {
-        const data = await api(`/api/ideas/generate?domain=${currentDomain}&category=${ideaCat}`);
-        const items = data.items || [];
-        if (!items.length) { grid.innerHTML = '<div class="empty-state"><p>No ideas.</p></div>'; return; }
-        grid.innerHTML = items.map(it => `
-            <div class="glass-card-static" style="padding:1.25rem; display:flex; flex-direction:column; gap:0.5rem;">
-                <div style="font-size:0.7rem; font-weight:800; color:var(--accent-primary); letter-spacing:0.08em;">${esc((it.type || '').toUpperCase())}</div>
-                <div style="font-weight:700; font-size:0.95rem;">${esc(it.title || '')}</div>
-                <div style="color:var(--text-muted); font-size:0.8rem; line-height:1.5;">${esc(it.description || '')}</div>
-                <div style="display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:0.25rem;">
-                    ${(it.hashtags || []).map(h => `<span style="background:var(--accent-primary-soft); color:var(--accent-primary); padding:0.15rem 0.5rem; border-radius:9999px; font-size:0.7rem;">${esc(h)}</span>`).join('')}
-                </div>
-                <div style="margin-top:0.25rem; font-size:0.75rem; color:var(--text-muted);">Best on: <strong>${esc(it.best_platform || '-')}</strong></div>
-            </div>
-        `).join('');
-        checkIdeasNotifications();
-    } catch (e) {
-        grid.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
+function setILFilter(f) {
+    _ilFilter = f;
+    document.querySelectorAll('#il-format-filters .il-chip').forEach(b => b.classList.toggle('active', b.dataset.ilFilter === f));
+    _ilRenderIdeas();
+}
+
+function _ilMakeIdea(id, title, format, group, audience, hook, angle, score, cta, visual, compliance) {
+    return {
+        id, title, format, group, audience, hook, angle, score, cta, visual, compliance,
+        why: `This idea works because it speaks to a specific ${(audience||'').toLowerCase()} concern, uses a clear ${(angle||'').toLowerCase()} angle, and connects naturally to the selected campaign goal.`,
+        slides: ['Hook slide', 'Core problem', 'Insight 1', 'Insight 2', 'Expert tip', 'CTA / next step'],
+        scores: { 'Audience fit': score, 'Clarity': Math.max(78, score - 5), 'Platform fit': Math.max(76, score - 7), 'Conversion potential': Math.max(74, score - 3), 'Compliance safety': Math.max(80, score - 1) }
+    };
+}
+
+function _ilRenderIdeas() {
+    const grid = document.getElementById('il-idea-grid');
+    if (!grid) return;
+    const filtered = _ilFilter === 'All' ? _ilIdeas : _ilIdeas.filter(x => x.group === _ilFilter || (_ilFilter === 'Social' && ['LinkedIn carousel', 'Social post', 'Email'].includes(x.format)));
+    const metricGen = document.getElementById('il-metric-generated');
+    const metricScore = document.getElementById('il-metric-score');
+    const metricSaved = document.getElementById('il-metric-saved');
+    const metricFit = document.getElementById('il-metric-fit');
+    if (metricGen) metricGen.textContent = filtered.length;
+    if (metricScore) metricScore.textContent = filtered.length ? Math.max(...filtered.map(x => x.score)) : '--';
+    if (metricSaved) metricSaved.textContent = _ilSavedIdeas.length;
+    if (metricFit) metricFit.textContent = (document.getElementById('il-type')?.value || '--').replace('LinkedIn ', '');
+
+    if (!filtered.length) {
+        grid.innerHTML = '<div class="il-empty-state" style="grid-column:1/-1">Click "Generate usable ideas" to get structured content directions.</div>';
+        return;
     }
+    grid.innerHTML = filtered.map(x => `
+        <article class="il-idea-card ${_ilSelectedId === x.id ? 'selected' : ''}" onclick="selectILIdea('${x.id}')">
+            <div class="il-card-top">
+                <span class="il-badge il-badge-purple">${esc(x.format)}</span>
+                <div class="il-score" style="--score:${x.score}"><strong>${x.score}</strong><span>score</span></div>
+            </div>
+            <h3>${esc(x.title)}</h3>
+            <p>${esc(x.hook)}</p>
+            <div class="il-idea-meta">
+                <span class="il-badge il-badge-green">${esc(x.angle)}</span>
+                <span class="il-badge il-badge-blue">${esc(x.audience)}</span>
+            </div>
+            <div class="il-info-list">
+                <div class="il-info-row"><b>CTA</b><span>${esc(x.cta)}</span></div>
+                <div class="il-info-row"><b>Why</b><span>${esc(x.why)}</span></div>
+            </div>
+            <div class="il-card-actions" onclick="event.stopPropagation()">
+                <button class="il-btn il-btn-small" onclick="copyILIdea('${x.id}')">Copy</button>
+                <button class="il-btn il-btn-small" onclick="saveILIdea('${x.id}')">Save</button>
+                <button class="il-btn il-btn-small" onclick="copyILGenerated('caption','${x.id}')">Caption</button>
+                <button class="il-btn il-btn-small" onclick="copyILGenerated('outline','${x.id}')">Outline</button>
+            </div>
+        </article>
+    `).join('');
+}
+
+function selectILIdea(id) {
+    _ilSelectedId = id;
+    _ilRenderIdeas();
+    const x = _ilIdeas.find(i => i.id === id) || _ilSavedIdeas.find(i => i.id === id);
+    _ilRenderDetail(x);
+}
+
+function _ilRenderDetail(x) {
+    const host = document.getElementById('il-detail-panel');
+    if (!host) return;
+    if (!x) { host.innerHTML = '<div class="il-detail-empty">Select an idea card to see the full brief.</div>'; return; }
+    host.innerHTML = `
+        <div class="il-detail-title">
+            <div><h2>${esc(x.title)}</h2><p>${esc(x.format)} · ${esc(x.audience)}</p></div>
+            <div class="il-score" style="--score:${x.score}"><strong>${x.score}</strong><span>score</span></div>
+        </div>
+        <div class="il-detail-block"><h4>Hook</h4><p>${esc(x.hook)}</p></div>
+        <div class="il-detail-block"><h4>Why this works</h4><p>${esc(x.why)}</p></div>
+        <div class="il-detail-block"><h4>Suggested flow</h4><ul class="il-steps">${x.slides.map((s, i) => `<li><span>${i + 1}</span>${esc(s)}</li>`).join('')}</ul></div>
+        <div class="il-detail-block"><h4>Visual direction</h4><p>${esc(x.visual)}</p></div>
+        <div class="il-detail-block"><h4>CTA</h4><p>${esc(x.cta)}</p></div>
+        <div class="il-detail-block"><h4>Compliance reminder</h4><p>${esc(x.compliance)}</p></div>
+        <div class="il-detail-block"><h4>Score breakdown</h4><div class="il-score-bars">${Object.entries(x.scores).map(([k, v]) => `<div class="il-scorebar"><span>${k}</span><div class="il-track"><div class="il-fill" style="--w:${v}%"></div></div><b>${v}</b></div>`).join('')}</div></div>
+        <div class="il-detail-block"><div class="il-card-actions">
+            <button class="il-btn il-btn-small" onclick="copyILIdea('${x.id}')">Copy idea</button>
+            <button class="il-btn il-btn-small" onclick="saveILIdea('${x.id}')">Save to library</button>
+            <button class="il-btn il-btn-small" onclick="copyILGenerated('carousel','${x.id}')">Carousel outline</button>
+            <button class="il-btn il-btn-small" onclick="copyILGenerated('blog','${x.id}')">Blog outline</button>
+        </div></div>
+    `;
+}
+
+async function generateILIdeas() {
+    const topic = document.getElementById('il-topic')?.value?.trim() || 'NRI planning';
+    const audience = document.getElementById('il-audience')?.value?.trim() || 'target audience';
+    const type = document.getElementById('il-type')?.value || 'LinkedIn carousel';
+    const goal = document.getElementById('il-goal')?.value || 'Awareness';
+    const source = document.getElementById('il-source')?.value || 'Manual topic';
+    const client = document.getElementById('il-client')?.value || 'rh';
+    const context = document.getElementById('il-context')?.value?.trim() || '';
+
+    const grid = document.getElementById('il-idea-grid');
+    if (grid) grid.innerHTML = '<div class="il-empty-state" style="grid-column:1/-1">Generating ideas…</div>';
+
+    try {
+        const qs = `?domain=${client}&topic=${encodeURIComponent(topic)}&audience=${encodeURIComponent(audience)}&content_type=${encodeURIComponent(type)}&goal=${encodeURIComponent(goal)}&source=${encodeURIComponent(source)}&context=${encodeURIComponent(context)}`;
+        const data = await api(`/api/ideas/lab/generate${qs}`);
+        const items = data.ideas || data.items || [];
+        if (items.length) {
+            _ilIdeas = items.map((it, i) => ({
+                id: 'ai' + Date.now() + i,
+                title: it.title || '',
+                format: it.format || type,
+                group: it.group || (type.includes('video') || type.includes('YouTube') ? 'Video' : type.includes('Blog') ? 'Blog' : 'Social'),
+                audience: it.audience || audience,
+                hook: it.hook || '',
+                angle: it.angle || 'Educational',
+                score: it.score || (85 + Math.floor(Math.random() * 10)),
+                cta: it.cta || '',
+                visual: it.visual || it.visual_direction || '',
+                compliance: it.compliance || it.compliance_reminder || '',
+                why: it.why || it.why_it_works || `This idea works because it targets ${audience} with a clear ${it.angle || 'educational'} angle.`,
+                slides: it.slides || it.slide_flow || ['Hook slide', 'Core problem', 'Insight 1', 'Insight 2', 'Expert tip', 'CTA'],
+                scores: it.scores || { 'Audience fit': 88, 'Clarity': 85, 'Platform fit': 82, 'Conversion potential': 84, 'Compliance safety': 90 }
+            }));
+        } else {
+            _ilGenerateFallbackIdeas(topic, audience, type, goal, source);
+        }
+    } catch (e) {
+        _ilGenerateFallbackIdeas(topic, audience, type, goal, source);
+    }
+
+    _ilFilter = 'All';
+    _ilSelectedId = null;
+    document.querySelectorAll('#il-format-filters .il-chip').forEach(b => b.classList.toggle('active', b.dataset.ilFilter === 'All'));
+    _ilRenderIdeas();
+    _ilRenderDetail(null);
+    _ilToast(`Generated ideas for "${goal}"`);
+}
+
+function _ilGenerateFallbackIdeas(topic, audience, type, goal, source) {
+    const t = Date.now();
+    _ilIdeas = [
+        _ilMakeIdea(t+'a', `5 ${topic} mistakes ${audience} should avoid`, type, type.includes('video')||type.includes('YouTube')?'Video':type.includes('Blog')?'Blog':'Social', audience, `Thinking about ${topic}? Avoid these mistakes before you make a decision.`, 'Mistakes to avoid', 90, 'Book a consultation / register for the session.', 'Clean visual hierarchy, finance icons, simple chart cues, and strong first-slide hook.', 'Avoid guaranteed language and add disclaimer when investment advice is mentioned.'),
+        _ilMakeIdea(t+'b', `${topic}: The simple checklist for ${audience}`, 'LinkedIn carousel', 'Social', audience, `Here is a simple checklist to make ${topic.toLowerCase()} less confusing.`, 'Checklist', 88, 'Save this checklist and join the next webinar.', 'Use checklist cards with numbered sections and calm finance colors.', 'Keep educational, avoid overclaiming outcomes.'),
+        _ilMakeIdea(t+'c', `What ${audience} often misunderstand about ${topic}`, 'Short video', 'Video', audience, `Most people understand ${topic.toLowerCase()} too late. Here is what to know earlier.`, 'Myth-busting', 85, 'Watch the full discussion or speak to an advisor.', 'Use speaker-led video with on-screen myth/fact labels.', 'Avoid personalized financial advice.'),
+        _ilMakeIdea(t+'d', `${topic}: A practical guide for ${audience}`, 'Blog', 'Blog', audience, `A practical, jargon-free guide to ${topic.toLowerCase()} for ${audience.toLowerCase()}.`, 'Educational', 87, 'Read the full guide or connect with the team.', 'Use long-form blog structure with tables, examples, and FAQ section.', 'Make tax/investment claims general and carefully worded.'),
+        _ilMakeIdea(t+'e', `Why ${topic} matters now`, 'Social post', 'Social', audience, `Why ${topic.toLowerCase()} should be reviewed now, not later.`, 'Timely insight', 83, 'Save this post and attend the upcoming session.', 'Single image or carousel with clear problem statement and expert POV.', 'Use cautious language around market and tax outcomes.'),
+        _ilMakeIdea(t+'f', `${topic} explained in 60 seconds`, 'YouTube video', 'Video', audience, `If ${topic.toLowerCase()} feels complicated, start with these basics.`, 'Quick explainer', 86, 'Subscribe and join the webinar for deeper guidance.', 'Animated explainer with 3 core points and one CTA frame.', 'Keep guidance educational, not advisory.')
+    ];
+}
+
+function saveILIdea(id) {
+    const x = _ilIdeas.find(i => i.id === id) || _ilSavedIdeas.find(i => i.id === id);
+    if (!x) return;
+    if (!_ilSavedIdeas.some(s => s.title === x.title)) {
+        _ilSavedIdeas.unshift({ ...x, id: 's' + Date.now() });
+        _ilPersistSaved();
+        _ilToast('Saved to Idea Library');
+    } else {
+        _ilToast('Already saved');
+    }
+    _ilRenderIdeas();
+}
+
+function copyILIdea(id) {
+    const x = _ilIdeas.find(i => i.id === id) || _ilSavedIdeas.find(i => i.id === id);
+    if (!x) return;
+    _copyToClipboard(`${x.title}\nFormat: ${x.format}\nAudience: ${x.audience}\nHook: ${x.hook}\nCTA: ${x.cta}\nWhy: ${x.why}\nVisual: ${x.visual}\nCompliance: ${x.compliance}`);
+    _ilToast('Idea copied');
+}
+
+function copyILGenerated(kind, id) {
+    const x = _ilIdeas.find(i => i.id === id) || _ilSavedIdeas.find(i => i.id === id);
+    if (!x) return;
+    let text = '';
+    if (kind === 'caption') text = `Caption direction for ${x.title}:\n\n${x.hook}\n\nUse a short educational intro, 3 practical points, and close with: ${x.cta}`;
+    else if (kind === 'outline' || kind === 'carousel') text = `Carousel outline for ${x.title}:\n${x.slides.map((s, i) => `${i + 1}. ${s}`).join('\n')}`;
+    else text = `Blog outline for ${x.title}:\nH1: ${x.title}\nIntro\nWhy this matters\nKey points\nCommon mistakes\nCTA\nFAQ`;
+    _copyToClipboard(text);
+    _ilToast(`${kind} copied`);
+}
+
+function _ilRenderLibrary() {
+    const host = document.getElementById('il-library-grid');
+    if (!host) return;
+    const metricSaved = document.getElementById('il-metric-saved');
+    if (metricSaved) metricSaved.textContent = _ilSavedIdeas.length;
+    if (!_ilSavedIdeas.length) {
+        host.innerHTML = '<div class="il-empty-state" style="grid-column:1/-1">No saved ideas yet. Save useful idea cards from Generate Ideas.</div>';
+        return;
+    }
+    host.innerHTML = _ilSavedIdeas.map(x => _ilMiniCard(x.title, x.format, x.hook, `<button class="il-btn il-btn-small" onclick="copyILIdea('${x.id}')">Copy</button><button class="il-btn il-btn-small" onclick="_ilDeleteSaved('${x.id}')">Delete</button>`)).join('');
+}
+
+function _ilDeleteSaved(id) {
+    _ilSavedIdeas = _ilSavedIdeas.filter(x => x.id !== id);
+    _ilPersistSaved();
+    _ilRenderLibrary();
+    _ilRenderIdeas();
+    _ilToast('Removed from library');
+}
+
+function _ilRenderSeasonal() {
+    const data = [
+        ['Budget season: Tax planning checklist', 'Blog + carousel', 'Use Budget changes as a practical planning hook, not a generic news post.'],
+        ["Father's Day: Financial lessons from fathers", 'Social creative', 'Emotional but still brand-safe, with a finance lesson angle.'],
+        ['Financial year-end: Portfolio review reminder', 'Email + LinkedIn', 'Position as a timely review checklist before the year closes.'],
+        ['Independence Day: Financial independence angle', 'Carousel', 'Tie the occasion to long-term planning without forced patriotism.'],
+        ['Diwali: Wealth planning for families', 'Social + email', 'Family wealth, gifting, and goal planning angle.'],
+        ['NRI return-to-India season', 'Webinar promo', 'Use school/job relocation months as a planning trigger.']
+    ];
+    const host = document.getElementById('il-seasonal-grid');
+    if (host) host.innerHTML = data.map(x => _ilMiniCard(x[0], x[1], x[2], '<button class="il-btn il-btn-small">Use angle</button>')).join('');
+}
+
+async function generateILWebinarIdeas() {
+    const text = document.getElementById('il-webinar-text')?.value?.trim();
+    if (!text) { _ilToast('Paste webinar content first'); return; }
+    const kpis = document.getElementById('il-webinar-kpis');
+    const grid = document.getElementById('il-webinar-grid');
+    if (grid) grid.innerHTML = '<div class="il-empty-state" style="grid-column:1/-1">Generating repurposing pack…</div>';
+
+    try {
+        const data = await api('/api/ideas/lab/webinar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, domain: document.getElementById('il-client')?.value || 'rh' }) });
+        const items = data.ideas || data.items || [];
+        if (items.length) {
+            const counts = {};
+            items.forEach(it => { const f = it.format || 'Content'; counts[f] = (counts[f] || 0) + 1; });
+            if (kpis) kpis.innerHTML = Object.entries(counts).map(([k, v]) => `<span class="il-kpi">${v} ${esc(k)}${v > 1 ? 's' : ''}</span>`).join('');
+            if (grid) grid.innerHTML = items.map(x => _ilMiniCard(x.title || '', x.format || '', x.description || x.hook || '', `<button class="il-btn il-btn-small" onclick="_copyToClipboard('${esc((x.title||'').replace(/'/g,"\\'"))}')">Copy</button>`)).join('');
+            _ilToast('Webinar repurposing pack generated');
+            return;
+        }
+    } catch (e) {}
+
+    // Fallback
+    const items = [
+        ['LinkedIn post', 'Key takeaway from the webinar', 'Use as a thought-leadership post from the speaker.'],
+        ['Carousel', 'Checklist from webinar topics', 'Convert the webinar into a checklist carousel.'],
+        ['Short video', 'Quick explainer from transcript', '45-second educational clip from transcript.'],
+        ['Blog', 'Full guide from webinar content', 'Long-form SEO article from webinar key points.'],
+        ['Email', 'Follow-up email from webinar', 'Use for webinar follow-up or nurture email.'],
+        ['Quote card', 'Expert quote from the session', 'Use as expert quote creative.']
+    ];
+    if (kpis) kpis.innerHTML = '<span class="il-kpi">1 LinkedIn post</span><span class="il-kpi">1 Carousel</span><span class="il-kpi">1 Short</span><span class="il-kpi">1 Blog</span><span class="il-kpi">1 Email</span><span class="il-kpi">1 Quote card</span>';
+    if (grid) grid.innerHTML = items.map(x => _ilMiniCard(x[1], x[0], x[2], '<button class="il-btn il-btn-small">Copy</button>')).join('');
+    _ilToast('Webinar repurposing pack generated');
+}
+
+async function generateILSeoIdeas() {
+    const text = document.getElementById('il-seo-text')?.value?.trim();
+    if (!text) { _ilToast('Enter SEO keywords first'); return; }
+    const grid = document.getElementById('il-seo-grid');
+    if (grid) grid.innerHTML = '<div class="il-empty-state" style="grid-column:1/-1">Generating SEO ideas…</div>';
+
+    try {
+        const data = await api('/api/ideas/lab/seo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keywords: text, domain: document.getElementById('il-client')?.value || 'rh' }) });
+        const items = data.ideas || data.items || [];
+        if (items.length) {
+            if (grid) grid.innerHTML = items.map(x => _ilMiniCard(x.title || '', x.format || '', x.description || '', `<button class="il-btn il-btn-small" onclick="_copyToClipboard('${esc((x.title||'').replace(/'/g,"\\'"))}')">Copy idea</button>`)).join('');
+            _ilToast('SEO ideas generated');
+            return;
+        }
+    } catch (e) {}
+
+    // Fallback
+    const raw = text.split('\n').map(x => x.trim()).filter(Boolean);
+    if (grid) grid.innerHTML = raw.slice(0, 6).map((kw, i) => _ilMiniCard(kw.charAt(0).toUpperCase() + kw.slice(1), i % 2 ? 'Blog outline' : 'Carousel idea', `Create content around search intent for "${kw}". Include FAQ, internal links, and a clear CTA.`, '<button class="il-btn il-btn-small">Copy idea</button>')).join('');
+    _ilToast('SEO ideas generated');
+}
+
+function _ilMiniCard(title, type, desc, actions) {
+    return `<article class="il-mini-card"><span class="il-badge il-badge-orange">${esc(type)}</span><h3>${esc(title)}</h3><p>${esc(desc)}</p><div class="il-card-actions">${actions || ''}</div></article>`;
+}
+
+function loadILWebinarPreset() {
+    const s = id => document.getElementById(id);
+    if (s('il-source')) s('il-source').value = 'Existing webinar';
+    if (s('il-goal')) s('il-goal').value = 'Webinar registrations';
+    if (s('il-type')) s('il-type').value = 'LinkedIn carousel';
+    if (s('il-topic')) s('il-topic').value = 'NRI retirement planning';
+    if (s('il-audience')) s('il-audience').value = 'Middle East NRIs';
+    _ilToast('Webinar preset loaded');
+}
+
+function loadILSeoPreset() {
+    const s = id => document.getElementById(id);
+    if (s('il-source')) s('il-source').value = 'SEO keyword';
+    if (s('il-goal')) s('il-goal').value = 'SEO traffic';
+    if (s('il-type')) s('il-type').value = 'Blog';
+    if (s('il-topic')) s('il-topic').value = 'NRI tax planning in India';
+    if (s('il-audience')) s('il-audience').value = 'NRIs investing in India';
+    _ilToast('SEO preset loaded');
+}
+
+function resetIdeaLab() {
+    localStorage.removeItem(IL_LS_KEY);
+    _ilSavedIdeas = [];
+    _ilIdeas = [];
+    _ilSelectedId = null;
+    _ilFilter = 'All';
+    document.querySelectorAll('#il-format-filters .il-chip').forEach(b => b.classList.toggle('active', b.dataset.ilFilter === 'All'));
+    _ilRenderIdeas();
+    _ilRenderDetail(null);
+    _ilRenderLibrary();
+    ['il-topic', 'il-audience', 'il-context'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    _ilToast('Idea Lab reset');
+}
+
+function copyIdeaLabBrief() {
+    _copyToClipboard('Idea Lab generates usable idea cards with title, format, audience, hook, CTA, why it works, visual direction, compliance reminder, score, detail view, webinar repurposing, SEO ideas, and saved library.');
+    _ilToast('Section brief copied');
+}
+
+let _ilToastTimer;
+function _ilToast(msg) {
+    let el = document.getElementById('il-toast');
+    if (!el) { el = document.createElement('div'); el.id = 'il-toast'; el.className = 'il-toast'; document.body.appendChild(el); }
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(_ilToastTimer);
+    _ilToastTimer = setTimeout(() => el.classList.remove('show'), 2200);
 }
 
 async function checkIdeasNotifications() {

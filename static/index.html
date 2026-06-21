@@ -49,7 +49,7 @@
             </button>
             <button class="sidebar-item" data-view="ideas" onclick="switchView('ideas')" style="position:relative;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 00-4 12.7c.6.5 1 1.2 1 2v.3h6V17c0-.8.4-1.5 1-2A7 7 0 0012 2z"/></svg>
-                <span class="sidebar-tooltip">Creative Ideas</span>
+                <span class="sidebar-tooltip">Idea Lab</span>
                 <span id="ideas-badge" style="display:none; position:absolute; top:6px; right:6px; background:#ef4444; color:#fff; font-size:0.6rem; font-weight:800; padding:2px 5px; border-radius:9999px; min-width:14px; text-align:center;"></span>
             </button>
             <button class="sidebar-item" data-view="validator" onclick="switchView('validator')">
@@ -546,23 +546,220 @@
                 </div>
             </div>
 
-            <!-- ═══ Creative Ideas view ═══ -->
+            <!-- ═══ Idea Lab view ═══ -->
             <div id="view-ideas" style="display:none">
-                <div class="section page-enter">
-                    <div class="section-label">Creative Ideas</div>
-                    <div class="glass-card-static" style="padding:1.5rem; margin-bottom:1.5rem;">
-                        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
-                            <button class="dr-btn active" data-ideacat="all" onclick="setIdeaCat('all')">All</button>
-                            <button class="dr-btn" data-ideacat="social" onclick="setIdeaCat('social')">Social</button>
-                            <button class="dr-btn" data-ideacat="video" onclick="setIdeaCat('video')">Video</button>
-                            <button class="dr-btn" data-ideacat="blog" onclick="setIdeaCat('blog')">Blog</button>
-                            <button class="dr-btn" data-ideacat="seasonal" onclick="setIdeaCat('seasonal')">Seasonal</button>
-                            <button class="btn-export" style="margin-left:auto;" onclick="generateIdeas()">Generate Ideas</button>
+                <div class="section page-enter il-root">
+
+                    <!-- Topbar -->
+                    <header class="il-topbar">
+                        <div>
+                            <span class="il-eyebrow">✦ Idea Lab</span>
+                            <h1 class="il-h1">Idea Lab</h1>
+                            <p class="il-subtext">Turn topics, webinars, SEO keywords, seasonal moments, and high-performing content into usable campaign ideas with hooks, CTAs, visual direction, and finance-safe reminders.</p>
                         </div>
-                    </div>
-                    <div id="ideas-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:1rem;">
-                        <div class="empty-state"><p>Click "Generate Ideas" to get fresh content ideas.</p></div>
-                    </div>
+                        <div class="il-header-actions">
+                            <button class="il-btn" onclick="copyIdeaLabBrief()">Copy section brief</button>
+                            <button class="il-btn il-btn-dark" onclick="resetIdeaLab()">Reset</button>
+                        </div>
+                    </header>
+
+                    <!-- Main Tabs -->
+                    <nav class="il-nav-tabs">
+                        <button class="il-tab-btn active" data-il-tab="generate" onclick="switchILTab('generate')">Generate Ideas</button>
+                        <button class="il-tab-btn" data-il-tab="library" onclick="switchILTab('library')">Idea Library</button>
+                        <button class="il-tab-btn" data-il-tab="seasonal" onclick="switchILTab('seasonal')">Seasonal Ideas</button>
+                        <button class="il-tab-btn" data-il-tab="webinar" onclick="switchILTab('webinar')">Webinar Repurposing</button>
+                        <button class="il-tab-btn" data-il-tab="seo" onclick="switchILTab('seo')">SEO Content Ideas</button>
+                    </nav>
+
+                    <!-- TAB: Generate Ideas -->
+                    <section id="il-tab-generate" class="il-tab-panel il-active">
+                        <div class="il-grid">
+                            <!-- Left: Input Panel -->
+                            <aside class="il-panel">
+                                <div class="il-panel-title">
+                                    <div>
+                                        <h2>Idea input</h2>
+                                        <p>Give the lab a goal, format, and topic. The output becomes usable idea cards, not plain titles.</p>
+                                    </div>
+                                </div>
+
+                                <div class="il-field-group">
+                                    <label>Client</label>
+                                    <select id="il-client">
+                                        <option value="rh">Right Horizons</option>
+                                        <option value="pms">Right Horizons PMS</option>
+                                        <option value="aif">Right Horizons AIF</option>
+                                    </select>
+                                </div>
+
+                                <div class="il-field-group">
+                                    <label>Content Goal</label>
+                                    <select id="il-goal">
+                                        <option>Webinar registrations</option>
+                                        <option>Awareness</option>
+                                        <option>Lead generation</option>
+                                        <option>Engagement</option>
+                                        <option>SEO traffic</option>
+                                        <option>Thought leadership</option>
+                                        <option>YouTube growth</option>
+                                    </select>
+                                </div>
+
+                                <div class="il-field-group">
+                                    <label>Content Type</label>
+                                    <select id="il-type">
+                                        <option>LinkedIn carousel</option>
+                                        <option>Social post</option>
+                                        <option>Blog</option>
+                                        <option>Short video</option>
+                                        <option>YouTube video</option>
+                                        <option>Email</option>
+                                        <option>Ad creative</option>
+                                    </select>
+                                </div>
+
+                                <div class="il-field-group">
+                                    <label>Topic Source</label>
+                                    <select id="il-source">
+                                        <option>Manual topic</option>
+                                        <option>Existing webinar</option>
+                                        <option>High-performing content</option>
+                                        <option>Seasonal event</option>
+                                        <option>SEO keyword</option>
+                                        <option>Recent market trend</option>
+                                    </select>
+                                </div>
+
+                                <div class="il-field-group">
+                                    <label>Topic / Keyword</label>
+                                    <input class="il-input" id="il-topic" value="" placeholder="e.g. NRI retirement planning" />
+                                    <div class="il-quick-chips">
+                                        <button class="il-chip" onclick="document.getElementById('il-topic').value='Tax saving for NRIs'">Tax saving</button>
+                                        <button class="il-chip" onclick="document.getElementById('il-topic').value='Retirement planning for NRIs'">Retirement</button>
+                                        <button class="il-chip" onclick="document.getElementById('il-topic').value='PMS for HNIs'">PMS</button>
+                                    </div>
+                                </div>
+
+                                <div class="il-field-group">
+                                    <label>Audience</label>
+                                    <input class="il-input" id="il-audience" value="" placeholder="e.g. Middle East NRIs" />
+                                </div>
+
+                                <div class="il-field-group">
+                                    <label>Extra Context</label>
+                                    <textarea id="il-context" class="il-textarea" placeholder="Paste webinar notes, campaign angle, competitor reference, or any specific direction."></textarea>
+                                </div>
+
+                                <button class="il-btn il-btn-primary" style="width:100%" onclick="generateILIdeas()">✦ Generate usable ideas</button>
+                                <div class="il-input-footer">
+                                    <button class="il-btn il-btn-small" onclick="loadILWebinarPreset()">Use webinar preset</button>
+                                    <button class="il-btn il-btn-small" onclick="loadILSeoPreset()">Use SEO preset</button>
+                                </div>
+                                <div class="il-notice">No TODO actions here. Idea Lab only helps explore, refine, save, copy, and send ideas forward.</div>
+                            </aside>
+
+                            <!-- Center: Ideas Grid -->
+                            <main class="il-content-area">
+                                <div class="il-hero-metrics">
+                                    <div class="il-metric"><span>Ideas generated</span><strong id="il-metric-generated">0</strong><small>from current brief</small></div>
+                                    <div class="il-metric"><span>Strongest score</span><strong id="il-metric-score">--</strong><small>best idea quality</small></div>
+                                    <div class="il-metric"><span>Saved ideas</span><strong id="il-metric-saved">0</strong><small>local library</small></div>
+                                    <div class="il-metric"><span>Best fit</span><strong id="il-metric-fit">--</strong><small>for selected goal</small></div>
+                                </div>
+
+                                <div class="il-toolbar">
+                                    <div class="il-section-title">
+                                        <h2>Generated idea directions</h2>
+                                        <p>Use filters to review by format. Click any card to open the detailed creative brief.</p>
+                                    </div>
+                                    <div class="il-filters" id="il-format-filters">
+                                        <button class="il-chip active" data-il-filter="All" onclick="setILFilter('All')">All</button>
+                                        <button class="il-chip" data-il-filter="Social" onclick="setILFilter('Social')">Social</button>
+                                        <button class="il-chip" data-il-filter="Video" onclick="setILFilter('Video')">Video</button>
+                                        <button class="il-chip" data-il-filter="Blog" onclick="setILFilter('Blog')">Blog</button>
+                                        <button class="il-chip" data-il-filter="Seasonal" onclick="setILFilter('Seasonal')">Seasonal</button>
+                                    </div>
+                                </div>
+                                <div class="il-idea-grid" id="il-idea-grid">
+                                    <div class="il-empty-state" style="grid-column:1/-1">Click "Generate usable ideas" to get structured content directions.</div>
+                                </div>
+                            </main>
+
+                            <!-- Right: Detail Panel -->
+                            <aside class="il-side-panel" id="il-detail-panel">
+                                <div class="il-detail-empty">Select an idea card to see the full brief, slide flow, caption direction, visual direction, CTA, and scoring breakdown.</div>
+                            </aside>
+                        </div>
+                    </section>
+
+                    <!-- TAB: Idea Library -->
+                    <section id="il-tab-library" class="il-tab-panel">
+                        <div class="il-full-panel">
+                            <div class="il-section-title">
+                                <h2>Idea Library</h2>
+                                <p>Saved ideas live here. Save useful idea cards from Generate Ideas.</p>
+                            </div>
+                            <div id="il-library-grid" class="il-library-grid">
+                                <div class="il-empty-state" style="grid-column:1/-1">No saved ideas yet. Save useful idea cards from Generate Ideas.</div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- TAB: Seasonal Ideas -->
+                    <section id="il-tab-seasonal" class="il-tab-panel">
+                        <div class="il-full-panel">
+                            <div class="il-section-title">
+                                <h2>Seasonal Ideas</h2>
+                                <p>Use recurring moments as content hooks without making every idea festival-generic.</p>
+                            </div>
+                            <div class="il-seasonal-grid" id="il-seasonal-grid"></div>
+                        </div>
+                    </section>
+
+                    <!-- TAB: Webinar Repurposing -->
+                    <section id="il-tab-webinar" class="il-tab-panel">
+                        <div class="il-full-panel">
+                            <div class="il-section-title">
+                                <h2>Webinar Repurposing</h2>
+                                <p>Paste a webinar transcript or key points and convert one webinar into multiple content formats.</p>
+                            </div>
+                            <div class="il-webinar-layout">
+                                <div>
+                                    <label>Webinar transcript / key points</label>
+                                    <textarea id="il-webinar-text" class="il-textarea" style="min-height:250px" placeholder="Paste webinar title, speaker name, transcript, or key talking points..."></textarea>
+                                    <button class="il-btn il-btn-primary" style="margin-top:12px;width:100%" onclick="generateILWebinarIdeas()">Generate repurposing pack</button>
+                                </div>
+                                <div>
+                                    <div class="il-kpi-strip" id="il-webinar-kpis"></div>
+                                    <div class="il-webinar-grid" id="il-webinar-grid">
+                                        <div class="il-empty-state" style="grid-column:1/-1">Paste webinar content and click generate to create a repurposing pack.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- TAB: SEO Content Ideas -->
+                    <section id="il-tab-seo" class="il-tab-panel">
+                        <div class="il-full-panel">
+                            <div class="il-section-title">
+                                <h2>SEO Content Ideas</h2>
+                                <p>Convert SEO keywords into blog, carousel, YouTube, and social ideas with search intent clarity.</p>
+                            </div>
+                            <div class="il-webinar-layout">
+                                <div>
+                                    <label>SEO keyword / query list</label>
+                                    <textarea id="il-seo-text" class="il-textarea" style="min-height:220px" placeholder="Enter one keyword per line..."></textarea>
+                                    <button class="il-btn il-btn-primary" style="margin-top:12px;width:100%" onclick="generateILSeoIdeas()">Generate SEO ideas</button>
+                                </div>
+                                <div class="il-seo-grid" id="il-seo-grid">
+                                    <div class="il-empty-state" style="grid-column:1/-1">Enter SEO keywords and click generate.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
                 </div>
             </div>
 
