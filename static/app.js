@@ -1823,14 +1823,14 @@ function _ilMakeIdea(id, title, format, group, audience, hook, angle, score, cta
         id, title, format, group, audience, hook, angle, score, cta, visual, compliance,
         why: `This idea works because it speaks to a specific ${(audience||'').toLowerCase()} concern, uses a clear ${(angle||'').toLowerCase()} angle, and connects naturally to the selected campaign goal.`,
         slides: ['Hook slide', 'Core problem', 'Insight 1', 'Insight 2', 'Expert tip', 'CTA / next step'],
-        scores: { 'Audience fit': score, 'Clarity': Math.max(78, score - 5), 'Platform fit': Math.max(76, score - 7), 'Conversion potential': Math.max(74, score - 3), 'Compliance safety': Math.max(80, score - 1) }
+        scores: { 'Audience fit': score, 'Clarity': score - 5, 'Platform fit': score - 7, 'Conversion potential': score - 3, 'Compliance safety': score - 1 }
     };
 }
 
 function _ilRenderIdeas() {
     const grid = document.getElementById('il-idea-grid');
     if (!grid) return;
-    const filtered = _ilFilter === 'All' ? _ilIdeas : _ilIdeas.filter(x => x.group === _ilFilter || (_ilFilter === 'Social' && ['LinkedIn carousel', 'Social post', 'Email'].includes(x.format)));
+    const filtered = _ilFilter === 'All' ? _ilIdeas : _ilIdeas.filter(x => x.group === _ilFilter || (_ilFilter === 'Social' && ['LinkedIn carousel', 'Social post', 'Email'].includes(x.format)) || (_ilFilter === 'Seasonal' && x.group === 'Seasonal'));
     const metricGen = document.getElementById('il-metric-generated');
     const metricScore = document.getElementById('il-metric-score');
     const metricSaved = document.getElementById('il-metric-saved');
@@ -2023,7 +2023,7 @@ function _ilRenderSeasonal() {
         ['NRI return-to-India season', 'Webinar promo', 'Use school/job relocation months as a planning trigger.']
     ];
     const host = document.getElementById('il-seasonal-grid');
-    if (host) host.innerHTML = data.map(x => _ilMiniCard(x[0], x[1], x[2], '<button class="il-btn il-btn-small">Use angle</button>')).join('');
+    if (host) host.innerHTML = data.map(x => `${_ilMiniCard(x[0], x[1], x[2], `<button class="il-btn il-btn-small" data-angle="${esc(x[0])}" onclick="document.getElementById('il-topic').value=this.dataset.angle;switchILTab('generate');_ilToast('Angle loaded into topic')">Use angle</button>`)}`).join('');
 }
 
 async function generateILWebinarIdeas() {
@@ -2040,7 +2040,7 @@ async function generateILWebinarIdeas() {
             const counts = {};
             items.forEach(it => { const f = it.format || 'Content'; counts[f] = (counts[f] || 0) + 1; });
             if (kpis) kpis.innerHTML = Object.entries(counts).map(([k, v]) => `<span class="il-kpi">${v} ${esc(k)}${v > 1 ? 's' : ''}</span>`).join('');
-            if (grid) grid.innerHTML = items.map(x => _ilMiniCard(x.title || '', x.format || '', x.description || x.hook || '', `<button class="il-btn il-btn-small" onclick="_copyToClipboard('${esc((x.title||'').replace(/'/g,"\\'"))}')">Copy</button>`)).join('');
+            if (grid) grid.innerHTML = items.map(x => _ilMiniCard(x.title || '', x.format || '', x.description || x.hook || '', `<button class="il-btn il-btn-small" data-copy-text="${esc(x.title||'')}" onclick="_copyToClipboard(this.dataset.copyText)">Copy</button>`)).join('');
             _ilToast('Webinar repurposing pack generated');
             return;
         }
@@ -2056,7 +2056,7 @@ async function generateILWebinarIdeas() {
         ['Quote card', 'Expert quote from the session', 'Use as expert quote creative.']
     ];
     if (kpis) kpis.innerHTML = '<span class="il-kpi">1 LinkedIn post</span><span class="il-kpi">1 Carousel</span><span class="il-kpi">1 Short</span><span class="il-kpi">1 Blog</span><span class="il-kpi">1 Email</span><span class="il-kpi">1 Quote card</span>';
-    if (grid) grid.innerHTML = items.map(x => _ilMiniCard(x[1], x[0], x[2], '<button class="il-btn il-btn-small">Copy</button>')).join('');
+    if (grid) grid.innerHTML = items.map(x => _ilMiniCard(x[1], x[0], x[2], `<button class="il-btn il-btn-small" data-copy-text="${esc(x[1])}" onclick="_copyToClipboard(this.dataset.copyText)">Copy</button>`)).join('');
     _ilToast('Webinar repurposing pack generated');
 }
 
@@ -2070,7 +2070,7 @@ async function generateILSeoIdeas() {
         const data = await api('/api/ideas/lab/seo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keywords: text, domain: document.getElementById('il-client')?.value || 'rh' }) });
         const items = data.ideas || data.items || [];
         if (items.length) {
-            if (grid) grid.innerHTML = items.map(x => _ilMiniCard(x.title || '', x.format || '', x.description || '', `<button class="il-btn il-btn-small" onclick="_copyToClipboard('${esc((x.title||'').replace(/'/g,"\\'"))}')">Copy idea</button>`)).join('');
+            if (grid) grid.innerHTML = items.map(x => _ilMiniCard(x.title || '', x.format || '', x.description || '', `<button class="il-btn il-btn-small" data-copy-text="${esc(x.title||'')}" onclick="_copyToClipboard(this.dataset.copyText)">Copy idea</button>`)).join('');
             _ilToast('SEO ideas generated');
             return;
         }
@@ -2078,7 +2078,7 @@ async function generateILSeoIdeas() {
 
     // Fallback
     const raw = text.split('\n').map(x => x.trim()).filter(Boolean);
-    if (grid) grid.innerHTML = raw.slice(0, 6).map((kw, i) => _ilMiniCard(kw.charAt(0).toUpperCase() + kw.slice(1), i % 2 ? 'Blog outline' : 'Carousel idea', `Create content around search intent for "${kw}". Include FAQ, internal links, and a clear CTA.`, '<button class="il-btn il-btn-small">Copy idea</button>')).join('');
+    if (grid) grid.innerHTML = raw.slice(0, 6).map((kw, i) => { const t = kw.charAt(0).toUpperCase() + kw.slice(1); return _ilMiniCard(t, i % 2 ? 'Blog outline' : 'Carousel idea', `Create content around search intent for "${kw}". Include FAQ, internal links, and a clear CTA.`, `<button class="il-btn il-btn-small" data-copy-text="${esc(t)}" onclick="_copyToClipboard(this.dataset.copyText)">Copy idea</button>`); }).join('');
     _ilToast('SEO ideas generated');
 }
 
@@ -2324,7 +2324,7 @@ function _repDomain() {
 function _getSelectedChannels() {
     const chs = [];
     document.querySelectorAll('.rr-switch.on[data-channel]').forEach(el => {
-        chs.push(el.dataset.channel === 'seo' ? 'gsc' : el.dataset.channel);
+        chs.push(el.dataset.channel);
     });
     return chs.length ? chs.join(',') : 'gsc,ga4,meta,social,youtube';
 }
@@ -2469,12 +2469,11 @@ function _renderNextSteps(steps) {
     el.innerHTML = steps.map(s => {
         const title = typeof s === 'object' ? (s.title || s.text || '') : s;
         const detail = typeof s === 'object' ? (s.detail || s.description || '') : '';
-        const copyText = (title + (detail ? ' - ' + detail : '')).replace(/'/g, "\\'");
         return `<div class="rr-rec">
   <div><div class="rr-rec-title">${esc(title)}</div><div class="rr-rec-text">${esc(detail)}</div></div>
   <div class="rr-rec-actions">
     <button class="rr-small-btn active">Include</button>
-    <button class="rr-small-btn" onclick="_copyToClipboard('${copyText}')">Copy</button>
+    <button class="rr-small-btn" data-copy-rec="${esc(title + (detail ? ' - ' + detail : ''))}" onclick="_copyToClipboard(this.dataset.copyRec)">Copy</button>
     <button class="rr-small-btn">Internal note</button>
   </div>
 </div>`;
@@ -2494,12 +2493,15 @@ async function generateReport() {
     if (btn) { btn.disabled = true; btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px; animation:spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke-dasharray="31" stroke-dashoffset="10"/></svg> Generating…'; }
 
     try {
-        const qs = `?domain=${dom}&start=${start}&end=${end}&compare=${compare}&channels=${channels}`;
+        const purpose = document.getElementById('rep-purpose')?.value || 'client';
+        const qs = `?domain=${dom}&start=${start}&end=${end}&compare=${compare}&channels=${channels}&purpose=${purpose}`;
         _roomData = await api(`/api/reports/room${qs}`);
 
         // Hide empty state, show footer and preview tab
         if (empty) empty.style.display = 'none';
         if (footer) footer.style.display = '';
+        const lastBtn = document.getElementById('rr-preview-last-btn');
+        if (lastBtn) lastBtn.style.display = '';
         switchRRTab('preview');
 
         // Set preview to loading state
@@ -2515,8 +2517,14 @@ async function generateReport() {
         // Auto-generate AI summary
         generateExecSummary();
     } catch (e) {
-        // Show empty state with error
-        if (empty) { empty.style.display = ''; empty.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`; }
+        if (empty) {
+            empty.style.display = '';
+            const content = document.getElementById('rr-empty-content');
+            if (content) content.style.display = 'none';
+            let errEl = empty.querySelector('.rr-error-msg');
+            if (!errEl) { errEl = document.createElement('div'); errEl.className = 'rr-error-msg'; empty.appendChild(errEl); }
+            errEl.innerHTML = `<p style="color:var(--rr-red);font-weight:600;">⚠ ${esc(e.message)}</p><button class="rr-btn rr-btn-outline" onclick="document.getElementById('rr-empty-content').style.display='';this.parentElement.remove();">Dismiss</button>`;
+        }
         document.querySelectorAll('.rr-tab-content').forEach(p => p.style.display = 'none');
         if (footer) footer.style.display = 'none';
     } finally {
@@ -2561,18 +2569,21 @@ async function generateExecSummary() {
 function setExportMode(mode) {
     _exportMode = mode;
     document.querySelectorAll('.rr-mode').forEach(b => b.classList.toggle('active', b.dataset.exportMode === mode));
+    document.querySelectorAll('.rr-export-tile[data-export-mode]').forEach(t => t.classList.toggle('active', t.dataset.exportMode === mode));
 }
 
 function exportReportFmt(fmt) {
     const start = document.getElementById('rep-start').value;
     const end = document.getElementById('rep-end').value;
     const dom = _repDomain();
-    window.location.href = `/api/reports/export?period=${repPeriod}&domain=${dom}&start=${start}&end=${end}&format=${fmt}&mode=${_exportMode}`;
+    const purpose = document.getElementById('rep-purpose')?.value || 'client';
+    window.location.href = `/api/reports/export?period=${repPeriod}&domain=${dom}&start=${start}&end=${end}&format=${fmt}&mode=${_exportMode}&purpose=${purpose}`;
 }
 
 function resetReportFilters() {
+    setRepPeriod('weekly');
     setRepRange('28d');
-    document.querySelectorAll('.rr-switch').forEach(sw => sw.classList.add('on'));
+    document.querySelectorAll('.rr-switch').forEach(sw => { sw.classList.add('on'); sw.setAttribute('aria-checked', 'true'); });
     const comp = document.getElementById('rep-comparison'); if (comp) comp.value = 'previous_period';
     const purp = document.getElementById('rep-purpose'); if (purp) purp.value = 'client';
     document.querySelectorAll('.rr-seg button').forEach((b, i) => b.classList.toggle('active', i === 0));
@@ -2585,7 +2596,13 @@ function copyReportSummary() {
 
 function saveInternalNote() {
     const note = document.getElementById('report-internal-notes')?.value;
-    if (note) console.log('Internal note saved:', note);
+    if (!note) return;
+    const dom = _repDomain();
+    const key = `rr_notes_${dom}`;
+    const notes = JSON.parse(localStorage.getItem(key) || '[]');
+    notes.unshift({ text: note, date: new Date().toISOString() });
+    localStorage.setItem(key, JSON.stringify(notes.slice(0, 50)));
+    _ilToast ? _ilToast('Note saved') : alert('Note saved');
 }
 
 // ── Init ──

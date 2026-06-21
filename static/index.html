@@ -712,7 +712,9 @@
                                 <h2>Seasonal Ideas</h2>
                                 <p>Use recurring moments as content hooks without making every idea festival-generic.</p>
                             </div>
-                            <div class="il-seasonal-grid" id="il-seasonal-grid"></div>
+                            <div class="il-seasonal-grid" id="il-seasonal-grid">
+                                <div class="il-empty-state" style="grid-column:1/-1">Loading seasonal ideas...</div>
+                            </div>
                         </div>
                     </section>
 
@@ -801,18 +803,14 @@
                 <div class="section page-enter" style="padding:26px;">
 
                     <!-- ── Topbar ── -->
-                    <header style="display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:22px;flex-wrap:wrap;">
+                    <header class="il-topbar">
                         <div>
-                            <div style="font-size:13px;color:var(--rr-muted);font-weight:600;margin-bottom:8px;">Right Horizons Reporting App / Reports & Analytics</div>
-                            <h1 style="margin:0;font-size:34px;letter-spacing:-.04em;line-height:1.05;color:var(--rr-text);font-weight:900;">Reporting Room</h1>
-                            <p style="margin:10px 0 0;color:var(--rr-muted);font-size:15px;max-width:760px;line-height:1.55;">Generate the current report, then turn the numbers into a clean client-ready story with highlights, reasons, notes and export modes.</p>
+                            <span class="il-eyebrow">✦ Reports & Analytics</span>
+                            <h1 class="il-h1">Reporting Room</h1>
+                            <p class="il-subtext">Generate the current report, then turn the numbers into a clean client-ready story with highlights, reasons, notes and export modes.</p>
                         </div>
-                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                            <button class="rr-btn rr-btn-secondary" id="rr-preview-last-btn" style="display:none;" onclick="switchRRTab('preview')">Preview last report</button>
-                            <button class="rr-btn rr-btn-primary" onclick="generateReport()">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                                Generate report
-                            </button>
+                        <div class="il-header-actions">
+                            <button class="il-btn" id="rr-preview-last-btn" style="display:none;" onclick="switchRRTab('preview')">Preview last report</button>
                         </div>
                     </header>
 
@@ -821,7 +819,7 @@
                         <!-- ═══ LEFT: Build Report Sidebar ═══ -->
                         <aside class="rr-card rr-card-pad rr-builder">
                             <h2 class="rr-section-title">Build Report</h2>
-                            <p class="rr-section-sub">Keep the existing filters, but make the report purpose and channel selection clearer.</p>
+                            <p class="rr-section-sub">Select filters and channels to build your performance report.</p>
 
                             <div class="rr-field">
                                 <label class="rr-label">Client / Account</label>
@@ -875,11 +873,11 @@
                             <div class="rr-field">
                                 <label class="rr-label">Channels to Include</label>
                                 <div class="rr-checklist">
-                                    <div class="rr-check"><span>SEO / GSC</span><span class="rr-switch on" data-channel="gsc" onclick="this.classList.toggle('on')"></span></div>
-                                    <div class="rr-check"><span>GA4 Website</span><span class="rr-switch on" data-channel="ga4" onclick="this.classList.toggle('on')"></span></div>
-                                    <div class="rr-check"><span>Meta Ads</span><span class="rr-switch on" data-channel="meta" onclick="this.classList.toggle('on')"></span></div>
-                                    <div class="rr-check"><span>Social</span><span class="rr-switch on" data-channel="social" onclick="this.classList.toggle('on')"></span></div>
-                                    <div class="rr-check"><span>YouTube</span><span class="rr-switch on" data-channel="youtube" onclick="this.classList.toggle('on')"></span></div>
+                                    <div class="rr-check"><span>SEO / GSC</span><span class="rr-switch on" data-channel="gsc" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></span></div>
+                                    <div class="rr-check"><span>GA4 Website</span><span class="rr-switch on" data-channel="ga4" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></span></div>
+                                    <div class="rr-check"><span>Meta Ads</span><span class="rr-switch on" data-channel="meta" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></span></div>
+                                    <div class="rr-check"><span>Social</span><span class="rr-switch on" data-channel="social" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></span></div>
+                                    <div class="rr-check"><span>YouTube</span><span class="rr-switch on" data-channel="youtube" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></span></div>
                                 </div>
                             </div>
 
@@ -905,9 +903,11 @@
 
                             <!-- Empty state -->
                             <div id="rr-empty" class="rr-card rr-card-pad" style="text-align:center; padding:3rem;">
-                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--rr-muted)" stroke-width="1.5" style="margin-bottom:1rem; opacity:0.4;"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                                <div style="font-size:15px; font-weight:700; color:var(--rr-text); margin-bottom:6px;">No report generated yet</div>
-                                <div style="font-size:13px; color:var(--rr-muted); line-height:1.5;">Select your filters and click Generate Report to build a client-ready performance story.</div>
+                                <div id="rr-empty-content">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:1rem; opacity:0.3; color:var(--text-muted);"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                                    <div style="font-size:15px; font-weight:700; color:var(--text-primary); margin-bottom:6px;">No report generated yet</div>
+                                    <div style="font-size:13px; color:var(--text-muted); line-height:1.5;">Select your filters and click Generate Report to build a client-ready performance story.</div>
+                                </div>
                             </div>
 
                             <!-- TAB: Preview -->
@@ -996,12 +996,12 @@
                             <div class="rr-tab-content" id="rr-panel-export" style="display:none;">
                                 <div class="rr-card rr-card-pad">
                                     <h2 class="rr-section-title">Export Report</h2>
-                                    <p class="rr-section-sub">Keep existing exports with cleaner modes for different audiences.</p>
+                                    <p class="rr-section-sub">Choose a report mode and export format.</p>
                                     <div class="rr-export-grid">
-                                        <div class="rr-export-tile" onclick="setExportMode('client')"><strong>Client Report</strong><span>Clean PDF/HTML with summary and selected next steps.</span></div>
-                                        <div class="rr-export-tile" onclick="setExportMode('internal')"><strong>Internal Report</strong><span>Full diagnosis with notes and hidden context.</span></div>
-                                        <div class="rr-export-tile" onclick="setExportMode('leadership')"><strong>Leadership Summary</strong><span>Short version with spend, leads, wins and concerns.</span></div>
-                                        <div class="rr-export-tile" onclick="setExportMode('raw')"><strong>Raw Data</strong><span>CSV / Excel export for deeper analysis.</span></div>
+                                        <div class="rr-export-tile" data-export-mode="client" onclick="setExportMode('client')"><strong>Client Report</strong><span>Clean PDF/HTML with summary and selected next steps.</span></div>
+                                        <div class="rr-export-tile" data-export-mode="internal" onclick="setExportMode('internal')"><strong>Internal Report</strong><span>Full diagnosis with notes and hidden context.</span></div>
+                                        <div class="rr-export-tile" data-export-mode="leadership" onclick="setExportMode('leadership')"><strong>Leadership Summary</strong><span>Short version with spend, leads, wins and concerns.</span></div>
+                                        <div class="rr-export-tile" data-export-mode="raw" onclick="setExportMode('raw')"><strong>Raw Data</strong><span>CSV / Excel export for deeper analysis.</span></div>
                                     </div>
                                     <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
                                         <button class="rr-btn rr-btn-primary" onclick="exportReportFmt('pdf')">Export PDF</button>
