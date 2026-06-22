@@ -12,7 +12,11 @@ from fastapi.staticfiles import StaticFiles
 from config import DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN, META_PAGE_ID, META_APP_ID, META_APP_SECRET, ADMIN_PASSWORD
 from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
 from config import YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN
-from config import OPENROUTER_API_KEY
+from config import OPENROUTER_API_KEY, TAVILY_API_KEY
+try:
+    import web_search
+except Exception:
+    web_search = None
 from google_auth import get_credentials, get_youtube_credentials
 import gsc
 import ga4
@@ -1280,6 +1284,12 @@ def reports_room_summary(
     )
     import json
     user_msg = f"Report room data for {room_data.get('label', domain)} ({start} to {end}):\n\n{json.dumps(room_data, default=str)}"
+
+    if web_search:
+        live = web_search.search_market_context()
+        if live:
+            user_msg += f"\n\nCURRENT MARKET CONTEXT (live — use to contextualize performance against market conditions):\n{live}\n"
+
     try:
         summary = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=5000, temperature=0.6)
         return {"domain": domain, "label": room_data.get("label"), "start": start, "end": end, "summary": summary}
@@ -1464,6 +1474,12 @@ def calendar_generate(req: CalendarRequest):
         user += "shift the sub-topic, audience segment, age bracket, or numerical example.\n"
     if req.context:
         user += f"\n\nAdditional context:\n{req.context}"
+
+    if web_search:
+        live = web_search.search_market_context()
+        if live:
+            user += f"\n\nLATEST MARKET CONTEXT (live web search — reference current events, rates, and indices):\n{live}\n"
+
     try:
         items = ai_mod.chat_json(sys_prompt, user, max_tokens=8000, temperature=0.85)
         items = _unwrap_items(items)
@@ -1764,6 +1780,11 @@ def ideas_lab_generate(
     if past:
         user_msg += f"\nAVOID REPEATING these previously generated ideas — find fresh angles:\n{past}\n"
 
+    if web_search:
+        live = web_search.search_indian_finance(topic or "Indian wealth management trends")
+        if live:
+            user_msg += f"\n\nCURRENT MARKET CONTEXT (live web search — use for timely references, do NOT fabricate data):\n{live}\n"
+
     try:
         items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=6000, temperature=0.85)
         items = _unwrap_items(items)
@@ -2003,6 +2024,12 @@ def ideas_lab_seasonal(domain: str = "rh", month: int = 0):
         "- Sort by urgency (high first)"
     )
     user_msg = f"Generate seasonal ideas for {current_name}-{next2} {current_year} for {domain_label}. Today is {today.isoformat()}."
+
+    if web_search:
+        live = web_search.search_seasonal_events(f"{current_name} {next1} {next2}")
+        if live:
+            user_msg += f"\n\nCURRENT EVENTS & DEADLINES (live web search — ground your ideas in these real events):\n{live}\n"
+
     try:
         items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=5000, temperature=0.8)
         items = _unwrap_items(items)
