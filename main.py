@@ -812,26 +812,58 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
         if ai_mod and (mode or purpose or "client") in ("client", "internal", "leadership"):
             try:
                 import json as _json
+                _ads = html_data.get("meta_ads") or []
+                def _sumf(items, key):
+                    t = 0.0
+                    for c in items:
+                        try:
+                            t += float(c.get(key) or 0)
+                        except Exception:
+                            pass
+                    return t
                 summary_data = {
                     "gsc": html_data.get("gsc", {}),
                     "ga4": html_data.get("ga4", {}),
                     "social_fb": html_data.get("social_fb", {}),
                     "social_ig": html_data.get("social_ig", {}),
+                    "seo_trend": html_data.get("seo_trend", []),
+                    "social_trend": html_data.get("social_trend", []),
                     "meta_ads_summary": {
-                        "total_impressions": sum(int((c.get('impressions') or 0) if isinstance(c.get('impressions'), (int, float, str)) else 0) for c in (html_data.get("meta_ads") or [])),
-                        "total_clicks": sum(int((c.get('clicks') or 0) if isinstance(c.get('clicks'), (int, float, str)) else 0) for c in (html_data.get("meta_ads") or [])),
-                        "total_spend": sum(float((c.get('spend') or 0) if isinstance(c.get('spend'), (int, float, str)) else 0) for c in (html_data.get("meta_ads") or [])),
+                        "total_impressions": int(_sumf(_ads, "impressions")),
+                        "total_clicks": int(_sumf(_ads, "clicks")),
+                        "total_reach": int(_sumf(_ads, "reach")),
+                        "total_leads": int(_sumf(_ads, "leads")),
+                        "total_spend_inr": _sumf(_ads, "spend"),
+                        "active_campaigns": [c.get("campaign_name") or c.get("name") for c in _ads if (float(c.get("impressions") or 0) > 0 or float(c.get("spend") or 0) > 0)][:10],
                     },
                 }
                 sys_prompt = (
-                    "You are a senior digital marketing analyst. Given the data below, produce a brief executive summary as JSON with keys: "
-                    "headline (one punchy sentence), whats_working (2-3 bullet points), needs_attention (2-3 bullet points), "
-                    "recommended_actions (3-4 specific action items). Use actual numbers from the data. All currency in ₹/INR."
+                    "You are a senior digital marketing performance analyst for Indian financial services. "
+                    "Given the report data below, produce a sharp, insight-driven executive summary as JSON. "
+                    "Compare current period vs previous period using trend data. Identify the STORY behind the numbers. "
+                    "All currency in ₹ (INR). Use em dash (—) only when data is genuinely missing.\n\n"
+                    "Return JSON with ALL of these keys (do not omit any):\n"
+                    "- executive_summary: 2-3 sentence boardroom-ready summary leading with the most important finding\n"
+                    "- what_improved: array of 3-5 specific bullet points naming metrics, actual numbers and % changes\n"
+                    "- what_dropped: array of 2-4 specific bullet points with metrics, numbers, % declines and likely causes\n"
+                    "- what_stable: array of 1-3 bullet points on metrics that held steady\n"
+                    "- main_win: one-sentence biggest positive takeaway with the metric, magnitude, and business impact\n"
+                    "- main_concern: one-sentence biggest concern with what could happen if unaddressed\n"
+                    "- key_opportunity: one-sentence highest-ROI action to take now (specific, not generic)\n"
+                    "- recommended_focus: one-sentence focus for next period tied to a specific channel/metric\n"
+                    "- confidence_score: integer 0-100 representing overall digital marketing health "
+                    "(80+ strong, 60-79 stable, 40-59 needs attention, <40 urgent)\n"
+                    "- channel_grades: object keyed by 'seo','social','ads' (and 'youtube','email' if data present). "
+                    "Each value is {grade: 'A'/'B'/'C'/'D'/'F', trend: 'improving'/'stable'/'declining', one_liner: short reason}\n"
+                    "- next_steps: array of 4-5 objects each with keys title, description, priority ('high'/'medium'/'low'), "
+                    "channel (which channel this applies to), expected_impact (what improvement to expect)\n"
+                    "- risks: array of 1-3 objects each with keys risk, mitigation\n\n"
+                    "Reference ACTUAL numbers from the data — never fabricate metrics."
                 )
-                user_msg = f"Report data for {d['label']} ({start} to {end}):\n{_json.dumps(summary_data, default=str)}"
-                html_data["ai_summary"] = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=2000, temperature=0.5)
-            except Exception:
-                pass
+                user_msg = f"Report room data for {d['label']} ({start} to {end}):\n\n{_json.dumps(summary_data, default=str)[:30000]}"
+                html_data["ai_summary"] = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=5000, temperature=0.55)
+            except Exception as e:
+                html_data["ai_summary_error"] = str(e)
 
         report_mode = mode or purpose or "client"
         html_content = html_report.generate_html_report(html_data, start, end, d["label"], report_mode=report_mode)
