@@ -60,7 +60,7 @@ def _esc(s):
     return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;')
 
 
-def generate_html_report(data: dict, start: str, end: str, domain: str) -> str:
+def generate_html_report(data: dict, start: str, end: str, domain: str, report_mode: str = "client") -> str:
     data = data or {}
     ts = datetime.now(_IST).strftime('%d %b %Y, %I:%M %p IST')
 
@@ -72,40 +72,79 @@ def generate_html_report(data: dict, start: str, end: str, domain: str) -> str:
     smm_trend = data.get('social_trend') or []
     seo_trend = data.get('seo_trend') or []
 
-    # AI summary data (if present)
     ai_summary = data.get('ai_summary') or data.get('executive_summary') or {}
 
-    hero = _hero(domain, start, end)
-    toolbar = _toolbar()
-    nav = _nav()
-    exec_summary = _exec_summary_section(ai_summary, gsc, ga4, fb, ig, ads)
-    kpi_snapshot = _kpi_snapshot(gsc, ga4, fb, ig, ads, seo_trend, smm_trend)
-    perf_overview = _perf_overview(gsc, ga4, fb, ig, ads)
-    seo_section = _seo_trend_section(seo_trend, gsc, ga4)
-    smm_section = _smm_trend_section(smm_trend)
-    ads_section = _ads_section(ads)
-    metrics_index = _metrics_index()
+    mode = report_mode.lower().strip()
 
-    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{_esc(domain)} — Marketing Report</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"><style>
+    MODE_LABELS = {
+        'client': 'Client Report',
+        'internal': 'Internal Report',
+        'leadership': 'Leadership Summary',
+        'raw': 'Raw Data Export',
+    }
+    mode_label = MODE_LABELS.get(mode, 'Client Report')
+
+    hero = _hero(domain, start, end, mode_label)
+    toolbar = _toolbar()
+
+    if mode == 'leadership':
+        nav = _nav_leadership()
+        exec_summary = _exec_summary_section(ai_summary, gsc, ga4, fb, ig, ads)
+        kpi_snapshot = _kpi_snapshot(gsc, ga4, fb, ig, ads, seo_trend, smm_trend)
+        body = f"{hero}\n{toolbar}\n{nav}\n{exec_summary}\n{kpi_snapshot}"
+
+    elif mode == 'internal':
+        nav = _nav()
+        exec_summary = _exec_summary_section(ai_summary, gsc, ga4, fb, ig, ads)
+        kpi_snapshot = _kpi_snapshot(gsc, ga4, fb, ig, ads, seo_trend, smm_trend)
+        perf_overview = _perf_overview(gsc, ga4, fb, ig, ads)
+        seo_section = _seo_trend_section(seo_trend, gsc, ga4)
+        smm_section = _smm_trend_section(smm_trend)
+        ads_section = _ads_section(ads)
+        metrics_index = _metrics_index()
+        notes_section = _internal_notes_section()
+        raw_dump = _raw_data_section(gsc, ga4, fb, ig, ads)
+        body = f"{hero}\n{toolbar}\n{nav}\n{exec_summary}\n{kpi_snapshot}\n{perf_overview}\n{seo_section}\n{smm_section}\n{ads_section}\n{raw_dump}\n{notes_section}\n{metrics_index}"
+
+    elif mode == 'raw':
+        nav = _nav_raw()
+        perf_overview = _perf_overview(gsc, ga4, fb, ig, ads)
+        seo_section = _seo_trend_section(seo_trend, gsc, ga4)
+        smm_section = _smm_trend_section(smm_trend)
+        ads_section = _ads_section(ads)
+        raw_dump = _raw_data_section(gsc, ga4, fb, ig, ads)
+        metrics_index = _metrics_index()
+        body = f"{hero}\n{toolbar}\n{nav}\n{perf_overview}\n{seo_section}\n{smm_section}\n{ads_section}\n{raw_dump}\n{metrics_index}"
+
+    else:
+        nav = _nav()
+        exec_summary = _exec_summary_section(ai_summary, gsc, ga4, fb, ig, ads)
+        kpi_snapshot = _kpi_snapshot(gsc, ga4, fb, ig, ads, seo_trend, smm_trend)
+        perf_overview = _perf_overview(gsc, ga4, fb, ig, ads)
+        seo_section = _seo_trend_section(seo_trend, gsc, ga4)
+        smm_section = _smm_trend_section(smm_trend)
+        ads_section = _ads_section(ads)
+        metrics_index = _metrics_index()
+        body = f"{hero}\n{toolbar}\n{nav}\n{exec_summary}\n{kpi_snapshot}\n{perf_overview}\n{seo_section}\n{smm_section}\n{ads_section}\n{metrics_index}"
+
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{_esc(domain)} — {_esc(mode_label)}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"><style>
 {CSS}</style></head><body><div class="wrap">
-{hero}
-{toolbar}
-{nav}
-{exec_summary}
-{kpi_snapshot}
-{perf_overview}
-{seo_section}
-{smm_section}
-{ads_section}
-{metrics_index}
+{body}
 </div></body></html>"""
 
 
 # ---------------------------------------------------------------------------
 # Hero header
 # ---------------------------------------------------------------------------
-def _hero(domain, start, end):
-    return f"""<div class="hero"><div class="hero-grid"><div><div class="eyebrow">Reporting Room &middot; {_esc(domain)}</div><h1>Weekly / Monthly Full Metrics Report</h1><p>Detailed workbook-style weekly/monthly report covering SEO, Social Media, and Paid Ads performance.</p></div><div class="period-card"><span>Reporting period</span><b>{_esc(start)} &ndash; {_esc(end)}</b><span>Generated for {_esc(domain)}</span></div></div></div>"""
+def _hero(domain, start, end, mode_label='Client Report'):
+    MODE_SUBTITLES = {
+        'Client Report': 'Clean, presentation-ready report with KPIs, trends, and executive summary.',
+        'Internal Report': 'Full diagnostic report with raw data, internal notes, and all metric breakdowns.',
+        'Leadership Summary': 'One-page executive summary — wins, concerns, KPIs, and recommended focus areas.',
+        'Raw Data Export': 'All available data tables for deeper analysis and custom reporting.',
+    }
+    subtitle = MODE_SUBTITLES.get(mode_label, MODE_SUBTITLES['Client Report'])
+    return f"""<div class="hero"><div class="hero-grid"><div><div class="eyebrow">Reporting Room &middot; {_esc(domain)}</div><h1>{_esc(mode_label)}</h1><p>{subtitle}</p></div><div class="period-card"><span>Reporting period</span><b>{_esc(start)} &ndash; {_esc(end)}</b><span>Generated for {_esc(domain)}</span></div></div></div>"""
 
 
 # ---------------------------------------------------------------------------
@@ -399,6 +438,45 @@ def _ads_section(ads):
 <div class="table-wrap"><table class="report-table"><tr class="group"><td colspan="2">PLATFORM PERFORMANCE — ALL ICPs</td></tr><tr><th>Metric</th><th>Value</th></tr>{platform_rows}</table></div>
 
 <div class="table-wrap" style="margin-top:14px"><table class="report-table"><tr class="group"><td colspan="8">CAMPAIGN PERFORMANCE</td></tr><tr><th>Campaign Name</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>Reach</th><th>Leads</th><th>Spend</th><th>CPL</th></tr>{camp_rows}</table></div></section>"""
+
+
+# ---------------------------------------------------------------------------
+# Navigation variants
+# ---------------------------------------------------------------------------
+def _nav_leadership():
+    return """<div class="nav"><a href="#summary">Executive Summary</a><a href="#quick-kpis">KPI Snapshot</a></div>"""
+
+
+def _nav_raw():
+    return """<div class="nav"><a href="#performance-overview">Performance Overview</a><a href="#seo-trend">SEO Trend</a><a href="#smm-trend">SMM Trend</a><a href="#ads">Ads</a><a href="#raw-data">Raw Data</a><a href="#metrics-index">Metrics Index</a></div>"""
+
+
+# ---------------------------------------------------------------------------
+# Internal notes section (placeholder for internal mode)
+# ---------------------------------------------------------------------------
+def _internal_notes_section():
+    return """<section class="section page-break" id="internal-notes"><div class="section-head"><div><h2>Internal Notes</h2><div class="sub">Space for team annotations, context, and action items.</div></div></div>
+<div class="card"><div class="summary-block" style="min-height:120px;color:var(--muted);font-style:italic">Add internal notes, team comments, and action items here after downloading. This section is not included in client-facing reports.</div></div></section>"""
+
+
+# ---------------------------------------------------------------------------
+# Raw data dump section
+# ---------------------------------------------------------------------------
+def _raw_data_section(gsc, ga4, fb, ig, ads):
+    rows = ''
+    for section_name, section_data in [('GSC', gsc), ('GA4', ga4), ('Social — Facebook', fb), ('Social — Instagram', ig)]:
+        if not section_data or not isinstance(section_data, dict):
+            continue
+        rows += f'<tr class="group"><td colspan="2">{section_name}</td></tr>'
+        for k, v in section_data.items():
+            if isinstance(v, (list, dict)):
+                continue
+            rows += f'<tr><td>{_esc(str(k))}</td><td class="num">{_f(v)}</td></tr>'
+
+    if not rows:
+        return ''
+
+    return f"""<section class="section page-break" id="raw-data"><div class="section-head"><div><h2>Raw Data Dump</h2><div class="sub">All individual metric values from each data source.</div></div></div><div class="table-wrap"><table class="report-table"><tr><th>Metric</th><th>Value</th></tr>{rows}</table></div></section>"""
 
 
 # ---------------------------------------------------------------------------

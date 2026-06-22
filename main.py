@@ -722,7 +722,7 @@ def reports_generate(period: str = "weekly", domain: str = "rh", start: str = ""
 
 
 @app.get("/api/reports/export")
-def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", end: str = "", format: str = "excel"):
+def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", end: str = "", format: str = "excel", mode: str = "client", purpose: str = "client"):
     today = _today_ist()
     if not end:
         end = today.isoformat()
@@ -792,7 +792,8 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
             except Exception:
                 pass
 
-        html_content = html_report.generate_html_report(html_data, start, end, d["label"])
+        report_mode = mode or purpose or "client"
+        html_content = html_report.generate_html_report(html_data, start, end, d["label"], report_mode=report_mode)
         return StreamingResponse(
             io.BytesIO(html_content.encode("utf-8")),
             media_type="text/html",
