@@ -180,11 +180,21 @@ def _exec_summary_section(ai_summary, gsc, ga4, fb, ig, ads):
     attention = _g(ai_summary, 'needs_attention') or _g(ai_summary, 'attention') or '—'
     actions = _g(ai_summary, 'recommended_actions') or _g(ai_summary, 'actions') or '—'
 
+    def _fmt_bullets(val):
+        if isinstance(val, list):
+            return '<ul>' + ''.join(f'<li>{_esc(str(item))}</li>' for item in val) + '</ul>'
+        return _esc(str(val)) if val != '—' else val
+
+    headline_html = _esc(str(headline)) if headline != '—' else headline
+    working_html = _fmt_bullets(working)
+    attention_html = _fmt_bullets(attention)
+    actions_html = _fmt_bullets(actions)
+
     return f"""<section class="section" id="summary"><div class="section-head"><div><h2>Executive Summary</h2><div class="sub">AI-generated executive summary for the reporting period.</div></div></div>
-<div class="card" style="margin-bottom:12px"><span class="pill">The Headline</span><div class="summary-block" style="margin-top:12px">{headline}</div></div>
-<div class="card" style="margin-bottom:12px"><span class="pill good">What&#x27;s Working</span><div class="summary-block" style="margin-top:12px">{working}</div></div>
-<div class="card" style="margin-bottom:12px"><span class="pill warn">What Needs Attention</span><div class="summary-block" style="margin-top:12px">{attention}</div></div>
-<div class="card" style="margin-bottom:12px"><span class="pill bad">Recommended Actions</span><div class="summary-block" style="margin-top:12px">{actions}</div></div>
+<div class="card" style="margin-bottom:12px"><span class="pill">The Headline</span><div class="summary-block" style="margin-top:12px">{headline_html}</div></div>
+<div class="card" style="margin-bottom:12px"><span class="pill good">What&#x27;s Working</span><div class="summary-block" style="margin-top:12px">{working_html}</div></div>
+<div class="card" style="margin-bottom:12px"><span class="pill warn">What Needs Attention</span><div class="summary-block" style="margin-top:12px">{attention_html}</div></div>
+<div class="card" style="margin-bottom:12px"><span class="pill bad">Recommended Actions</span><div class="summary-block" style="margin-top:12px">{actions_html}</div></div>
 </section>"""
 
 
@@ -420,6 +430,8 @@ def _ads_section(ads):
     if not ads:
         return f"""<section class="section page-break" id="ads"><div class="section-head"><div><h2>Ads — Full Sheet Metrics</h2><div class="sub">No ad campaign data available for this period.</div></div></div></section>"""
 
+    active_ads = [c for c in ads if int(_g(c, 'impressions', 0) or 0) > 0 or float(_g(c, 'spend', 0) or 0) > 0]
+
     # Platform-level aggregation
     ti = sum(int(_g(c, 'impressions', 0) or 0) for c in ads)
     tc = sum(int(_g(c, 'clicks', 0) or 0) for c in ads)
@@ -440,11 +452,11 @@ def _ads_section(ads):
 
     # Campaign detail rows
     camp_rows = ''
-    for c in ads:
+    for c in active_ads:
         name = c.get('campaign_name', c.get('name', '—'))
         camp_rows += f"""<tr><td>{_esc(name)}</td><td class="num">{_f(_g(c,'impressions'))}</td><td class="num">{_f(_g(c,'clicks'))}</td><td class="num">{_f(_g(c,'ctr'), pct=True)}</td><td class="num">{_f(_g(c,'reach'))}</td><td class="num">{_f(_g(c,'leads'))}</td><td class="num">{_f(float(_g(c,'spend',0) or 0), cur=True)}</td><td class="num">{_f(float(_g(c,'cpl',0) or 0), cur=True)}</td></tr>"""
 
-    return f"""<section class="section page-break" id="ads"><div class="section-head"><div><h2>Ads — Full Sheet Metrics</h2><div class="sub">Platform performance and campaign detail.</div></div><span class="pill">{len(ads)} campaigns</span></div>
+    return f"""<section class="section page-break" id="ads"><div class="section-head"><div><h2>Ads — Full Sheet Metrics</h2><div class="sub">Platform performance and campaign detail.</div></div><span class="pill">{len(active_ads)} campaigns</span></div>
 <div class="table-wrap"><table class="report-table"><tr class="group"><td colspan="2">PLATFORM PERFORMANCE — ALL ICPs</td></tr><tr><th>Metric</th><th>Value</th></tr>{platform_rows}</table></div>
 
 <div class="table-wrap" style="margin-top:14px"><table class="report-table"><tr class="group"><td colspan="8">CAMPAIGN PERFORMANCE</td></tr><tr><th>Campaign Name</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>Reach</th><th>Leads</th><th>Spend</th><th>CPL</th></tr>{camp_rows}</table></div></section>"""

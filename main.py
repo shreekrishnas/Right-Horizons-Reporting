@@ -384,7 +384,7 @@ def social_trend(period: str = "weekly", periods: int = 5, domain: str = "rh", e
         else:
             label = p_start.strftime('%B %Y')
 
-        row = {"period": label, "start": ps, "end": pe}
+        row = {"period": label, "start": ps, "end": pe, "period_start": p_start.strftime('%b %d'), "period_end": p_end.strftime('%b %d')}
         try:
             fb = social.get_fb_comprehensive(token, page_id, ps, pe)
             row["fb"] = fb
@@ -398,6 +398,10 @@ def social_trend(period: str = "weekly", periods: int = 5, domain: str = "rh", e
                 row["ig"] = {}
         else:
             row["ig"] = {}
+        if row.get("fb") and isinstance(row["fb"], dict):
+            row["fb"]["posts"] = row["fb"].get("posts_published", 0)
+        if row.get("ig") and isinstance(row["ig"], dict):
+            row["ig"]["posts"] = row["ig"].get("posts_published", 0)
         results.append(row)
 
     results.reverse()
@@ -516,7 +520,7 @@ def seo_trend(domain: str = "rh", period: str = "weekly", periods: int = 5, end_
         else:
             label = p_start.strftime('%B %Y')
 
-        row = {"period": label, "start": ws, "end": we}
+        row = {"period": label, "start": ws, "end": we, "period_start": p_start.strftime('%b %d'), "period_end": p_end.strftime('%b %d')}
 
         try:
             gs = gsc.get_summary(creds, d["gsc_site"], ws, we)
@@ -527,6 +531,9 @@ def seo_trend(domain: str = "rh", period: str = "weekly", periods: int = 5, end_
             })
         except Exception:
             row.update({"gsc_clicks": 0, "gsc_impressions": 0, "gsc_position": 0})
+        row["clicks"] = row.get("gsc_clicks", 0)
+        row["impressions"] = row.get("gsc_impressions", 0)
+        row["position"] = row.get("gsc_position", 0)
 
         prop = d.get("ga4_property")
         if prop:
@@ -541,6 +548,8 @@ def seo_trend(domain: str = "rh", period: str = "weekly", periods: int = 5, end_
                 })
             except Exception:
                 row.update({"organic_sessions": 0, "organic_users": 0, "bounce_rate": 0, "avg_session_duration": 0, "leads": 0})
+        row["sessions"] = row.get("organic_sessions", 0)
+        row["users"] = row.get("organic_users", 0)
         results.append(row)
 
     results.reverse()
@@ -797,6 +806,30 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
                 s_days_per = 7 if period == "weekly" else 30
                 s_num_periods = max(1, (date.fromisoformat(end) - date.fromisoformat(start)).days // s_days_per)
                 html_data["social_trend"] = social_trend(period, s_num_periods, domain, end_date=end)
+            except Exception:
+                pass
+
+        if ai_mod and (mode or purpose or "client") in ("client", "internal", "leadership"):
+            try:
+                import json as _json
+                summary_data = {
+                    "gsc": html_data.get("gsc", {}),
+                    "ga4": html_data.get("ga4", {}),
+                    "social_fb": html_data.get("social_fb", {}),
+                    "social_ig": html_data.get("social_ig", {}),
+                    "meta_ads_summary": {
+                        "total_impressions": sum(int((c.get('impressions') or 0) if isinstance(c.get('impressions'), (int, float, str)) else 0) for c in (html_data.get("meta_ads") or [])),
+                        "total_clicks": sum(int((c.get('clicks') or 0) if isinstance(c.get('clicks'), (int, float, str)) else 0) for c in (html_data.get("meta_ads") or [])),
+                        "total_spend": sum(float((c.get('spend') or 0) if isinstance(c.get('spend'), (int, float, str)) else 0) for c in (html_data.get("meta_ads") or [])),
+                    },
+                }
+                sys_prompt = (
+                    "You are a senior digital marketing analyst. Given the data below, produce a brief executive summary as JSON with keys: "
+                    "headline (one punchy sentence), whats_working (2-3 bullet points), needs_attention (2-3 bullet points), "
+                    "recommended_actions (3-4 specific action items). Use actual numbers from the data. All currency in ₹/INR."
+                )
+                user_msg = f"Report data for {d['label']} ({start} to {end}):\n{_json.dumps(summary_data, default=str)}"
+                html_data["ai_summary"] = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=2000, temperature=0.5)
             except Exception:
                 pass
 
