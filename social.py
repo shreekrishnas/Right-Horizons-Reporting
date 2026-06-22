@@ -1,4 +1,7 @@
 import requests
+import logging
+
+log = logging.getLogger(__name__)
 
 BASE = "https://graph.facebook.com/v21.0"
 
@@ -39,14 +42,13 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
         "page_likes": page.get("fan_count", 0),
     }
 
-    # Try each metric individually with total_over_range
     _metrics_total = [
         "page_post_engagements",
         "page_views_total",
         "page_video_views",
         "page_impressions",
-        "page_impressions_unique",   # unique reach (replaces deprecated page_reach)
-        "page_consumptions",          # link/content clicks
+        "page_impressions_unique",
+        "page_consumptions",
         "page_consumptions_unique",
     ]
     for metric in _metrics_total:
@@ -58,8 +60,8 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
             for item in data.get("data", []):
                 val = item.get("values", [{}])[0].get("value", 0)
                 result[item["name"]] = val if not isinstance(val, dict) else sum(val.values())
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("FB metric %s failed: %s", metric, e)
 
     # page_fan_adds: day period, sum daily values
     try:
@@ -69,16 +71,35 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
         })
         for item in data.get("data", []):
             result["page_fan_adds"] = sum(v.get("value", 0) for v in item.get("values", []))
-    except Exception:
+    except Exception as e:
+        log.debug("FB page_fan_adds failed: %s", e)
         result.setdefault("page_fan_adds", 0)
 
+    # page_fan_adds_unique as fallback
+    if not result.get("page_fan_adds"):
+        try:
+            data = _get(f"/{page_id}/insights", token, {
+                "metric": "page_fan_adds_unique", "period": "day",
+                "since": start, "until": end,
+            })
+            for item in data.get("data", []):
+                result["page_fan_adds"] = sum(v.get("value", 0) for v in item.get("values", []))
+        except Exception:
+            pass
+
+    # Fetch posts with shares/saves detail
     try:
         posts_data = _get(f"/{page_id}/posts", token, {
-            "fields": "id", "since": start, "until": end, "limit": 100,
+            "fields": "id,shares",
+            "since": start, "until": end, "limit": 100,
         })
-        result["posts_published"] = len(posts_data.get("data", []))
+        posts_list = posts_data.get("data", [])
+        result["posts_published"] = len(posts_list)
+        total_shares = sum(p.get("shares", {}).get("count", 0) for p in posts_list)
+        result["total_shares"] = total_shares
     except Exception:
         result["posts_published"] = 0
+        result["total_shares"] = 0
 
     try:
         vids = _get(f"/{page_id}/videos", token, {
@@ -88,7 +109,6 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
     except Exception:
         result["reels_stories"] = 0
 
-    # Reach: unique impressions is the closest v21.0 equivalent to reach
     reach = (
         result.get("page_impressions_unique") or
         result.get("page_impressions") or
@@ -110,7 +130,7 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
     result["video_views"] = result.get("page_video_views", 0)
     result["link_clicks"] = link_clicks
     result["profile_visits"] = result.get("page_views_total", 0)
-    result["saves_shares"] = 0
+    result["saves_shares"] = result.get("total_shares", 0)
 
     return result
 
@@ -154,6 +174,16 @@ def get_ig_account(token: str, page_id: str) -> str | None:
     return ig["id"] if ig else None
 
 
+def get_ig_profile(token: str, ig_id: str) -> dict:
+    return _get(f"/{ig_id}", token, {
+        "fields": "username,name,followers_count,follows_count,media_count,biography,website,profile_picture_url",
+    })
+
+
+def get_ig_insights(token: str, ig_id: str, start: str, end: str) -> dict:
+    return get_ig_comprehensive(token, ig_id, start, end)
+
+
 def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
     profile = _get(f"/{ig_id}", token, {
         "fields": "username,name,followers_count,follows_count,media_count",
@@ -181,7 +211,6 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
                 tv = item.get("total_value", {})
                 val = tv.get("value", 0)
                 if metric == "follows_and_unfollows":
-                    # value may be net int, or breakdowns may contain follows/unfollows
                     follows = unfollows = 0
                     for bd in tv.get("breakdowns", []):
                         for r in bd.get("results", []):
@@ -199,12 +228,28 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
                         result["new_followers"] = val
                 else:
                     result[item["name"]] = val if not isinstance(val, dict) else 0
-        except Exception:
+        except Exception as e:
+            log.debug("IG metric %s failed: %s", metric, e)
             if metric == "follows_and_unfollows":
                 result.setdefault("new_followers", 0)
             else:
                 result.setdefault(metric, 0)
 
+    # Fallback: try follower_count metric if follows_and_unfollows failed
+    if not result.get("new_followers"):
+        try:
+            data = _get(f"/{ig_id}/insights", token, {
+                "metric": "follower_count", "period": "day",
+                "since": start, "until": end,
+            })
+            for item in data.get("data", []):
+                vals = item.get("values", [])
+                if len(vals) >= 2:
+                    result["new_followers"] = vals[-1].get("value", 0) - vals[0].get("value", 0)
+        except Exception:
+            pass
+
+    # Fetch media for the period
     all_media = _safe(lambda: _get(f"/{ig_id}/media", token, {
         "fields": "id,timestamp,media_type,like_count,comments_count",
         "limit": 100,
@@ -221,16 +266,27 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
     reach = result.get("reach", 0)
     impressions = result.get("impressions", 0)
 
-    # views = impressions if available, otherwise reach (both measure content visibility)
     result["views"] = impressions if impressions > 0 else reach
-    # video_views: use impressions proportional to video posts, or reels count as proxy
     result["video_views"] = impressions if (impressions > 0 and len(video_media) > 0) else 0
     result["link_clicks"] = result.get("website_clicks", 0)
-    result["saves_shares"] = 0
+
+    # Fetch saves from individual media insights
+    total_saves = 0
+    for m in media[:50]:
+        try:
+            mi = _get(f"/{m['id']}/insights", token, {"metric": "saved"})
+            for item in mi.get("data", []):
+                vals = item.get("values", [])
+                if vals:
+                    total_saves += vals[0].get("value", 0)
+        except Exception:
+            pass
+    result["saves_shares"] = total_saves
 
     eng = result.get("engagements", 0)
     result["engagement_rate"] = round((eng / reach * 100), 2) if reach > 0 else 0
     result["reach"] = reach
+    result["profile_visits"] = result.get("profile_views", 0)
 
     return result
 
