@@ -17,6 +17,10 @@ try:
     import web_search
 except Exception:
     web_search = None
+try:
+    import google_trends
+except Exception:
+    google_trends = None
 from google_auth import get_credentials, get_youtube_credentials
 import gsc
 import ga4
@@ -1289,6 +1293,9 @@ def reports_room_summary(
         live = web_search.search_market_context()
         if live:
             user_msg += f"\n\nCURRENT MARKET CONTEXT (live — use to contextualize performance against market conditions):\n{live}\n"
+        news = web_search.search_finance_news()
+        if news:
+            user_msg += f"\n\nLATEST FINANCE NEWS (use to add market context to the summary):\n{news}\n"
 
     try:
         summary = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=5000, temperature=0.6)
@@ -1479,6 +1486,13 @@ def calendar_generate(req: CalendarRequest):
         live = web_search.search_market_context()
         if live:
             user += f"\n\nLATEST MARKET CONTEXT (live web search — reference current events, rates, and indices):\n{live}\n"
+        news = web_search.search_finance_news()
+        if news:
+            user += f"\n\nLATEST FINANCE NEWS (from Moneycontrol, ET Money, LiveMint — weave current events into posts):\n{news}\n"
+    if google_trends:
+        gt = google_trends.finance_trends_context()
+        if gt:
+            user += f"\n\nGOOGLE TRENDS — INDIA (align post topics with what people are actually searching):\n{gt}\n"
 
     try:
         items = ai_mod.chat_json(sys_prompt, user, max_tokens=8000, temperature=0.85)
@@ -1784,6 +1798,16 @@ def ideas_lab_generate(
         live = web_search.search_indian_finance(topic or "Indian wealth management trends")
         if live:
             user_msg += f"\n\nCURRENT MARKET CONTEXT (live web search — use for timely references, do NOT fabricate data):\n{live}\n"
+        news = web_search.search_finance_news(topic or "")
+        if news:
+            user_msg += f"\n\nLATEST FINANCE NEWS (from Moneycontrol, ET Money, LiveMint — reference specific articles/data):\n{news}\n"
+        trending = web_search.search_content_trends(topic or "")
+        if trending:
+            user_msg += f"\n\nTRENDING CONTENT IN FINANCE (use for timely angle inspiration):\n{trending}\n"
+    if google_trends:
+        gt = google_trends.finance_trends_context(topic or "mutual funds India")
+        if gt:
+            user_msg += f"\n\nGOOGLE TRENDS — INDIA (use trending keywords to make content timely and discoverable):\n{gt}\n"
 
     try:
         items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=6000, temperature=0.85)
@@ -2029,6 +2053,13 @@ def ideas_lab_seasonal(domain: str = "rh", month: int = 0):
         live = web_search.search_seasonal_events(f"{current_name} {next1} {next2}")
         if live:
             user_msg += f"\n\nCURRENT EVENTS & DEADLINES (live web search — ground your ideas in these real events):\n{live}\n"
+        news = web_search.search_finance_news("India financial events regulatory SEBI RBI")
+        if news:
+            user_msg += f"\n\nLATEST FINANCE NEWS (reference current regulatory/market developments):\n{news}\n"
+    if google_trends:
+        gt = google_trends.trending_searches_india()
+        if gt:
+            user_msg += f"\n\n{gt}\n"
 
     try:
         items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=5000, temperature=0.8)
