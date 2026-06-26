@@ -1569,8 +1569,8 @@ CAL_SYSTEM = (
     "  'references': any source URL or note for fact-checking (regulation, news article, "
     "trend keyword from the live context), or '' if none\n"
     "}\n\n"
-    "RETURN: JSON array of 18-22 row objects covering the entire month (active posts + "
-    "placeholders + off-day skips combined). DO NOT wrap in any other object."
+    'RETURN: a JSON object {"items": [...]} where items is the array of 18-22 row objects '
+    "covering the entire month (active posts + placeholders + off-day skips combined)."
 )
 
 
@@ -1632,8 +1632,11 @@ def calendar_generate(req: CalendarRequest):
         if gt:
             user += f"\n\nGOOGLE TRENDS — INDIA (align post topics with what people are actually searching):\n{gt}\n"
 
+    if len(user) > 25000:
+        user = user[:25000] + "\n\n[context trimmed for length]"
+
     try:
-        items = ai_mod.chat_json(sys_prompt, user, max_tokens=8000, temperature=0.85)
+        items = ai_mod.chat_json(sys_prompt, user, max_tokens=12000, temperature=0.75)
         items = _unwrap_items(items)
         _calendars[f"{req.domain}:{req.month}"] = items
         _push_history(_calendar_history, req.domain, items if isinstance(items, list) else [], key_field="title")
