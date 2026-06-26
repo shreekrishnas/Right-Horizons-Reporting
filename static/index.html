@@ -535,6 +535,7 @@
                         <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
                             <input type="month" class="date-input" id="cal-month" style="height:40px; font-size:0.85rem;">
                             <button class="btn-export" onclick="generateCalendar()">Generate with AI</button>
+                            <button class="btn-export rr-btn-highlight" onclick="downloadCalendarCSV()" id="cal-csv-btn" style="display:none;">⬇ Download CSV</button>
                             <label class="btn-export" style="cursor:pointer;">
                                 Upload PDF/DOCX/TXT
                                 <input type="file" id="cal-file" accept=".pdf,.docx,.txt" style="display:none;">

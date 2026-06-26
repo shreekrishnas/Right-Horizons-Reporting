@@ -1771,15 +1771,28 @@ let calendarItems = [];
 function renderCalendarTable(items) {
     calendarItems = items;
     const tbl = document.getElementById('cal-table');
-    if (!items.length) { tbl.innerHTML = '<div class="empty-state"><p>No items.</p></div>'; return; }
-    let html = '<table><thead><tr><th>Date</th><th>Platform</th><th>Type</th><th>Title</th><th>Description</th></tr></thead><tbody>';
+    const csvBtn = document.getElementById('cal-csv-btn');
+    if (!items.length) {
+        tbl.innerHTML = '<div class="empty-state"><p>No items.</p></div>';
+        if (csvBtn) csvBtn.style.display = 'none';
+        return;
+    }
+    if (csvBtn) csvBtn.style.display = '';
+    let html = '<table><thead><tr><th style="width:90px">Date</th><th style="width:70px">Day</th><th style="width:90px">Status</th><th style="width:90px">Type</th><th style="width:110px">Swimlane</th><th style="min-width:280px">Caption / Slide Copy</th><th style="min-width:260px">Description</th><th style="min-width:180px">Hashtags</th><th style="min-width:140px">Design Notes</th><th style="min-width:120px">References</th></tr></thead><tbody>';
     items.forEach((it, i) => {
-        html += `<tr data-idx="${i}">
+        const isPlaceholder = !it.type || it.type === '';
+        const rowStyle = isPlaceholder ? 'background:rgba(255,255,255,0.02);font-style:italic;opacity:0.75' : '';
+        html += `<tr data-idx="${i}" style="${rowStyle}">
             <td contenteditable="true" data-k="date">${esc(it.date || '')}</td>
-            <td contenteditable="true" data-k="platform">${esc(it.platform || '')}</td>
+            <td contenteditable="true" data-k="day">${esc(it.day || '')}</td>
+            <td contenteditable="true" data-k="approval_status">${esc(it.approval_status || '')}</td>
             <td contenteditable="true" data-k="type">${esc(it.type || '')}</td>
-            <td contenteditable="true" data-k="title">${esc(it.title || '')}</td>
-            <td contenteditable="true" data-k="description">${esc(it.description || '')}</td>
+            <td contenteditable="true" data-k="swimlane">${esc(it.swimlane || '')}</td>
+            <td contenteditable="true" data-k="caption" style="white-space:pre-wrap;">${esc(it.caption || '')}</td>
+            <td contenteditable="true" data-k="description" style="white-space:pre-wrap;">${esc(it.description || '')}</td>
+            <td contenteditable="true" data-k="hashtags" style="font-size:0.78rem;">${esc(it.hashtags || '')}</td>
+            <td contenteditable="true" data-k="design_notes">${esc(it.design_notes || '')}</td>
+            <td contenteditable="true" data-k="references">${esc(it.references || '')}</td>
         </tr>`;
     });
     html += '</tbody></table>';
@@ -1791,6 +1804,20 @@ function renderCalendarTable(items) {
             calendarItems[idx][td.dataset.k] = td.textContent.trim();
         });
     });
+}
+
+async function downloadCalendarCSV() {
+    const month = document.getElementById('cal-month').value;
+    if (!month) return alert('Pick a month');
+    if (!calendarItems.length) return alert('Generate a calendar first');
+    try {
+        await api('/api/calendar/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ domain: currentDomain, month, items: calendarItems }),
+        });
+    } catch (e) { /* save best-effort */ }
+    window.location.href = `/api/calendar/export.csv?domain=${currentDomain}&month=${month}`;
 }
 
 // ── Idea Lab ──

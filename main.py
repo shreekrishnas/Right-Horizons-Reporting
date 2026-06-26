@@ -6,7 +6,7 @@ def _today_ist() -> date:
     return datetime.now(_IST).date()
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from config import DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN, META_PAGE_ID, META_APP_ID, META_APP_SECRET, ADMIN_PASSWORD
@@ -1508,18 +1508,69 @@ SEBI-registered advisor before making decisions."
 
 
 CAL_SYSTEM = (
-    "You are the content strategist for Right Horizons (Indian wealth/PMS/AIF firm). "
-    "You must produce content that matches the firm's established voice exactly.\n\n"
+    "You are the Head of Content Strategy for Right Horizons (Indian wealth/PMS/AIF firm "
+    "serving HNIs, NRIs, senior tech professionals, and UHNI business families). You write "
+    "at CEO/CIO level — every post must read like it came from a Partner at the firm, not "
+    "an intern. Vague, generic, or recycled advice is unacceptable.\n\n"
     + RH_CONTENT_DNA +
-    "\n\nTASK: Generate a monthly content calendar for {domain} for {month}. Produce "
-    "12-15 posts (not 20-30) matching the swimlane distribution above (5-6 Retirement, "
-    "3-4 NRI, 2 ESOPs, 1-2 Family Office). Follow the post-type mix (more Carousels & "
-    "Static Images, occasional Reels/Polls). Captions and descriptions MUST follow the "
-    "voice rules — observational, data-driven, no hype. Each post must include a swimlane.\n\n"
-    "Output ONLY valid JSON: an array of "
-    "{date: 'YYYY-MM-DD', platform, type ('Carousel'/'Static Image'/'Reel'/'Poll'), "
-    "swimlane ('Retirement Planning'/'NRI'/'ESOPs'/'Family Office'), title, caption, "
-    "description, hashtags: []}."
+    "\n\nCALENDAR STRUCTURE (match the firm's actual operating cadence — DO NOT deviate):\n"
+    "- Posts go on Mon/Wed/Fri primarily; occasional Tue/Thu. Sat = Case Study placeholder. "
+    "Sun = OFF. Some Mondays = 'Leadership Quote/Video from RM' placeholder.\n"
+    "- Target 12-14 active posts in the month + 3-4 'Case Study' placeholder rows + "
+    "2-3 'Leadership Quote/Video from RM' placeholder rows.\n"
+    "- For placeholders: set type='', swimlane='', caption='Case Study' or 'Leadership "
+    "Quote/Video from RM', description=''. Still include the date and day.\n\n"
+    "CAPTION QUALITY BAR (this is what separates basic from CEO-level — STUDY THESE PATTERNS):\n"
+    "CAROUSEL captions MUST be written slide-by-slide with full slide text, e.g.:\n"
+    "  'Slide 1: At 55, the plan that worked at 40 starts to quietly fail.\n"
+    "   Slide 2: Equity allocation that felt aggressive at 40 now feels reckless. Three "
+    "things change: time horizon shrinks, sequence-of-returns risk shows up, healthcare "
+    "inflation compounds at 14%.\n"
+    "   Slide 3: The 60/40 split everyone quotes assumes a US-style 4% withdrawal. In "
+    "India, that math breaks. SWP-led 3.5% with a 5-year debt bucket holds up better.\n"
+    "   Slide 4: A ₹4.2 Cr corpus at 55, structured right, produces ₹2.1L/month inflation-"
+    "adjusted for 35 years. Same corpus, wrong structure — fails by year 22.\n"
+    "   Slide 5: Three questions to ask your advisor this week.'\n\n"
+    "STATIC IMAGE captions: Headline + 3-5 punchy supporting lines. Use specific numbers, "
+    "named regulations (Form 13, Section 197, DTAA, FEMA), city/country specifics.\n\n"
+    "REEL captions: Scene-by-scene with [Scene 1: ...] directions, dialogue, then the "
+    "financial reveal. Build a relatable working professional persona.\n\n"
+    "POLL captions: Sharp question + 3-4 options that themselves teach something.\n\n"
+    "DESCRIPTION RULES (the longer post body, 80-150 words):\n"
+    "- Opens with an OBSERVATION, never a question.\n"
+    "- Cites a concrete data point (₹ amount, regulation reference, age bracket, year, %).\n"
+    "- Acknowledges 2-3 sub-areas the post covers as observations, not advice.\n"
+    "- Ends with a soft handle reference ('@righthorizons') — NEVER 'DM us' or 'book now'.\n\n"
+    "HASHTAGS: 12-15 educational tags. Always include #RightHorizons + #WealthManagement + "
+    "swimlane tag + 6-8 specific topical tags. NEVER #trending #viral #moneygoals.\n\n"
+    "VARIETY MANDATE (CRITICAL — you must NOT produce a generic Indian-finance calendar):\n"
+    "- For EACH post, choose a DIFFERENT narrative device: case study, myth-buster, "
+    "regulatory deep-dive, mistake post-mortem, age-bracket walkthrough, before/after "
+    "math, persona-driven scenario, contrarian take, framework introduction, FAQ format.\n"
+    "- For EACH post, anchor in a SPECIFIC angle: a city (Dubai/Singapore/Bangalore), an "
+    "age (52/58/63), a regulation just changed, a market event from this week, a number "
+    "from a recent SEBI/RBI/CBDT circular, a profession (cardiologist, founder, CXO).\n"
+    "- Use the LATEST MARKET CONTEXT, FINANCE NEWS, and GOOGLE TRENDS provided below to "
+    "ground at least 3-4 posts in current events from this month.\n\n"
+    "OUTPUT FORMAT (strict JSON array — match the firm's xlsx schema exactly):\n"
+    "Each object: {\n"
+    "  'date': 'YYYY-MM-DD',\n"
+    "  'day': 'Monday/Tuesday/...',\n"
+    "  'approval_status': 'Waiting for content approval' (for active posts) or '' (placeholders),\n"
+    "  'type': 'Carousel' | 'Static Image' | 'Reel' | 'Poll' | 'Gif' | '' (for placeholders),\n"
+    "  'swimlane': 'Retirement Planning' | 'NRI' | 'ESOPs' | 'Family Office' | '' (placeholders),\n"
+    "  'caption': full slide-by-slide caption (for carousels) or headline+bullets (image) or "
+    "scene script (reel) or question+options (poll) or 'Case Study'/'Leadership Quote/Video "
+    "from RM' for placeholders,\n"
+    "  'description': 80-150 word post body following the description rules above,\n"
+    "  'hashtags': '#tag1 #tag2 ...' as a single string of 12-15 tags,\n"
+    "  'design_notes': brief visual direction (e.g. 'Hero number ₹4.2 Cr centered, charcoal "
+    "bg, mint accent on key stats'),\n"
+    "  'references': any source URL or note for fact-checking (regulation, news article, "
+    "trend keyword from the live context), or '' if none\n"
+    "}\n\n"
+    "RETURN: JSON array of 18-22 row objects covering the entire month (active posts + "
+    "placeholders + off-day skips combined). DO NOT wrap in any other object."
 )
 
 
@@ -1539,6 +1590,28 @@ def calendar_generate(req: CalendarRequest):
     user += "- Level 4-7: intermediate angles (corpus vs SWP math, ESOP exit waterfalls, NRI DTAA optimization)\n"
     user += "- Level 8+: advanced/niche (estate freezes, GIFT City FoF structures, ESOP+RSU dual-track, family LLP vs Trust)\n"
     user += "Pick angles appropriate for current level. NEVER use the exact angle of any past item.\n\n"
+
+    import random
+    _devices = ["case study", "myth-buster", "regulatory deep-dive", "mistake post-mortem",
+                "age-bracket walkthrough", "before/after math", "persona-driven scenario",
+                "contrarian take", "framework introduction", "FAQ format", "checklist",
+                "decision tree", "data-led explainer", "what-if scenario"]
+    _personas = ["Bangalore CTO with vested ESOPs", "Dubai-based cardiologist returning to India",
+                 "Mumbai founder post-exit", "Singapore-based banker with India property",
+                 "Pune family office trustee", "Hyderabad startup CFO", "London-based NRI cardiologist",
+                 "Chennai retired PSU executive", "Delhi second-generation business family",
+                 "US-based tech VP with RSUs and ESOPs"]
+    _angles = ["sequence-of-returns risk", "currency mismatch", "regulatory just-changed",
+               "concentration risk", "tax timing", "estate transition", "withdrawal mechanics",
+               "DTAA optimization", "liquidity event planning", "intergenerational gift structuring"]
+    _devices_pick = random.sample(_devices, 6)
+    _personas_pick = random.sample(_personas, 4)
+    _angles_pick = random.sample(_angles, 4)
+    user += "VARIETY SEED FOR THIS GENERATION (use these as starting points — do not repeat across posts):\n"
+    user += f"- Narrative devices to lean on: {', '.join(_devices_pick)}\n"
+    user += f"- Personas to weave in (at least 3 of these): {', '.join(_personas_pick)}\n"
+    user += f"- Specific angles to anchor posts: {', '.join(_angles_pick)}\n\n"
+
     past = _history_context(_calendar_history, req.domain, limit=80)
     if past:
         user += "DO NOT REPEAT THESE PAST POSTS (vary the angle, the numbers, the specifics):\n"
@@ -1583,6 +1656,45 @@ def calendar_save(payload: dict = Body(...)):
         raise HTTPException(400, "month required")
     _calendars[f"{domain}:{month}"] = items
     return {"ok": True}
+
+
+@app.get("/api/calendar/export.csv")
+def calendar_export_csv(domain: str = "rh", month: str = ""):
+    import csv
+    items = _calendars.get(f"{domain}:{month}", [])
+    if not items:
+        raise HTTPException(404, "No calendar found for this domain/month — generate it first.")
+    buf = io.StringIO()
+    cols = ["DATE", "DAY", "Approval Status", "POST TYPE", "Aligned Swimlane",
+            "CAPTION/Image Copy", "Design Notes", "DESCRIPTION", "HASHTAGS",
+            "REFERENCES", "IMAGE", "CLIENT FEEDBACK"]
+    w = csv.writer(buf)
+    w.writerow(cols)
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        w.writerow([
+            it.get("date", ""),
+            it.get("day", ""),
+            it.get("approval_status", ""),
+            it.get("type", ""),
+            it.get("swimlane", ""),
+            it.get("caption", ""),
+            it.get("design_notes", ""),
+            it.get("description", ""),
+            it.get("hashtags", ""),
+            it.get("references", ""),
+            "",  # IMAGE — filled by designer
+            "",  # CLIENT FEEDBACK — filled later
+        ])
+    csv_text = buf.getvalue()
+    label = DOMAINS.get(domain, {}).get("label", domain).replace(" ", "_")
+    fname = f"RH_SM_Calendar_{label}_{month}.csv"
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 def _parse_rh_calendar_xlsx(content: bytes) -> list:
