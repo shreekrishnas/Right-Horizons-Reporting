@@ -1451,9 +1451,9 @@ async function generateSEO() {
         html += '<div class="glass-card-static" style="padding:1.5rem; margin-bottom:1rem;">';
         html += '<div class="table-title" style="margin-bottom:0.75rem;">Suggested Titles</div>';
         (seo.titles || []).forEach((t, i) => {
-            const badge = t.type === 'SEO Optimized'
-                ? '<span style="background:#7C3AED20;color:#7C3AED;padding:2px 8px;border-radius:9999px;font-size:0.7rem;font-weight:700;margin-right:0.5rem;">SEO</span>'
-                : '<span style="background:#0EA5E920;color:#0EA5E9;padding:2px 8px;border-radius:9999px;font-size:0.7rem;font-weight:700;margin-right:0.5rem;">BRAND</span>';
+            const badgeColors = {'SEO Optimized':['#7C3AED','SEO'],'Speaker & Brand':['#0EA5E9','BRAND'],'Curiosity':['#F59E0B','HOOK']};
+            const bc = badgeColors[t.type] || ['#10B981', t.type || 'OTHER'];
+            const badge = `<span style="background:${bc[0]}20;color:${bc[0]};padding:2px 8px;border-radius:9999px;font-size:0.7rem;font-weight:700;margin-right:0.5rem;">${bc[1]}</span>`;
             html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.75rem;background:var(--surface-input);border-radius:0.6rem;margin-bottom:0.5rem;">
                 <div style="font-size:0.85rem;font-weight:500;">${badge}${esc(t.title)}</div>
                 <button onclick="_copyToClipboard('${esc(t.title).replace(/'/g,"\\'")}', this)" style="background:var(--accent-primary-soft);color:var(--accent-primary);border:none;padding:4px 12px;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;white-space:nowrap;">Copy</button>
@@ -1464,7 +1464,7 @@ async function generateSEO() {
         html += '<div class="glass-card-static" style="padding:1.5rem; margin-bottom:1rem;">';
         html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;"><div class="table-title" style="margin:0;">Description</div>';
         html += `<button id="copy-desc-btn" style="background:var(--accent-primary-soft);color:var(--accent-primary);border:none;padding:4px 12px;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;">Copy</button></div>`;
-        html += `<pre id="seo-desc-text" style="white-space:pre-wrap;font-size:0.8rem;background:var(--surface-input);padding:1rem;border-radius:0.75rem;font-family:Inter,sans-serif;line-height:1.6;max-height:300px;overflow-y:auto;">${esc(seo.description)}</pre>`;
+        html += `<pre id="seo-desc-text" style="white-space:pre-wrap;font-size:0.8rem;background:var(--surface-input);padding:1rem;border-radius:0.75rem;font-family:Inter,sans-serif;line-height:1.6;max-height:500px;overflow-y:auto;">${esc(seo.description)}</pre>`;
         html += '</div>';
 
         html += '<div class="glass-card-static" style="padding:1.5rem; margin-bottom:1rem;">';

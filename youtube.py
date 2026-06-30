@@ -1,5 +1,9 @@
+import json
+import logging
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
+
+log = logging.getLogger(__name__)
 
 
 def _service(creds: Credentials):
@@ -54,107 +58,207 @@ def get_recent_videos(creds: Credentials, max_results: int = 10) -> list:
     return results
 
 
+_SEO_SYSTEM = """You are the YouTube SEO strategist for Right Horizons (Indian SEBI-registered PMS & AIF firm).
+
+You produce professional YouTube descriptions, titles, timestamps, and tags that match the firm's
+established format EXACTLY. Study these two real examples of Right Horizons YouTube descriptions:
+
+--- EXAMPLE 1 ---
+Looking to invest beyond mutual funds, PMS, and stocks? In this Right FinTalk Live webinar, Anil Rego (Founder & CIO of Right Horizons) explains Alternative Investment Funds (AIF), how they manage risk via market hedging, and who should consider them for portfolio diversification.
+
+Timestamp:
+00:00 - Introduction & Portfolio Diversification
+02:08 - Audience Poll: What is an Alternative Investment Fund (AIF)?
+04:03 - Why Consider AIFs? Low Market Correlation & Hedging Explained
+08:09 - What is an Alternative Investment Fund? Mutual Funds vs. PMS vs. AIF
+11:24 - AIF Categories Explained: Cat 1, Cat 2, and Cat 3 Funds
+15:51 - Asset Allocation: How HNIs & Family Offices Structure Portfolios
+21:30 - Small Cap & Mid Cap Market Cycle Outlook (20-Year Data)
+28:44 - The Right Horizons $10 Trillion India Growth Opportunity Strategy
+33:32 - AIF Fund Structure: Staggered Drawdowns, Lock-ins, and Taxation
+39:12 - Global Opportunity Strategy: International Diversification with ETFs
+
+Key topics covered:
+✅ What is an Alternative Investment Fund and how it differs from Mutual Funds and PMS
+✅ Why low market correlation matters for portfolio risk
+✅ How AIFs use F&O for both hedging and growth
+✅ Asymmetric return potential and downside protection
+✅ The Right Horizons AIF and the India opportunity
+✅ Introduction to global fund of funds investing
+✅ Who should consider AIFs and why
+
+📢 Watch now to understand how AIFs can add a new dimension to your investment portfolio
+🔔 Like, Share & Subscribe for more insights from Right Horizons
+
+For more information about Right Horizons, connect with us:
+Facebook: https://facebook.com/Righthorizonsfinancialspvtltd/
+LinkedIn: https://linkedin.com/in/right-horizons-3b8a2240/
+Instagram: https://instagram.com/_righthorizons_/
+Website: https://www.righthorizons.com
+Website: https://righthorizonspms.com/
+
+#AlternativeInvestments #AIFFund #RightHorizons #AnilRego #WealthManagement #PortfolioManagement #HNIInvestors #InvestmentStrategy #AssetAllocation #IndiaGrowthStory #AlternativeAssets #FinancialPlanning #RightFinTalk #SmartInvesting #BeyondMutualFunds
+
+Disclaimer: Investments in securities markets are subject to market risks. Read all scheme-related documents carefully before investing. Past performance is not indicative of future results.
+
+--- EXAMPLE 2 ---
+Looking to understand where India's markets may be headed and how investors can approach opportunities beyond traditional investment products?
+
+In this Right Horizons webinar, Shakthi Prabhu, Assistant Fund Manager at Right Horizons, shares insights on India's structural growth story, the current macro environment, FII sentiment, small and mid-cap opportunities, and the role of Alternative Investment Funds in long-term wealth creation.
+
+Key topics covered:
+✅ India's long-term structural growth opportunity
+✅ Current market environment and macroeconomic indicators
+✅ FII flows, currency stability and global capital rotation
+✅ Why small and mid-caps can create long-term wealth
+✅ How AIFs differ from traditional investment products
+✅ RH Rising India Opportunities AIF strategy and structure
+
+📢 Watch now to understand how India's growth story, small-cap opportunities and AIF strategies can support long-term wealth creation.
+🔔 Like, Share & Subscribe for more insights from Right Horizons.
+
+For more information about Right Horizons, connect with us:
+Facebook: https://facebook.com/Righthorizonsfinancialspvtltd/
+LinkedIn: https://linkedin.com/in/right-horizons-3b8a2240/
+Instagram: https://instagram.com/_righthorizons_/
+Website: https://www.righthorizons.com
+Website: https://righthorizonspms.com/
+
+#RightHorizons #AIF #AlternativeInvestmentFund #RHWebinar #ShakthiPrabhu #WealthManagement #SmallCaps #MidCaps #IndiaGrowthStory #InvestmentStrategy #PortfolioManagement #HNIInvestors #MarketOutlook #AssetAllocation #RiskManagement #FinancialPlanning #LongTermInvesting #SmartInvesting #AlternativeInvestments
+
+Disclaimer: Investments in securities markets are subject to market risks. Read all scheme-related documents carefully before investing. Past performance is not indicative of future results.
+
+--- END EXAMPLES ---
+
+RULES FOR GENERATING OUTPUT:
+1. DESCRIPTION must follow the EXACT structure:
+   - Opening hook paragraph (1-2 sentences, question or statement that pulls the viewer in)
+   - Speaker intro paragraph ("In this Right Horizons webinar, [Speaker Name], [Title] at Right Horizons, shares insights on...")
+   - Timestamp section (if transcript is provided — generate realistic timestamps from the transcript content, formatted as "Timestamp:\\n00:00 - Topic\\n02:15 - Topic...")
+   - "Key topics covered:" section with ✅ bullet points (5-8 points, specific not generic)
+   - 📢 CTA line ("Watch now to understand...")
+   - 🔔 Subscribe line
+   - Social links block (ALWAYS include these exact links):
+     Facebook: https://facebook.com/Righthorizonsfinancialspvtltd/
+     LinkedIn: https://linkedin.com/in/right-horizons-3b8a2240/
+     Instagram: https://instagram.com/_righthorizons_/
+     Website: https://www.righthorizons.com
+     Website: https://righthorizonspms.com/
+   - Hashtags line (15-20 hashtags, always include #RightHorizons, speaker name hashtag, topic-specific tags)
+   - Disclaimer: "Investments in securities markets are subject to market risks. Read all scheme-related documents carefully before investing. Past performance is not indicative of future results."
+
+2. TITLES: Generate 4-5 title options:
+   - SEO-optimized titles with year, numbers, and power words
+   - Speaker & brand title with speaker name
+   - Curiosity-driven title
+   - Each under 100 characters for YouTube best practices
+
+3. TAGS: Generate 25-30 YouTube tags (NOT hashtags — these go in YouTube's tag field):
+   - Mix of broad (wealth management, investment) and specific (topic-related)
+   - Include "Right Horizons", speaker name, topic variations
+   - Include India-specific investing terms
+   - Include trending finance YouTube search terms
+   - Long-tail keywords (3-5 word phrases that people actually search)
+
+4. HASHTAGS: Generate 15-20 hashtags for the description:
+   - Always start with topic-specific tags
+   - Always include #RightHorizons
+   - Include speaker name as hashtag
+   - Mix of broad financial + specific topic tags
+   - Never use generic hype tags (#trending, #viral)
+
+Return JSON: {
+  "titles": [{"type": "SEO Optimized"|"Speaker & Brand"|"Curiosity", "title": "..."}],
+  "description": "full description following the exact structure above",
+  "tags": ["tag1", "tag2", ...],
+  "hashtags": ["#Tag1", "#Tag2", ...]
+}"""
+
+
 def generate_seo_metadata(topic: str, speaker: str = "", transcript: str = "") -> dict:
-    topic_clean = topic.strip()
-    topic_lower = topic_clean.lower()
-    speaker = speaker.strip()
-    transcript = transcript.strip()
+    try:
+        import ai as ai_mod
+    except ImportError:
+        ai_mod = None
 
-    topic_words = [w for w in topic_lower.split() if len(w) > 2]
-    key_phrases = [topic_lower]
-    if transcript:
-        words = transcript.lower().split()
-        freq = {}
-        stop = {"the","a","an","is","are","was","were","be","been","being","have","has","had",
-                "do","does","did","will","would","could","should","may","might","shall","can",
-                "in","on","at","to","for","of","with","by","from","and","or","but","not","so",
-                "this","that","these","those","it","its","we","you","i","he","she","they","our",
-                "your","my","his","her","their","what","which","who","how","when","where","why",
-                "about","into","than","then","also","just","very","more","most","some","any","all",
-                "each","every","both","few","many","much","own","same","other","such","no","nor"}
-        for w in words:
-            w = ''.join(c for c in w if c.isalnum())
-            if w and len(w) > 3 and w not in stop:
-                freq[w] = freq.get(w, 0) + 1
-        top_words = sorted(freq, key=freq.get, reverse=True)[:8]
-        key_phrases.extend(top_words)
+    if not ai_mod:
+        return _fallback_seo(topic, speaker, transcript)
 
-    seo_title_1 = f"{topic_clean} in India 2026 — Complete Guide for Smart Investors"
-    seo_title_2 = f"{topic_clean}: Strategy, Returns & Risk Analysis | Expert Breakdown"
+    user_msg = f"VIDEO TOPIC: {topic}\n"
     if speaker:
-        speaker_title = f"{topic_clean} with {speaker} | Right Horizons"
-    else:
-        speaker_title = f"{topic_clean} | Right Horizons Expert Analysis"
-
-    titles = [
-        {"type": "SEO Optimized", "title": seo_title_1},
-        {"type": "SEO Optimized", "title": seo_title_2},
-        {"type": "Speaker & Brand", "title": speaker_title},
-    ]
-
-    speaker_line = f" by {speaker}" if speaker else ""
-    transcript_topics = ""
+        user_msg += f"SPEAKER: {speaker}\n"
     if transcript:
-        sentences = [s.strip() for s in transcript.replace('\n', '. ').split('.') if len(s.strip()) > 15]
-        bullet_points = sentences[:5]
-        transcript_topics = "\n".join(f"- {bp}" for bp in bullet_points)
+        user_msg += f"\nTRANSCRIPT / KEY POINTS:\n{transcript[:15000]}\n"
+    user_msg += "\nGenerate the complete YouTube SEO package following the structure and quality of the examples."
+
+    try:
+        result = ai_mod.chat_json(_SEO_SYSTEM, user_msg, max_tokens=5000, temperature=0.6)
+        if isinstance(result, dict):
+            items = result.get("items")
+            if isinstance(items, list) and len(items) == 1 and isinstance(items[0], dict):
+                result = items[0]
+            elif isinstance(items, dict):
+                result = items
+        for key in ("titles", "description", "tags", "hashtags"):
+            if key not in result:
+                result[key] = [] if key != "description" else ""
+        return result
+    except Exception as e:
+        log.warning("AI SEO generation failed, using fallback: %s", e)
+        return _fallback_seo(topic, speaker, transcript)
+
+
+def _fallback_seo(topic: str, speaker: str = "", transcript: str = "") -> dict:
+    topic_clean = topic.strip()
+    topic_tag = topic_clean.replace(' ', '')
+    speaker_line = f", {speaker}," if speaker else ""
 
     description = (
-        f"{topic_clean}{speaker_line} — A deep-dive into {topic_lower} "
-        f"covering key strategies, market outlook, and actionable insights for Indian investors.\n\n"
-    )
-    if speaker:
-        description += (
-            f"In this video, {speaker} from Right Horizons shares expert perspectives "
-            f"on {topic_lower} and what it means for your portfolio in 2026.\n\n"
-        )
-    description += "Key topics covered in this video:\n"
-    if transcript_topics:
-        description += transcript_topics + "\n\n"
-    else:
-        description += (
-            f"- What is {topic_lower} and why it matters now\n"
-            f"- How {topic_lower} impacts your investment returns\n"
-            f"- Strategies to maximize gains while managing risk\n"
-            f"- Expert insights from Right Horizons research team\n\n"
-        )
-    description += (
-        "About Right Horizons:\n"
-        "Right Horizons is a SEBI-registered Portfolio Management Service (PMS) "
-        "and Alternative Investment Fund (AIF) provider. With over 15 years of expertise, "
-        "we help investors build sustainable, long-term wealth through research-driven strategies.\n\n"
-        "Connect with us:\n"
+        f"Looking to understand {topic_clean.lower()} and how it fits into your investment strategy?\n\n"
+        f"In this Right Horizons webinar{speaker_line} shares insights on {topic_clean.lower()}, "
+        f"key strategies, market outlook, and actionable takeaways for Indian investors.\n\n"
+        "Key topics covered:\n"
+        f"✅ What is {topic_clean.lower()} and why it matters now\n"
+        f"✅ How {topic_clean.lower()} impacts your investment portfolio\n"
+        "✅ Strategies to maximize returns while managing risk\n"
+        "✅ Expert insights from Right Horizons research team\n\n"
+        f"📢 Watch now to understand how {topic_clean.lower()} can support your wealth creation goals.\n"
+        "🔔 Like, Share & Subscribe for more insights from Right Horizons.\n\n"
+        "For more information about Right Horizons, connect with us:\n"
+        "Facebook: https://facebook.com/Righthorizonsfinancialspvtltd/\n"
+        "LinkedIn: https://linkedin.com/in/right-horizons-3b8a2240/\n"
+        "Instagram: https://instagram.com/_righthorizons_/\n"
         "Website: https://www.righthorizons.com\n"
-        "PMS: https://righthorizonspms.com\n"
-        "AIF: https://aif.righthorizonspms.com\n"
-        "Email: info@righthorizons.com\n"
-        "Phone: +91-80-4612 4612\n\n"
-    )
-    topic_tag = topic_clean.replace(' ', '')
-    description += (
-        f"#{topic_tag} #RightHorizons #Investment #WealthManagement "
-        f"#PMS #AIF #StockMarketIndia #PortfolioManagement\n\n"
-        "DISCLAIMER: This video is for educational and informational purposes only. "
-        "It does not constitute investment advice. Please consult your financial advisor "
-        "before making investment decisions."
+        "Website: https://righthorizonspms.com/\n\n"
+        f"#{topic_tag} #RightHorizons #WealthManagement #Investment #PortfolioManagement "
+        "#HNIInvestors #InvestmentStrategy #FinancialPlanning #SmartInvesting\n\n"
+        "Disclaimer: Investments in securities markets are subject to market risks. "
+        "Read all scheme-related documents carefully before investing. "
+        "Past performance is not indicative of future results."
     )
 
-    base_tags = [
+    titles = [
+        {"type": "SEO Optimized", "title": f"{topic_clean} in India 2026 — Complete Guide for Smart Investors"},
+        {"type": "SEO Optimized", "title": f"{topic_clean}: Strategy, Returns & Risk Analysis | Expert Breakdown"},
+    ]
+    if speaker:
+        titles.append({"type": "Speaker & Brand", "title": f"{topic_clean} with {speaker} | Right Horizons"})
+    else:
+        titles.append({"type": "Speaker & Brand", "title": f"{topic_clean} | Right Horizons Expert Analysis"})
+
+    tags = [
         "Right Horizons", "wealth management", "PMS India", "AIF India",
         "portfolio management services", "investment strategies India",
         "stock market India 2026", "financial planning", "SEBI registered PMS",
         "best PMS in India", topic_clean,
     ]
     if speaker:
-        base_tags.append(speaker.split(',')[0].strip())
-    extra = [w for w in key_phrases if w not in [t.lower() for t in base_tags]]
-    tags = list(dict.fromkeys(base_tags + extra))[:25]
+        tags.append(speaker.split(',')[0].strip())
 
     hashtags = [
-        f"#{topic_tag}", "#RightHorizons", "#Investment", "#WealthManagement",
-        "#PMS", "#AIF", "#StockMarketIndia", "#Finance2026",
-        "#PortfolioManagement", "#IndianStockMarket", "#SEBIRegistered",
-        "#FinancialPlanning",
+        f"#{topic_tag}", "#RightHorizons", "#WealthManagement", "#Investment",
+        "#PortfolioManagement", "#HNIInvestors", "#InvestmentStrategy",
+        "#FinancialPlanning", "#SmartInvesting", "#IndiaGrowthStory",
     ]
 
     return {
