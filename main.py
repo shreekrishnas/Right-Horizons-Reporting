@@ -5,7 +5,7 @@ _IST = timezone(timedelta(hours=5, minutes=30))
 def _today_ist() -> date:
     return datetime.now(_IST).date()
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Query
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query, Body
 from fastapi.responses import HTMLResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -1378,7 +1378,6 @@ try:
     import ai as ai_mod
 except Exception:
     ai_mod = None
-from fastapi import Body
 from pydantic import BaseModel
 
 _calendars: dict = {}  # key: f"{domain}:{month}" -> list of items
