@@ -576,9 +576,12 @@ def youtube_videos(limit: int = 10):
         raise HTTPException(502, f"YouTube error: {e}")
 
 
-@app.get("/api/youtube/seo")
-def youtube_seo(topic: str = "", speaker: str = "", transcript: str = ""):
-    if not topic.strip():
+@app.post("/api/youtube/seo")
+def youtube_seo(payload: dict = Body(...)):
+    topic = payload.get("topic", "").strip()
+    speaker = payload.get("speaker", "")
+    transcript = payload.get("transcript", "")
+    if not topic:
         raise HTTPException(400, "topic parameter required")
     return youtube.generate_seo_metadata(topic, speaker, transcript)
 

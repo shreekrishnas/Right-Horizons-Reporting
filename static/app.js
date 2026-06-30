@@ -1441,10 +1441,11 @@ async function generateSEO() {
     const resultEl = document.getElementById('yt-seo-result');
     resultEl.innerHTML = '<div class="empty-state"><p style="color:var(--accent-primary);">Generating SEO content...</p></div>';
     try {
-        let url = `/api/youtube/seo?topic=${encodeURIComponent(topic)}`;
-        if (speaker) url += `&speaker=${encodeURIComponent(speaker)}`;
-        if (transcript) url += `&transcript=${encodeURIComponent(transcript)}`;
-        const seo = await api(url);
+        const seo = await api('/api/youtube/seo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic, speaker, transcript }),
+        });
         let html = '';
 
         html += '<div class="glass-card-static" style="padding:1.5rem; margin-bottom:1rem;">';
