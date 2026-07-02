@@ -59,7 +59,7 @@ DOMAINS = {
     "akeana": {
         "label": "Akeana",
         "short": "AKE",
-        "gsc_site": os.getenv("GSC_SITE_AKEANA", "sc-domain:akeana.com"),
+        "gsc_site": os.getenv("GSC_SITE_AKEANA", "https://www.akeana.com/"),
         "ga4_property": os.getenv("GA4_PROPERTY_AKEANA", "454994121"),
         "color": "#F59E0B",
         "url": os.getenv("AKEANA_URL", "https://www.akeana.com"),
