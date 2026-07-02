@@ -58,6 +58,57 @@ def get_recent_videos(creds: Credentials, max_results: int = 10) -> list:
     return results
 
 
+def get_videos_in_range(creds: Credentials, start: str, end: str, max_results: int = 50) -> list:
+    """Videos published between start and end (YYYY-MM-DD), with view/like/comment stats."""
+    yt = _service(creds)
+    published_after = start + "T00:00:00Z"
+    published_before = end + "T23:59:59Z"
+    collected = []
+    page_token = None
+    while len(collected) < max_results:
+        search = yt.search().list(
+            forMine=True, type="video", order="date", part="snippet",
+            maxResults=min(50, max_results - len(collected)),
+            publishedAfter=published_after, publishedBefore=published_before,
+            pageToken=page_token,
+        ).execute()
+        items = search.get("items", [])
+        collected.extend(items)
+        page_token = search.get("nextPageToken")
+        if not page_token or not items:
+            break
+
+    video_ids = [it["id"]["videoId"] for it in collected if it.get("id", {}).get("videoId")]
+    if not video_ids:
+        return []
+    out = []
+    for i in range(0, len(video_ids), 50):
+        chunk = video_ids[i:i + 50]
+        details = yt.videos().list(id=",".join(chunk), part="statistics,snippet").execute()
+        for v in details.get("items", []):
+            s = v.get("statistics", {})
+            out.append({
+                "id": v["id"],
+                "title": v["snippet"]["title"],
+                "published": v["snippet"]["publishedAt"],
+                "views": int(s.get("viewCount", 0)),
+                "likes": int(s.get("likeCount", 0)),
+                "comments": int(s.get("commentCount", 0)),
+            })
+    return out
+
+
+def get_monthly_summary(creds: Credentials, start: str, end: str) -> dict:
+    """Aggregate YouTube activity for a date range: videos published + their stats."""
+    vids = get_videos_in_range(creds, start, end)
+    return {
+        "videos_published": len(vids),
+        "views": sum(v["views"] for v in vids),
+        "likes": sum(v["likes"] for v in vids),
+        "comments": sum(v["comments"] for v in vids),
+    }
+
+
 _SEO_SYSTEM = """You are the YouTube SEO strategist for Right Horizons (Indian SEBI-registered PMS & AIF firm).
 
 You produce professional YouTube descriptions, titles, timestamps, and tags that match the firm's
