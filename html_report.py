@@ -132,20 +132,22 @@ def _build_seed_store(all_monthly_data: dict, start: str, end: str) -> dict:
                 month_data[p] = dict(blank_platform)
 
             if ig:
+                # IG: 'views' is Meta's current field (replaced 'impressions')
                 month_data['Instagram'] = {
                     'followers': ig.get('followers'),
                     'newFollowers': ig.get('new_followers'),
                     'posts': ig.get('posts_published'),
-                    'impressions': ig.get('impressions') or ig.get('reach') or ig.get('views'),
+                    'impressions': ig.get('views') or ig.get('reach'),
                     'engagementRate': _pct_frac(ig.get('engagement_rate')),
                     'ctr': None,
                 }
             if fb:
+                # FB: page reach/impressions deprecated by Meta; use page views
                 month_data['Facebook'] = {
                     'followers': fb.get('followers') or fb.get('page_likes'),
                     'newFollowers': fb.get('new_followers'),
                     'posts': fb.get('posts_published'),
-                    'impressions': fb.get('page_impressions') or fb.get('reach') or fb.get('views'),
+                    'impressions': fb.get('views'),
                     'engagementRate': _pct_frac(fb.get('engagement_rate')),
                     'ctr': None,
                 }

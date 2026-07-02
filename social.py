@@ -143,14 +143,12 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
         "page_likes": page.get("fan_count", 0),
     }
 
+    # Only metrics confirmed valid on the current Graph API version (diagnose
+    # probe): page_post_engagements, page_views_total. Meta deprecated
+    # page_impressions / page_impressions_unique (reach) and page_consumptions.
     _metrics_total = [
         "page_post_engagements",
         "page_views_total",
-        "page_video_views",
-        "page_impressions",
-        "page_impressions_unique",
-        "page_consumptions",
-        "page_consumptions_unique",
     ]
     for metric in _metrics_total:
         try:
@@ -164,29 +162,17 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
         except Exception as e:
             log.debug("FB metric %s failed: %s", metric, e)
 
-    # page_fan_adds: day period, sum daily values
+    # New followers: page_daily_follows_unique (page_fan_adds is deprecated)
     try:
         data = _get(f"/{page_id}/insights", token, {
-            "metric": "page_fan_adds", "period": "day",
+            "metric": "page_daily_follows_unique", "period": "day",
             "since": start, "until": end,
         })
         for item in data.get("data", []):
-            result["page_fan_adds"] = sum(v.get("value", 0) for v in item.get("values", []))
+            result["new_followers_raw"] = sum(v.get("value", 0) for v in item.get("values", []))
     except Exception as e:
-        log.debug("FB page_fan_adds failed: %s", e)
-        result.setdefault("page_fan_adds", 0)
-
-    # page_fan_adds_unique as fallback
-    if not result.get("page_fan_adds"):
-        try:
-            data = _get(f"/{page_id}/insights", token, {
-                "metric": "page_fan_adds_unique", "period": "day",
-                "since": start, "until": end,
-            })
-            for item in data.get("data", []):
-                result["page_fan_adds"] = sum(v.get("value", 0) for v in item.get("values", []))
-        except Exception:
-            pass
+        log.debug("FB page_daily_follows_unique failed: %s", e)
+        result.setdefault("new_followers_raw", 0)
 
     # Fetch posts with shares/saves detail (paginated so long ranges aren't cut at 100)
     try:
@@ -209,26 +195,17 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
     except Exception:
         result["reels_stories"] = 0
 
-    reach = (
-        result.get("page_impressions_unique") or
-        result.get("page_impressions") or
-        0
-    )
     eng = result.get("page_post_engagements", 0)
-    new_followers = result.get("page_fan_adds", 0)
-    link_clicks = (
-        result.get("page_consumptions_unique") or
-        result.get("page_consumptions") or
-        0
-    )
-
-    result["engagement_rate"] = round((eng / reach * 100), 2) if reach > 0 else 0
-    result["new_followers"] = new_followers
-    result["reach"] = reach
+    followers = result.get("followers", 0) or result.get("page_likes", 0)
+    # FB page reach/impressions are no longer exposed by the API, so engagement
+    # rate is measured against total followers (a standard alternate definition).
+    result["engagement_rate"] = round((eng / followers * 100), 2) if followers > 0 else 0
+    result["new_followers"] = result.get("new_followers_raw", 0)
+    result["reach"] = None            # not available on current Graph API
     result["engagements"] = eng
     result["views"] = result.get("page_views_total", 0)
-    result["video_views"] = result.get("page_video_views", 0)
-    result["link_clicks"] = link_clicks
+    result["video_views"] = None      # page_video_views deprecated
+    result["link_clicks"] = None      # page_consumptions deprecated
     result["profile_visits"] = result.get("page_views_total", 0)
     result["saves_shares"] = result.get("total_shares", 0)
 
@@ -297,8 +274,12 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
         "total_media": profile.get("media_count", 0),
     }
 
+    # Valid on current Graph API (diagnose probe): reach, views,
+    # accounts_engaged, total_interactions. 'impressions' is deprecated
+    # (replaced by 'views'). The remaining ones are kept in the per-metric
+    # try/except so they populate where still supported and skip otherwise.
     _ig_metrics = [
-        "impressions", "reach", "accounts_engaged",
+        "reach", "views", "accounts_engaged", "total_interactions",
         "follows_and_unfollows", "profile_views", "website_clicks",
     ]
     for metric in _ig_metrics:
@@ -336,19 +317,8 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
             else:
                 result.setdefault(metric, 0)
 
-    # Fallback: try follower_count metric if follows_and_unfollows failed
-    if not result.get("new_followers"):
-        try:
-            data = _get(f"/{ig_id}/insights", token, {
-                "metric": "follower_count", "period": "day",
-                "since": start, "until": end,
-            })
-            for item in data.get("data", []):
-                vals = item.get("values", [])
-                if len(vals) >= 2:
-                    result["new_followers"] = vals[-1].get("value", 0) - vals[0].get("value", 0)
-        except Exception:
-            pass
+    # (follower_count insight metric is deprecated on the current API version,
+    # so no fallback here — new_followers comes from follows_and_unfollows.)
 
     # Fetch media for the period (paginated; stop once past the start date)
     def _fetch_media():
@@ -376,13 +346,16 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
     result["reels_stories"] = len(video_media)
     total_likes = sum(m.get("like_count", 0) for m in media)
     total_comments = sum(m.get("comments_count", 0) for m in media)
-    result["engagements"] = result.get("accounts_engaged", 0) or (total_likes + total_comments)
+    # Prefer total_interactions (valid), then accounts_engaged, then computed
+    result["engagements"] = (result.get("total_interactions", 0)
+                             or result.get("accounts_engaged", 0)
+                             or (total_likes + total_comments))
 
     reach = result.get("reach", 0)
-    impressions = result.get("impressions", 0)
+    views = result.get("views", 0)  # Meta's replacement for 'impressions'
 
-    result["views"] = impressions if impressions > 0 else reach
-    result["video_views"] = impressions if (impressions > 0 and len(video_media) > 0) else 0
+    result["views"] = views if views > 0 else reach
+    result["video_views"] = views if (views > 0 and len(video_media) > 0) else 0
     result["link_clicks"] = result.get("website_clicks", 0)
 
     # Fetch saves from individual media insights
