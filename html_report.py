@@ -16,17 +16,45 @@ def _esc(s):
     return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;')
 
 
-def _build_seed_store(all_data: dict, start: str, end: str) -> dict:
-    """Convert API data from all 3 entities into the reference HTML's STORE format."""
+def _month_ranges(start: str, end: str) -> list:
+    """Split a date range into per-month buckets: [(label, start, end), ...]."""
     from datetime import date as _date
     try:
-        end_d = _date.fromisoformat(end)
-        month_label = end_d.strftime('%b')
+        s = _date.fromisoformat(start)
+        e = _date.fromisoformat(end)
     except Exception:
-        month_label = 'Current'
+        return [('Current', start, end)]
+    import calendar
+    buckets = []
+    cur = s
+    while cur <= e:
+        y, m = cur.year, cur.month
+        _, last_day = calendar.monthrange(y, m)
+        month_end = _date(y, m, last_day)
+        if month_end > e:
+            month_end = e
+        label = cur.strftime('%b')
+        if (e.year - s.year) * 12 + (e.month - s.month) > 11:
+            label = cur.strftime("%b '%y")
+        elif e.year != s.year or (e.month - s.month) > 5:
+            label = cur.strftime("%b '%y")
+        buckets.append((label, cur.isoformat(), month_end.isoformat()))
+        if month_end.month == 12:
+            cur = _date(month_end.year + 1, 1, 1)
+        else:
+            cur = _date(month_end.year, month_end.month + 1, 1)
+    return buckets
+
+
+def _build_seed_store(all_monthly_data: dict, start: str, end: str) -> dict:
+    """Convert per-month API data from all 3 entities into the STORE format.
+
+    all_monthly_data: {month_label: {dom_key: entity_data, ...}, ...}
+    """
+    months = list(all_monthly_data.keys())
 
     store = {
-        'monthOrder': [month_label],
+        'monthOrder': months,
         'ads': {},
         'smm': {},
         'seo': {
@@ -46,61 +74,9 @@ def _build_seed_store(all_data: dict, start: str, end: str) -> dict:
         'aif': 'Right Horizons AIF',
     }
 
-    # Ads — aggregate from ALL entities
-    ads_month = {}
-    for ch in ADS_CHANNELS:
-        ads_month[ch] = {'spend': 0, 'leads': 0, 'notes': ''}
-
-    for dom_key in ['rh', 'pms', 'aif']:
-        entity_data = all_data.get(dom_key, {})
-        meta_ads = entity_data.get('meta_ads') or []
-        entity_spend = sum(float((c.get('spend') or 0)) for c in meta_ads)
-        entity_leads = sum(int((c.get('leads') or 0)) for c in meta_ads)
-        if entity_spend or entity_leads:
-            existing = ads_month['Meta (FB + Insta)']
-            existing['spend'] += entity_spend
-            existing['leads'] += entity_leads
-            entity_label = ENTITY_MAP.get(dom_key, dom_key)
-            note_parts = [existing['notes']] if existing['notes'] else []
-            note_parts.append(f'{entity_label}: ₹{entity_spend:,.0f} / {entity_leads} leads ({len(meta_ads)} campaigns)')
-            existing['notes'] = '; '.join(note_parts)
-
-    store['ads'][month_label] = ads_month
-
-    # SMM from social API data — all 3 entities
     SMM_PLATFORMS = ['LinkedIn','YouTube','Instagram','Facebook','Twitter / X']
     blank_platform = {'followers': None, 'newFollowers': None, 'posts': None, 'impressions': None, 'engagementRate': None, 'ctr': None}
 
-    for dom_key, entity_name in ENTITY_MAP.items():
-        d = all_data.get(dom_key, {})
-        ig = d.get('social_ig') or {}
-        fb = d.get('social_fb') or {}
-        month_data = {}
-        for p in SMM_PLATFORMS:
-            month_data[p] = dict(blank_platform)
-
-        if ig:
-            month_data['Instagram'] = {
-                'followers': ig.get('followers'),
-                'newFollowers': ig.get('new_followers'),
-                'posts': ig.get('posts_published'),
-                'impressions': ig.get('views') or ig.get('impressions'),
-                'engagementRate': ig.get('engagement_rate'),
-                'ctr': None,
-            }
-        if fb:
-            month_data['Facebook'] = {
-                'followers': fb.get('followers') or fb.get('page_likes'),
-                'newFollowers': fb.get('new_followers'),
-                'posts': fb.get('posts_published'),
-                'impressions': fb.get('views') or fb.get('impressions'),
-                'engagementRate': fb.get('engagement_rate'),
-                'ctr': None,
-            }
-
-        store['smm'][entity_name] = {month_label: month_data}
-
-    # SEO / Sites from GSC + GA4 API data — all 3 entities
     SITE_METRICS_KEYS = ['sessions','uniqueVisitors','avgSessionDuration','bounceRate','organicTraffic',
                          'organicImpressions','organicCTR','avgKeywordPosition','domainAuthority',
                          'newBacklinks','top10Keywords','mobileTrafficPct','pageLoadSpeed']
@@ -109,34 +85,92 @@ def _build_seed_store(all_data: dict, start: str, end: str) -> dict:
                      'Videos (YouTube / Reels)','Infographics','Newsletters','Webinar Recordings',
                      'Case Studies / Testimonials','Social Media Posts']
 
-    content_month = {}
-    for ct in CONTENT_TYPES:
-        content_month[ct] = 0
-    store['seo']['content'][month_label] = content_month
+    # Initialize SMM entity structure
+    for entity_name in ENTITY_MAP.values():
+        store['smm'][entity_name] = {}
+        store['seo']['sites'][entity_name] = {}
 
-    for dom_key, entity_name in ENTITY_MAP.items():
-        d = all_data.get(dom_key, {})
-        ga4_data = d.get('ga4') or {}
-        gsc_data = d.get('gsc') or {}
-        site_data = {k: None for k in SITE_METRICS_KEYS}
+    for month_label, month_entities in all_monthly_data.items():
+        # --- Ads: aggregate from ALL entities for this month ---
+        ads_month = {}
+        for ch in ADS_CHANNELS:
+            ads_month[ch] = {'spend': 0, 'leads': 0, 'notes': ''}
 
-        site_data['sessions'] = ga4_data.get('sessions') or ga4_data.get('organic_sessions')
-        site_data['uniqueVisitors'] = ga4_data.get('users') or ga4_data.get('organic_users')
-        site_data['avgSessionDuration'] = ga4_data.get('avg_session_duration')
-        site_data['bounceRate'] = ga4_data.get('bounce_rate')
-        site_data['organicTraffic'] = ga4_data.get('organic_sessions') or ga4_data.get('sessions')
-        site_data['organicImpressions'] = gsc_data.get('impressions')
-        site_data['organicCTR'] = gsc_data.get('ctr')
-        site_data['avgKeywordPosition'] = gsc_data.get('position')
+        for dom_key in ['rh', 'pms', 'aif']:
+            entity_data = month_entities.get(dom_key, {})
+            meta_ads = entity_data.get('meta_ads') or []
+            entity_spend = sum(float((c.get('spend') or 0)) for c in meta_ads)
+            entity_leads = sum(int((c.get('leads') or 0)) for c in meta_ads)
+            if entity_spend or entity_leads:
+                existing = ads_month['Meta (FB + Insta)']
+                existing['spend'] += entity_spend
+                existing['leads'] += entity_leads
+                entity_label = ENTITY_MAP.get(dom_key, dom_key)
+                note_parts = [existing['notes']] if existing['notes'] else []
+                note_parts.append(f'{entity_label}: ₹{entity_spend:,.0f} / {entity_leads} leads ({len(meta_ads)} campaigns)')
+                existing['notes'] = '; '.join(note_parts)
 
-        store['seo']['sites'][entity_name] = {month_label: site_data}
+        store['ads'][month_label] = ads_month
+
+        # --- SMM: per-entity social data for this month ---
+        for dom_key, entity_name in ENTITY_MAP.items():
+            d = month_entities.get(dom_key, {})
+            ig = d.get('social_ig') or {}
+            fb = d.get('social_fb') or {}
+            month_data = {}
+            for p in SMM_PLATFORMS:
+                month_data[p] = dict(blank_platform)
+
+            if ig:
+                month_data['Instagram'] = {
+                    'followers': ig.get('followers'),
+                    'newFollowers': ig.get('new_followers'),
+                    'posts': ig.get('posts_published'),
+                    'impressions': ig.get('views') or ig.get('impressions'),
+                    'engagementRate': ig.get('engagement_rate'),
+                    'ctr': None,
+                }
+            if fb:
+                month_data['Facebook'] = {
+                    'followers': fb.get('followers') or fb.get('page_likes'),
+                    'newFollowers': fb.get('new_followers'),
+                    'posts': fb.get('posts_published'),
+                    'impressions': fb.get('views') or fb.get('impressions'),
+                    'engagementRate': fb.get('engagement_rate'),
+                    'ctr': None,
+                }
+
+            store['smm'][entity_name][month_label] = month_data
+
+        # --- SEO / Sites: per-entity GSC + GA4 for this month ---
+        content_month = {}
+        for ct in CONTENT_TYPES:
+            content_month[ct] = 0
+        store['seo']['content'][month_label] = content_month
+
+        for dom_key, entity_name in ENTITY_MAP.items():
+            d = month_entities.get(dom_key, {})
+            ga4_data = d.get('ga4') or {}
+            gsc_data = d.get('gsc') or {}
+            site_data = {k: None for k in SITE_METRICS_KEYS}
+
+            site_data['sessions'] = ga4_data.get('sessions') or ga4_data.get('organic_sessions')
+            site_data['uniqueVisitors'] = ga4_data.get('users') or ga4_data.get('organic_users')
+            site_data['avgSessionDuration'] = ga4_data.get('avg_session_duration') or ga4_data.get('avg_session')
+            site_data['bounceRate'] = ga4_data.get('bounce_rate')
+            site_data['organicTraffic'] = ga4_data.get('organic_sessions') or ga4_data.get('sessions')
+            site_data['organicImpressions'] = gsc_data.get('impressions')
+            site_data['organicCTR'] = gsc_data.get('ctr')
+            site_data['avgKeywordPosition'] = gsc_data.get('position')
+
+            store['seo']['sites'][entity_name][month_label] = site_data
 
     return store
 
 
-def generate_html_report(all_data: dict, start: str, end: str, report_mode: str = "client") -> str:
+def generate_html_report(all_monthly_data: dict, start: str, end: str, report_mode: str = "client") -> str:
     ts = datetime.now(_IST).strftime('%d %b %Y, %I:%M %p IST')
-    seed = _build_seed_store(all_data, start, end)
+    seed = _build_seed_store(all_monthly_data, start, end)
     seed_json = _json.dumps(seed, default=str)
 
     html_part = """<!DOCTYPE html>

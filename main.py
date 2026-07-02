@@ -904,134 +904,66 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
     if fmt == "html":
         import html_report
         import json as _json
-        all_entity_data = {}
         report_domains = ["rh", "pms", "aif"]
         try:
             creds = get_credentials()
         except Exception:
             creds = None
 
-        for dom_key in report_domains:
-            dom_cfg = DOMAINS.get(dom_key, {})
-            if not dom_cfg:
-                continue
-            entity_data = {}
-            if creds:
-                try:
-                    gsc_sum = gsc.get_summary(creds, dom_cfg["gsc_site"], start, end)
-                    gsc_sum["queries"] = gsc.get_top_queries(creds, dom_cfg["gsc_site"], start, end, 20)
-                    gsc_sum["pages"] = gsc.get_top_pages(creds, dom_cfg["gsc_site"], start, end, 20)
-                    entity_data["gsc"] = gsc_sum
-                except Exception:
-                    pass
-                prop = dom_cfg.get("ga4_property")
-                if prop:
+        month_buckets = html_report._month_ranges(start, end)
+        all_monthly_data = {}
+
+        for month_label, m_start, m_end in month_buckets:
+            month_entities = {}
+            for dom_key in report_domains:
+                dom_cfg = DOMAINS.get(dom_key, {})
+                if not dom_cfg:
+                    continue
+                entity_data = {}
+                if creds:
                     try:
-                        ga4_sum = ga4.get_summary(creds, prop, start, end)
-                        ga4_sum["pages"] = ga4.get_top_pages(creds, prop, start, end, 20)
-                        ga4_sum["sources"] = ga4.get_traffic_sources(creds, prop, start, end)
-                        try:
-                            org = ga4.get_organic_summary(creds, prop, start, end)
-                            ga4_sum["organic_sessions"] = org.get("organic_sessions", 0)
-                            ga4_sum["organic_users"] = org.get("organic_users", 0)
-                            ga4_sum["leads"] = org.get("leads", 0)
-                        except Exception:
-                            pass
-                        entity_data["ga4"] = ga4_sum
+                        gsc_sum = gsc.get_summary(creds, dom_cfg["gsc_site"], m_start, m_end)
+                        entity_data["gsc"] = gsc_sum
                     except Exception:
                         pass
-                try:
-                    days_per = 7 if period == "weekly" else 30
-                    num_periods = max(1, (date.fromisoformat(end) - date.fromisoformat(start)).days // days_per)
-                    entity_data["seo_trend"] = seo_trend(dom_key, period, num_periods, end_date=end)
-                except Exception:
-                    pass
-
-            ad_account = dom_cfg.get("meta_ad_account", "")
-            if META_MARKETING_TOKEN and ad_account:
-                try:
-                    entity_data["meta_ads"] = meta.get_campaigns_summary(META_MARKETING_TOKEN, ad_account, start, end)
-                except Exception:
-                    pass
-            h_token, h_page_id = _meta_creds(dom_key)
-            if h_token and h_page_id:
-                try:
-                    entity_data["social_fb"] = social.get_fb_comprehensive(h_token, h_page_id, start, end)
-                except Exception:
-                    pass
-                try:
-                    ig_id = social.get_ig_account(h_token, h_page_id)
-                    if ig_id:
-                        entity_data["social_ig"] = social.get_ig_comprehensive(h_token, ig_id, start, end)
-                except Exception:
-                    pass
-                try:
-                    s_days_per = 7 if period == "weekly" else 30
-                    s_num_periods = max(1, (date.fromisoformat(end) - date.fromisoformat(start)).days // s_days_per)
-                    entity_data["social_trend"] = social_trend(period, s_num_periods, dom_key, end_date=end)
-                except Exception:
-                    pass
-
-            all_entity_data[dom_key] = entity_data
-
-        rh_data = all_entity_data.get("rh", {})
-        if ai_mod and rh_data and (mode or purpose or "client") in ("client", "internal", "leadership"):
-            try:
-                _ads = rh_data.get("meta_ads") or []
-                def _sumf(items, key):
-                    t = 0.0
-                    for c in items:
+                    prop = dom_cfg.get("ga4_property")
+                    if prop:
                         try:
-                            t += float(c.get(key) or 0)
+                            ga4_sum = ga4.get_summary(creds, prop, m_start, m_end)
+                            try:
+                                org = ga4.get_organic_summary(creds, prop, m_start, m_end)
+                                ga4_sum["organic_sessions"] = org.get("organic_sessions", 0)
+                                ga4_sum["organic_users"] = org.get("organic_users", 0)
+                            except Exception:
+                                pass
+                            entity_data["ga4"] = ga4_sum
                         except Exception:
                             pass
-                    return t
-                summary_data = {
-                    "gsc": rh_data.get("gsc", {}),
-                    "ga4": rh_data.get("ga4", {}),
-                    "social_fb": rh_data.get("social_fb", {}),
-                    "social_ig": rh_data.get("social_ig", {}),
-                    "seo_trend": rh_data.get("seo_trend", []),
-                    "social_trend": rh_data.get("social_trend", []),
-                    "meta_ads_summary": {
-                        "total_impressions": int(_sumf(_ads, "impressions")),
-                        "total_clicks": int(_sumf(_ads, "clicks")),
-                        "total_reach": int(_sumf(_ads, "reach")),
-                        "total_leads": int(_sumf(_ads, "leads")),
-                        "total_spend_inr": _sumf(_ads, "spend"),
-                        "active_campaigns": [c.get("campaign_name") or c.get("name") for c in _ads if (float(c.get("impressions") or 0) > 0 or float(c.get("spend") or 0) > 0)][:10],
-                    },
-                }
-                sys_prompt = (
-                    "You are a senior digital marketing performance analyst for Indian financial services. "
-                    "Given the report data below, produce a sharp, insight-driven executive summary as JSON. "
-                    "Compare current period vs previous period using trend data. Identify the STORY behind the numbers. "
-                    "All currency in ₹ (INR). Use em dash (—) only when data is genuinely missing.\n\n"
-                    "Return JSON with ALL of these keys (do not omit any):\n"
-                    "- executive_summary: 2-3 sentence boardroom-ready summary leading with the most important finding\n"
-                    "- what_improved: array of 3-5 specific bullet points naming metrics, actual numbers and % changes\n"
-                    "- what_dropped: array of 2-4 specific bullet points with metrics, numbers, % declines and likely causes\n"
-                    "- what_stable: array of 1-3 bullet points on metrics that held steady\n"
-                    "- main_win: one-sentence biggest positive takeaway with the metric, magnitude, and business impact\n"
-                    "- main_concern: one-sentence biggest concern with what could happen if unaddressed\n"
-                    "- key_opportunity: one-sentence highest-ROI action to take now (specific, not generic)\n"
-                    "- recommended_focus: one-sentence focus for next period tied to a specific channel/metric\n"
-                    "- confidence_score: integer 0-100 representing overall digital marketing health "
-                    "(80+ strong, 60-79 stable, 40-59 needs attention, <40 urgent)\n"
-                    "- channel_grades: object keyed by 'seo','social','ads' (and 'youtube','email' if data present). "
-                    "Each value is {grade: 'A'/'B'/'C'/'D'/'F', trend: 'improving'/'stable'/'declining', one_liner: short reason}\n"
-                    "- next_steps: array of 4-5 objects each with keys title, description, priority ('high'/'medium'/'low'), "
-                    "channel (which channel this applies to), expected_impact (what improvement to expect)\n"
-                    "- risks: array of 1-3 objects each with keys risk, mitigation\n\n"
-                    "Reference ACTUAL numbers from the data — never fabricate metrics."
-                )
-                user_msg = f"Report room data for Right Horizons ({start} to {end}):\n\n{_json.dumps(summary_data, default=str)[:30000]}"
-                rh_data["ai_summary"] = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=5000, temperature=0.55)
-            except Exception as e:
-                rh_data["ai_summary_error"] = str(e)
+
+                ad_account = dom_cfg.get("meta_ad_account", "")
+                if META_MARKETING_TOKEN and ad_account:
+                    try:
+                        entity_data["meta_ads"] = meta.get_campaigns_summary(META_MARKETING_TOKEN, ad_account, m_start, m_end)
+                    except Exception:
+                        pass
+                h_token, h_page_id = _meta_creds(dom_key)
+                if h_token and h_page_id:
+                    try:
+                        entity_data["social_fb"] = social.get_fb_comprehensive(h_token, h_page_id, m_start, m_end)
+                    except Exception:
+                        pass
+                    try:
+                        ig_id = social.get_ig_account(h_token, h_page_id)
+                        if ig_id:
+                            entity_data["social_ig"] = social.get_ig_comprehensive(h_token, ig_id, m_start, m_end)
+                    except Exception:
+                        pass
+
+                month_entities[dom_key] = entity_data
+            all_monthly_data[month_label] = month_entities
 
         report_mode = mode or purpose or "client"
-        html_content = html_report.generate_html_report(all_entity_data, start, end, report_mode=report_mode)
+        html_content = html_report.generate_html_report(all_monthly_data, start, end, report_mode=report_mode)
         return StreamingResponse(
             io.BytesIO(html_content.encode("utf-8")),
             media_type="text/html",
