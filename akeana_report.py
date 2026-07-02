@@ -15,10 +15,36 @@ BRAND_TERMS = [
     "akeana jobs", "akeana chip", "akeana semiconductor",
 ]
 
+RELEVANT_TERMS = [
+    "risc-v", "riscv", "risc v",
+    "semiconductor", "chip", "soc", "asic", "fpga",
+    "processor", "cpu", "core", "silicon",
+    "ai chip", "ai processor", "ai accelerator", "ai hardware",
+    "machine learning chip", "ml chip", "inference chip",
+    "custom silicon", "custom chip", "custom processor",
+    "embedded processor", "embedded core",
+    "arm alternative", "arm competitor",
+    "open source processor", "open source hardware",
+    "tape out", "tapeout", "tape-out",
+    "ip core", "ip licensing",
+    "high performance computing", "hpc",
+    "edge computing", "edge ai",
+    "data center chip", "server chip",
+    "automotive chip", "automotive processor",
+    "iot chip", "iot processor",
+]
+
 
 def _is_branded(query: str) -> bool:
     q = query.lower().strip()
     return any(term in q for term in BRAND_TERMS)
+
+
+def _is_relevant_non_branded(query: str) -> bool:
+    q = query.lower().strip()
+    if _is_branded(q):
+        return False
+    return any(term in q for term in RELEVANT_TERMS)
 
 
 def _build_akeana_data(ga4_data: dict, gsc_data: dict, ga4_extra: dict, start: str, end: str) -> dict:
@@ -27,7 +53,7 @@ def _build_akeana_data(ga4_data: dict, gsc_data: dict, ga4_extra: dict, start: s
     queries = gsc_data.get("queries") or []
 
     branded = [q for q in queries if _is_branded(q.get("query", ""))]
-    non_branded = [q for q in queries if not _is_branded(q.get("query", ""))]
+    non_branded = [q for q in queries if _is_relevant_non_branded(q.get("query", ""))]
 
     weekly = ga4_extra.get("weekly_users") or []
     users_trend = []
