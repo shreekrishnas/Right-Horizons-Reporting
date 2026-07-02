@@ -1,35 +1,139 @@
 """
-Dashboard-style monthly marketing report — glass-card SPA with sidebar navigation,
-multi-entity support, MoM comparison tables, dark/light theme, and data upload modals.
-Matches the reference RH_Monthly_Marketing_Report_2.html design language.
+Dashboard-style monthly marketing report — exact replica of RH_Monthly_Marketing_Report_2.html
+with sidebar, glass-card UI, Add Month modals, localStorage, dynamicTrendTable, entity pills.
+Pre-seeded with API data when available.
 """
 import json as _json
 from datetime import datetime, timezone, timedelta
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 
-ENTITY_COLOR = {
-    'Right Horizons': '#7C3AED',
-    'Right Horizons PMS': '#0EA5E9',
-    'Right Horizons AIF': '#10B981',
-}
-
-DOMAIN_TO_ENTITY = {
-    'rh': 'Right Horizons',
-    'pms': 'Right Horizons PMS',
-    'aif': 'Right Horizons AIF',
-}
-
 
 def _esc(s):
     if not isinstance(s, str):
-        return str(s) if s is not None else '—'
+        return str(s) if s is not None else ''
     return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;')
+
+
+def _build_seed_store(all_data: dict, start: str, end: str) -> dict:
+    """Convert API data into the reference HTML's STORE format."""
+    from datetime import date as _date
+    try:
+        end_d = _date.fromisoformat(end)
+        month_label = end_d.strftime('%b')
+    except Exception:
+        month_label = 'Current'
+
+    store = {
+        'monthOrder': [month_label],
+        'ads': {},
+        'smm': {},
+        'seo': {
+            'content': {},
+            'sites': {},
+        },
+    }
+
+    ADS_CHANNELS = ['Google Ads','LinkedIn Ads','Meta (FB + Insta)','SEO / Organic Search',
+                    'Content Marketing','Email Marketing','Webinars','Offline Events',
+                    'Referrals (Client)','Referrals (Partner/CA)','Social Media (Organic)','PR / Media']
+
+    # Ads from meta_ads API data (aggregate into Meta channel)
+    ads_month = {}
+    for ch in ADS_CHANNELS:
+        ads_month[ch] = {'spend': 0, 'leads': 0, 'notes': ''}
+
+    rh_data = all_data.get('rh', {})
+    meta_ads = rh_data.get('meta_ads') or []
+    total_spend = sum(float((c.get('spend') or 0)) for c in meta_ads)
+    total_leads = sum(int((c.get('leads') or 0)) for c in meta_ads)
+    if total_spend or total_leads:
+        ads_month['Meta (FB + Insta)'] = {
+            'spend': total_spend,
+            'leads': total_leads,
+            'notes': f'{len(meta_ads)} campaigns from API',
+        }
+    store['ads'][month_label] = ads_month
+
+    # SMM from social API data
+    ENTITY_MAP = {
+        'rh': 'Right Horizons',
+        'pms': 'Right Horizons PMS',
+        'aif': 'Right Horizons AIF',
+    }
+    SMM_PLATFORMS = ['LinkedIn','YouTube','Instagram','Facebook','Twitter / X']
+    blank_platform = {'followers': None, 'newFollowers': None, 'posts': None, 'impressions': None, 'engagementRate': None, 'ctr': None}
+
+    for dom_key, entity_name in ENTITY_MAP.items():
+        d = all_data.get(dom_key, {})
+        ig = d.get('social_ig') or {}
+        fb = d.get('social_fb') or {}
+        month_data = {}
+        for p in SMM_PLATFORMS:
+            month_data[p] = dict(blank_platform)
+
+        if ig:
+            month_data['Instagram'] = {
+                'followers': ig.get('followers'),
+                'newFollowers': ig.get('new_followers'),
+                'posts': ig.get('posts_published'),
+                'impressions': ig.get('views') or ig.get('impressions'),
+                'engagementRate': ig.get('engagement_rate'),
+                'ctr': None,
+            }
+        if fb:
+            month_data['Facebook'] = {
+                'followers': fb.get('followers') or fb.get('page_likes'),
+                'newFollowers': fb.get('new_followers'),
+                'posts': fb.get('posts_published'),
+                'impressions': fb.get('views') or fb.get('impressions'),
+                'engagementRate': fb.get('engagement_rate'),
+                'ctr': None,
+            }
+
+        store['smm'][entity_name] = {month_label: month_data}
+
+    # SEO / Sites from GSC + GA4 API data
+    SITE_METRICS_KEYS = ['sessions','uniqueVisitors','avgSessionDuration','bounceRate','organicTraffic',
+                         'organicImpressions','organicCTR','avgKeywordPosition','domainAuthority',
+                         'newBacklinks','top10Keywords','mobileTrafficPct','pageLoadSpeed']
+
+    CONTENT_TYPES = ['Blog Posts / Articles','Market Commentary / Insights','Whitepapers / Guides',
+                     'Videos (YouTube / Reels)','Infographics','Newsletters','Webinar Recordings',
+                     'Case Studies / Testimonials','Social Media Posts']
+
+    content_month = {}
+    for ct in CONTENT_TYPES:
+        content_month[ct] = 0
+    store['seo']['content'][month_label] = content_month
+
+    for dom_key, entity_name in ENTITY_MAP.items():
+        d = all_data.get(dom_key, {})
+        ga4 = d.get('ga4') or {}
+        gsc = d.get('gsc') or {}
+        site_data = {k: None for k in SITE_METRICS_KEYS}
+
+        site_data['sessions'] = ga4.get('sessions') or ga4.get('organic_sessions')
+        site_data['uniqueVisitors'] = ga4.get('users') or ga4.get('organic_users')
+        site_data['avgSessionDuration'] = ga4.get('avg_session_duration')
+        br = ga4.get('bounce_rate')
+        site_data['bounceRate'] = br
+        site_data['organicTraffic'] = ga4.get('organic_sessions') or ga4.get('sessions')
+        site_data['organicImpressions'] = gsc.get('impressions')
+        ctr = gsc.get('ctr')
+        site_data['organicCTR'] = ctr
+        site_data['avgKeywordPosition'] = gsc.get('position')
+
+        store['seo']['sites'][entity_name] = {month_label: site_data}
+
+    return store
 
 
 def generate_html_report(all_data: dict, start: str, end: str, report_mode: str = "client") -> str:
     ts = datetime.now(_IST).strftime('%d %b %Y, %I:%M %p IST')
-    data_json = _json.dumps(all_data, default=str)
+    seed = _build_seed_store(all_data, start, end)
+    seed_json = _json.dumps(seed, default=str)
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -38,7 +142,9 @@ def generate_html_report(all_data: dict, start: str, end: str, report_mode: str 
 <title>Right Horizons — Monthly Marketing Performance Report</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Fraunces:opsz,wght@9..144,400..700&display=swap" rel="stylesheet">
-<style>{CSS}</style>
+<style>
+{CSS}
+</style>
 </head>
 <body>
 <div class="atmosphere"></div>
@@ -57,18 +163,17 @@ def generate_html_report(all_data: dict, start: str, end: str, report_mode: str 
       <div id="navList"></div>
       <div class="sidebar-footnote">
         Generated {_esc(ts)}<br>
-        Period: {_esc(start)} to {_esc(end)}<br>
-        Mode: {_esc(report_mode.title())}
+        Data is saved in this browser. <a id="resetLink">Reset to API data</a>
       </div>
     </aside>
     <div class="app-content">
       <div class="topbar">
         <div>
-          <div class="topbar-title" id="pageTitle">Overview</div>
+          <div class="topbar-title" id="pageTitle">Ads</div>
           <div class="topbar-sub">{_esc(start)} to {_esc(end)} · Prepared by Marketing</div>
         </div>
         <div class="topbar-right">
-          <button class="btn btn-secondary" onclick="window.print()">
+          <button class="btn btn-secondary" onclick="window.print()" style="gap:0.4rem">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
             Print
           </button>
@@ -81,22 +186,458 @@ def generate_html_report(all_data: dict, start: str, end: str, report_mode: str 
     </div>
   </div>
 </div>
+
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal-card" id="modalCard"></div>
 </div>
+
 <script>
-const API_DATA = {data_json};
-const REPORT_START = "{_esc(start)}";
-const REPORT_END = "{_esc(end)}";
-const REPORT_MODE = "{_esc(report_mode)}";
-{JS}
+/* ============================= STORE ============================= */
+const STORAGE_KEY = 'rh_marketing_report_v2';
+const API_SEED = {seed_json};
+const ADS_CHANNELS = ['Google Ads','LinkedIn Ads','Meta (FB + Insta)','SEO / Organic Search','Content Marketing','Email Marketing','Webinars','Offline Events','Referrals (Client)','Referrals (Partner/CA)','Social Media (Organic)','PR / Media'];
+const SMM_PLATFORMS = ['LinkedIn','YouTube','Instagram','Facebook','Twitter / X'];
+const SMM_PLATFORM_ICON = {{'LinkedIn':'💼','YouTube':'▶️','Instagram':'📷','Facebook':'👥','Twitter / X':'𝕏'}};
+const SMM_ENTITIES = ['Right Horizons','Right Horizons PMS','Right Horizons AIF'];
+const ENTITY_COLOR = {{'Right Horizons':'#7C3AED','Right Horizons PMS':'#0EA5E9','Right Horizons AIF':'#10B981'}};
+const CONTENT_TYPES = ['Blog Posts / Articles','Market Commentary / Insights','Whitepapers / Guides','Videos (YouTube / Reels)','Infographics','Newsletters','Webinar Recordings','Case Studies / Testimonials','Social Media Posts'];
+const SITE_METRICS = [
+  {{key:'sessions', label:'Total Website Sessions', unit:'num'}},
+  {{key:'uniqueVisitors', label:'Unique Visitors', unit:'num'}},
+  {{key:'avgSessionDuration', label:'Avg. Session Duration (sec)', unit:'num'}},
+  {{key:'bounceRate', label:'Bounce Rate', unit:'pct'}},
+  {{key:'organicTraffic', label:'Organic Traffic', unit:'num'}},
+  {{key:'organicImpressions', label:'Organic Search Impressions', unit:'num'}},
+  {{key:'organicCTR', label:'Organic CTR', unit:'pct'}},
+  {{key:'avgKeywordPosition', label:'Avg. Keyword Position', unit:'num1'}},
+  {{key:'domainAuthority', label:'Domain Authority', unit:'num'}},
+  {{key:'newBacklinks', label:'New Backlinks', unit:'num'}},
+  {{key:'top10Keywords', label:'Top-10 Keywords', unit:'num'}},
+  {{key:'mobileTrafficPct', label:'Mobile Traffic %', unit:'pct'}},
+  {{key:'pageLoadSpeed', label:'Page Load Speed (sec)', unit:'num1'}},
+];
+const blankSite = ()=>{{ const o={{}}; SITE_METRICS.forEach(m=>o[m.key]=null); return o; }};
+const blankPlatform = ()=>({{followers:null,newFollowers:null,posts:null,impressions:null,engagementRate:null,ctr:null}});
+
+function seedStore(){{
+  return JSON.parse(JSON.stringify(API_SEED));
+}}
+let STORE = loadStore();
+function loadStore(){{
+  try{{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw) return JSON.parse(raw);
+  }}catch(e){{}}
+  return seedStore();
+}}
+function saveStore(){{ try{{ localStorage.setItem(STORAGE_KEY, JSON.stringify(STORE)); }}catch(e){{}} }}
+function addMonthName(name){{ if(!STORE.monthOrder.includes(name)) STORE.monthOrder.push(name); }}
+function monthsWithData(obj){{ return STORE.monthOrder.filter(m=>obj[m]); }}
+function prevMonthOf(list, current){{ const i=list.indexOf(current); return i>0?list[i-1]:null; }}
+
+/* ============================= FORMATTERS ============================= */
+const fmtINR = v => (v===null||v===undefined) ? null : '₹' + Math.round(v).toLocaleString('en-IN');
+const fmtNum = (v,d=0) => (v===null||v===undefined) ? null : Number(v).toLocaleString('en-IN',{{minimumFractionDigits:d,maximumFractionDigits:d}});
+const fmtPct = (v,d=1) => (v===null||v===undefined) ? null : (v*100).toFixed(d)+'%';
+const fmtSigned = (v,d=1) => (v===null||v===undefined) ? null : (v>0?'+':'') + v.toFixed(d);
+const fmtByUnit = (v,unit) => {{
+  if(v===null||v===undefined) return null;
+  if(unit==='inr') return fmtINR(v);
+  if(unit==='pct') return fmtPct(v,1);
+  if(unit==='num1') return v.toFixed(1);
+  return fmtNum(v);
+}};
+function cell(val, cls){{ if(val===null||val===undefined||val==='') return `<td class="num muted">—</td>`; return `<td class="num${{cls?(' '+cls):''}}">${{val}}</td>`; }}
+function nameCell(label){{ return `<td class="name-cell">${{label}}</td>`; }}
+function notesCell(t){{ return `<td class="notes-cell">${{t||''}}</td>`; }}
+function momChip(delta, pct, direction, deltaFmt){{
+  if(delta===null||delta===undefined) return `<span class="chip chip-flat">—</span>`;
+  const isZero = Math.abs(delta) < 1e-9;
+  const up = delta > 0;
+  let cls = 'chip-neutral';
+  if(!isZero && direction==='up') cls = up ? 'chip-up-good' : 'chip-down-bad';
+  if(!isZero && direction==='down') cls = up ? 'chip-up-bad' : 'chip-down-good';
+  if(isZero) cls = 'chip-flat';
+  const arrow = isZero ? '→' : (up ? '↑' : '↓');
+  const dTxt = deltaFmt!==undefined ? deltaFmt : fmtSigned(delta);
+  const pTxt = (pct===null||pct===undefined) ? '' : ` (${{fmtSigned(pct*100,1)}}%)`;
+  return `<span class="chip ${{cls}}">${{arrow}} ${{dTxt}}${{pTxt}}</span>`;
+}}
+function statusBadge(status){{
+  if(status==='GREEN') return `<span class="badge badge-green">● GREEN</span>`;
+  if(status==='AMBER') return `<span class="badge badge-amber">● AMBER</span>`;
+  if(status==='RED') return `<span class="badge badge-red">● RED</span>`;
+  return `<span class="badge badge-flat">—</span>`;
+}}
+function statusForCPL(spend, leads){{
+  if(!spend && !leads) return null;
+  if(!leads) return null;
+  const cpl = spend/leads;
+  if(cpl<500) return 'GREEN';
+  if(cpl<=1000) return 'AMBER';
+  return 'RED';
+}}
+
+/* ============================= PILL ROWS ============================= */
+function entityPillRow(activeEntity, onSelect){{
+  const html = SMM_ENTITIES.map(e=>{{
+    const active = e===activeEntity;
+    return `<button type="button" class="pill-btn ${{active?'active':''}}" style="color:${{active?ENTITY_COLOR[e]:''}}" data-entity="${{e}}">
+      <span class="dot" style="background:${{ENTITY_COLOR[e]}}"></span>${{e}}
+    </button>`;
+  }}).join('');
+  const wrap = document.createElement('div');
+  wrap.className = 'pill-row';
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('.pill-btn').forEach(b=> b.addEventListener('click', ()=> onSelect(b.dataset.entity)));
+  return wrap;
+}}
+function monthPillRow(months, activeMonth, onSelect, onAdd){{
+  const wrap = document.createElement('div');
+  wrap.className = 'pill-row';
+  wrap.innerHTML = months.map(m=>{{
+    const active = m===activeMonth;
+    return `<button type="button" class="pill-btn ${{active?'active':''}}" style="color:${{active?'#6366F1':''}}" data-month="${{m}}">
+      <span class="dot" style="background:#6366F1"></span>${{m}}
+    </button>`;
+  }}).join('') + `<button type="button" class="pill-add" id="addMonthBtn">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      Add Month
+    </button>`;
+  wrap.querySelectorAll('.pill-btn').forEach(b=> b.addEventListener('click', ()=> onSelect(b.dataset.month)));
+  wrap.querySelector('#addMonthBtn').addEventListener('click', onAdd);
+  return wrap;
+}}
+
+/* ============================= MODAL ============================= */
+function closeModal(){{ document.getElementById('modalOverlay').classList.remove('open'); }}
+function openModal(eyebrow, title, bodyHTML, onSave){{
+  const card = document.getElementById('modalCard');
+  card.innerHTML = `
+    <div class="modal-head">
+      <div><div class="modal-eyebrow">${{eyebrow}}</div><div class="modal-title">${{title}}</div></div>
+      <button class="modal-close" id="modalCloseBtn">✕</button>
+    </div>
+    <div id="modalBody">${{bodyHTML}}</div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="modalCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="modalSaveBtn">Save Month</button>
+    </div>`;
+  document.getElementById('modalOverlay').classList.add('open');
+  document.getElementById('modalCloseBtn').onclick = closeModal;
+  document.getElementById('modalCancelBtn').onclick = closeModal;
+  document.getElementById('modalSaveBtn').onclick = onSave;
+}}
+document.getElementById('modalOverlay').addEventListener('click', e=>{{ if(e.target.id==='modalOverlay') closeModal(); }});
+
+function monthNameField(existingMonths){{
+  return `<div class="field-group">
+    <label class="field-label">Month name</label>
+    <input type="text" class="field-input" id="newMonthName" placeholder="e.g. Jun, Jun 2026">
+    <div style="font-size:0.68rem;color:var(--text-muted);margin-top:0.3rem;">Already added: ${{existingMonths.join(', ')||'—'}}</div>
+  </div>`;
+}}
+
+/* ============================= ADS TAB ============================= */
+function addMonthButton(id, label, onClick){{
+  const w = document.createElement('div');
+  w.className = 'pill-row';
+  w.innerHTML = `<button type="button" class="pill-add" id="${{id}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>${{label}}</button>`;
+  w.querySelector(`#${{id}}`).addEventListener('click', onClick);
+  return w;
+}}
+function renderAds(){{
+  const months = monthsWithData(STORE.ads);
+
+  const spendRows = ADS_CHANNELS.map(c=>({{label:c, unit:'inr', direction:null,
+    values: Object.fromEntries(months.map(m=>[m, STORE.ads[m][c] ? STORE.ads[m][c].spend : null]))}}));
+  const spendTotal = {{label:'TOTAL SPEND', unit:'inr', direction:null, isTotal:true,
+    values: Object.fromEntries(months.map(m=>[m, ADS_CHANNELS.reduce((s,c)=> s+((STORE.ads[m][c]&&STORE.ads[m][c].spend)||0),0)]))}};
+
+  const leadsRows = ADS_CHANNELS.map(c=>({{label:c, unit:'num', direction:'up',
+    values: Object.fromEntries(months.map(m=>[m, STORE.ads[m][c] ? STORE.ads[m][c].leads : null]))}}));
+  const leadsTotal = {{label:'TOTAL LEADS', unit:'num', direction:'up', isTotal:true,
+    values: Object.fromEntries(months.map(m=>[m, ADS_CHANNELS.reduce((s,c)=> s+((STORE.ads[m][c]&&STORE.ads[m][c].leads)||0),0)]))}};
+
+  const cplRows = ADS_CHANNELS.map(c=>({{label:c, unit:'inr', direction:'down',
+    values: Object.fromEntries(months.map(m=>{{ const d=STORE.ads[m][c]; const v=(d&&d.leads)?d.spend/d.leads:null; return [m,v]; }}))}}));
+  const blendedCPL = {{label:'BLENDED CPL', unit:'inr', direction:'down', isTotal:true,
+    values: Object.fromEntries(months.map(m=>{{
+      const ts = ADS_CHANNELS.reduce((s,c)=> s+((STORE.ads[m][c]&&STORE.ads[m][c].spend)||0),0);
+      const tl = ADS_CHANNELS.reduce((s,c)=> s+((STORE.ads[m][c]&&STORE.ads[m][c].leads)||0),0);
+      return [m, tl? ts/tl : null];
+    }}))}};
+
+  const el = document.getElementById('ads');
+  el.innerHTML = `<div id="adsAddBtn"></div><div id="adsBody"></div>`;
+  document.getElementById('adsAddBtn').appendChild(addMonthButton('addAdsMonthBtn','Add Month', openAddAdsMonth));
+  document.getElementById('adsBody').innerHTML = `
+    <h2 class="section-title"><span class="title-txt">💰 Monthly Spend by Channel (₹)</span></h2>
+    ${{dynamicTrendTable([...spendRows, spendTotal], months, 'inr', 'FY Total', 'sum', 'Channel')}}
+    <h2 class="section-title"><span class="title-txt">📈 Monthly Leads by Channel</span></h2>
+    ${{dynamicTrendTable([...leadsRows, leadsTotal], months, 'num', 'FY Total', 'sum', 'Channel')}}
+    <h2 class="section-title"><span class="title-txt">💸 Monthly CPL by Channel (₹) — Lower is better</span></h2>
+    ${{dynamicTrendTable([...cplRows, blendedCPL], months, 'inr', 'FY Avg', 'avg', 'Channel')}}
+  `;
+}}
+function openAddAdsMonth(){{
+  const months = monthsWithData(STORE.ads);
+  const rowsHTML = ADS_CHANNELS.map((c,i)=>`<tr>
+    <td class="mt-label">${{c}}</td>
+    <td><input type="number" step="0.01" id="ads_spend_${{i}}" placeholder="0"></td>
+    <td><input type="number" step="1" id="ads_leads_${{i}}" placeholder="0"></td>
+    <td><input type="text" id="ads_notes_${{i}}" placeholder="optional note"></td>
+  </tr>`).join('');
+  const body = `
+    ${{monthNameField(months)}}
+    <div class="field-group">
+      <label class="field-label">Channel spend &amp; leads</label>
+      <table class="mini-table"><thead><tr><th>Channel</th><th>Spend (₹)</th><th>Leads</th><th>Notes</th></tr></thead><tbody>${{rowsHTML}}</tbody></table>
+    </div>`;
+  openModal('Ads', 'Add a new month', body, ()=>{{
+    const name = document.getElementById('newMonthName').value.trim();
+    if(!name){{ alert('Please enter a month name.'); return; }}
+    const monthData = {{}};
+    ADS_CHANNELS.forEach((c,i)=>{{
+      const spend = parseFloat(document.getElementById(`ads_spend_${{i}}`).value) || 0;
+      const leads = parseInt(document.getElementById(`ads_leads_${{i}}`).value) || 0;
+      const notes = document.getElementById(`ads_notes_${{i}}`).value.trim();
+      monthData[c] = {{spend, leads, notes}};
+    }});
+    STORE.ads[name] = monthData;
+    addMonthName(name); saveStore();
+    closeModal(); renderAds();
+  }});
+}}
+
+/* ============================= SMM TAB ============================= */
+let smmEntity = 'Right Horizons';
+function renderSMM(){{
+  const months = monthsWithData(STORE.smm[smmEntity]);
+  const metricDefs = [
+    {{k:'followers', label:'Followers', unit:'num', dir:'up'}},
+    {{k:'newFollowers', label:'New Followers', unit:'num', dir:'up'}},
+    {{k:'posts', label:'Posts Published', unit:'num', dir:'up'}},
+    {{k:'impressions', label:'Impressions', unit:'num', dir:'up'}},
+    {{k:'engagementRate', label:'Engagement Rate', unit:'pct', dir:'up'}},
+    {{k:'ctr', label:'Click-Through Rate', unit:'pct', dir:'up'}},
+  ];
+
+  let tablesHTML = '';
+  SMM_PLATFORMS.forEach(p=>{{
+    const rows = metricDefs.map(m=>({{
+      label:m.label, unit:m.unit, direction:m.dir,
+      values: Object.fromEntries(months.map(mo=>{{
+        const d = STORE.smm[smmEntity][mo] ? STORE.smm[smmEntity][mo][p] : null;
+        return [mo, d ? d[m.k] : null];
+      }})),
+    }}));
+    tablesHTML += `<div class="platform-tag" style="display:inline-flex;align-items:center;gap:0.4rem;font-size:0.8rem;font-weight:700;color:var(--text-primary);margin:1.1rem 0 0.5rem;">${{SMM_PLATFORM_ICON[p]}} ${{p}}</div>`;
+    tablesHTML += dynamicTrendTable(rows, months, 'num', 'FY Avg', 'avg');
+  }});
+
+  const el = document.getElementById('smm');
+  el.innerHTML = `<div id="smmEntityPills"></div><div id="smmAddBtn"></div><div id="smmBody"></div>`;
+  document.getElementById('smmEntityPills').appendChild(entityPillRow(smmEntity, e=>{{ smmEntity=e; renderSMM(); }}));
+  document.getElementById('smmAddBtn').appendChild(addMonthButton('addSmmMonthBtn', `Add Month (${{smmEntity}})`, ()=>openAddSMMMonth(smmEntity)));
+  document.getElementById('smmBody').innerHTML = tablesHTML;
+}}
+function openAddSMMMonth(entity){{
+  const months = monthsWithData(STORE.smm[entity]);
+  const rowsHTML = SMM_PLATFORMS.map((p,i)=>`<tr>
+    <td class="mt-label">${{SMM_PLATFORM_ICON[p]}} ${{p}}</td>
+    <td><input type="number" step="1" id="smm_foll_${{i}}" placeholder="0"></td>
+    <td><input type="number" step="1" id="smm_newfoll_${{i}}" placeholder="0"></td>
+    <td><input type="number" step="1" id="smm_posts_${{i}}" placeholder="0"></td>
+    <td><input type="number" step="1" id="smm_impr_${{i}}" placeholder="0"></td>
+    <td><input type="number" step="0.01" id="smm_eng_${{i}}" placeholder="%"></td>
+    <td><input type="number" step="0.01" id="smm_ctr_${{i}}" placeholder="%"></td>
+  </tr>`).join('');
+  const body = `
+    ${{monthNameField(months)}}
+    <div class="field-group">
+      <label class="field-label">${{entity}} — platform metrics</label>
+      <div style="overflow-x:auto;">
+      <table class="mini-table"><thead><tr><th>Platform</th><th>Followers</th><th>New Foll.</th><th>Posts</th><th>Impressions</th><th>Eng. Rate %</th><th>CTR %</th></tr></thead><tbody>${{rowsHTML}}</tbody></table>
+      </div>
+    </div>`;
+  openModal('SMM · ' + entity, 'Add a new month', body, ()=>{{
+    const name = document.getElementById('newMonthName').value.trim();
+    if(!name){{ alert('Please enter a month name.'); return; }}
+    const monthData = {{}};
+    SMM_PLATFORMS.forEach((p,i)=>{{
+      const followers = parseInt(document.getElementById(`smm_foll_${{i}}`).value);
+      const newFollowers = parseInt(document.getElementById(`smm_newfoll_${{i}}`).value);
+      const posts = parseInt(document.getElementById(`smm_posts_${{i}}`).value);
+      const impressions = parseInt(document.getElementById(`smm_impr_${{i}}`).value);
+      const engRaw = document.getElementById(`smm_eng_${{i}}`).value;
+      const ctrRaw = document.getElementById(`smm_ctr_${{i}}`).value;
+      monthData[p] = {{
+        followers: isNaN(followers)?null:followers,
+        newFollowers: isNaN(newFollowers)?null:newFollowers,
+        posts: isNaN(posts)?null:posts,
+        impressions: isNaN(impressions)?null:impressions,
+        engagementRate: engRaw===''?null:parseFloat(engRaw)/100,
+        ctr: ctrRaw===''?null:parseFloat(ctrRaw)/100,
+      }};
+    }});
+    STORE.smm[entity][name] = monthData;
+    addMonthName(name); saveStore();
+    closeModal(); renderSMM();
+  }});
+}}
+
+/* ============================= WEBSITES & SEO TAB ============================= */
+let seoSiteEntity = 'Right Horizons';
+function dynamicTrendTable(rows, months, unitDefault, fyLabel, fyType, labelHeader){{
+  let head = `<tr><th class="name-cell">${{labelHeader||'Metric'}}</th><th>MoM Δ</th><th>MoM %</th>`;
+  months.forEach(m=> head += `<th>${{m}}</th>`);
+  head += `<th>${{fyLabel}}</th></tr>`;
+  const prev = months.length>1 ? months[months.length-2] : null;
+  const last = months[months.length-1];
+  let body = rows.map(r=>{{
+    const unit = r.unit || unitDefault;
+    const lastV = r.values[last];
+    const prevV = prev!==null ? r.values[prev] : null;
+    const delta = (lastV!==null && lastV!==undefined && prevV!==null && prevV!==undefined) ? lastV-prevV : null;
+    const pct = (delta!==null && prevV) ? delta/prevV : null;
+    const nums = months.map(m=>r.values[m]).filter(v=>v!==null && v!==undefined);
+    let fy = null;
+    if(nums.length){{ fy = fyType==='sum' ? nums.reduce((a,b)=>a+b,0) : nums.reduce((a,b)=>a+b,0)/nums.length; }}
+    const rowCls = r.isTotal ? ' class="total-row"' : '';
+    let tr = `<tr${{rowCls}}>${{nameCell(r.label)}}`;
+    tr += `<td>${{momChip(delta, pct, r.direction, delta===null?null:fmtByUnit(Math.abs(delta),unit))}}</td>`;
+    tr += `<td class="num${{pct===null?' muted':''}}">${{pct===null?'—':fmtSigned(pct*100,1)+'%'}}</td>`;
+    months.forEach(m=>{{ const v=r.values[m]; tr += cell(fmtByUnit(v,unit), v===0?'muted':''); }});
+    tr += cell(fmtByUnit(fy,unit));
+    tr += `</tr>`;
+    return tr;
+  }}).join('');
+  return `<div class="table-wrap"><table><thead>${{head}}</thead><tbody>${{body}}</tbody></table></div>`;
+}}
+function renderSEO(){{
+  const contentMonths = monthsWithData(STORE.seo.content);
+  const contentRows = CONTENT_TYPES.map(t=>({{label:t, unit:'num', direction:'up', values: Object.fromEntries(contentMonths.map(m=>[m, STORE.seo.content[m][t]]))}}));
+  const totalRow = {{label:'TOTAL CONTENT PUBLISHED', unit:'num', direction:'up', isTotal:true,
+    values: Object.fromEntries(contentMonths.map(m=>[m, CONTENT_TYPES.reduce((s,t)=> s + (STORE.seo.content[m][t]||0), 0)]))}};
+
+  const siteMonths = monthsWithData(STORE.seo.sites[seoSiteEntity]);
+  const siteRows = SITE_METRICS.map(m=>({{
+    label:m.label, unit:m.unit,
+    direction: (m.key==='bounceRate'||m.key==='avgKeywordPosition'||m.key==='pageLoadSpeed') ? 'down' : (m.key==='avgSessionDuration'||m.key==='mobileTrafficPct'||m.key==='domainAuthority' ? null : 'up'),
+    values: Object.fromEntries(siteMonths.map(mo=>[mo, STORE.seo.sites[seoSiteEntity][mo][m.key]])),
+  }}));
+
+  const el = document.getElementById('seo');
+  el.innerHTML = `<div id="seoBody"></div>`;
+  document.getElementById('seoBody').innerHTML = `
+    <h2 class="section-title"><span class="title-txt">✍️ Content Publishing — # Published per Month</span></h2>
+    <div id="contentPills"></div>
+    ${{dynamicTrendTable([...contentRows, totalRow], contentMonths, 'num', 'FY Total', 'sum')}}
+
+    <h2 class="section-title" style="margin-top:2.25rem;"><span class="title-txt">🌐 Website &amp; SEO Metrics</span></h2>
+    <div id="seoEntityPills"></div>
+    <div id="seoSitePills"></div>
+    ${{dynamicTrendTable(siteRows, siteMonths, 'num', 'FY Avg', 'avg')}}
+  `;
+  document.getElementById('contentPills').appendChild(
+    (()=>{{ const w=document.createElement('div'); w.className='pill-row'; w.innerHTML = `<button type="button" class="pill-add" id="addContentMonthBtn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add Month (Content)</button>`;
+      w.querySelector('#addContentMonthBtn').addEventListener('click', openAddContentMonth); return w; }})()
+  );
+  document.getElementById('seoEntityPills').appendChild(entityPillRow(seoSiteEntity, e=>{{ seoSiteEntity=e; renderSEO(); }}));
+  document.getElementById('seoSitePills').appendChild(
+    (()=>{{ const w=document.createElement('div'); w.className='pill-row'; w.innerHTML = `<button type="button" class="pill-add" id="addSiteMonthBtn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add Month (${{seoSiteEntity}})</button>`;
+      w.querySelector('#addSiteMonthBtn').addEventListener('click', ()=>openAddSiteMonth(seoSiteEntity)); return w; }})()
+  );
+}}
+function openAddContentMonth(){{
+  const months = monthsWithData(STORE.seo.content);
+  const rowsHTML = CONTENT_TYPES.map((t,i)=>`<tr><td class="mt-label">${{t}}</td><td><input type="number" step="1" id="content_${{i}}" placeholder="0"></td></tr>`).join('');
+  const body = `${{monthNameField(months)}}
+    <div class="field-group"><label class="field-label">Items published</label>
+    <table class="mini-table"><thead><tr><th>Content Type</th><th># Published</th></tr></thead><tbody>${{rowsHTML}}</tbody></table></div>`;
+  openModal('Websites & SEO', 'Add a new month — Content Publishing', body, ()=>{{
+    const name = document.getElementById('newMonthName').value.trim();
+    if(!name){{ alert('Please enter a month name.'); return; }}
+    const monthData = {{}};
+    CONTENT_TYPES.forEach((t,i)=>{{ monthData[t] = parseInt(document.getElementById(`content_${{i}}`).value) || 0; }});
+    STORE.seo.content[name] = monthData;
+    addMonthName(name); saveStore();
+    closeModal(); renderSEO();
+  }});
+}}
+function openAddSiteMonth(entity){{
+  const months = monthsWithData(STORE.seo.sites[entity]);
+  const rowsHTML = SITE_METRICS.map((m,i)=>`<tr><td class="mt-label">${{m.label}}</td><td><input type="number" step="0.01" id="site_${{i}}" placeholder="${{m.unit==='pct'?'%':'0'}}"></td></tr>`).join('');
+  const body = `${{monthNameField(months)}}
+    <div class="field-group"><label class="field-label">${{entity}} — site metrics</label>
+    <table class="mini-table"><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>${{rowsHTML}}</tbody></table></div>`;
+  openModal('Websites & SEO · ' + entity, 'Add a new month — Site Metrics', body, ()=>{{
+    const name = document.getElementById('newMonthName').value.trim();
+    if(!name){{ alert('Please enter a month name.'); return; }}
+    const monthData = {{}};
+    SITE_METRICS.forEach((m,i)=>{{
+      const raw = document.getElementById(`site_${{i}}`).value;
+      if(raw===''){{ monthData[m.key]=null; return; }}
+      const num = parseFloat(raw);
+      monthData[m.key] = m.unit==='pct' ? num/100 : num;
+    }});
+    STORE.seo.sites[entity][name] = monthData;
+    addMonthName(name); saveStore();
+    closeModal(); renderSEO();
+  }});
+}}
+
+/* ============================= NAV / SHELL ============================= */
+const ICONS = {{
+  ads:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>',
+  smm:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.6l6.8-3.2M8.6 13.4l6.8 3.2"/></svg>',
+  seo:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+}};
+const PAGES = [
+  {{id:'ads', label:'Ads', icon:ICONS.ads}},
+  {{id:'smm', label:'SMM', icon:ICONS.smm}},
+  {{id:'seo', label:'Websites & SEO', icon:ICONS.seo}},
+];
+function buildNav(){{
+  const nav = document.getElementById('navList');
+  nav.innerHTML = PAGES.map(p=>`<div class="nav-item" data-page="${{p.id}}">${{p.icon}}<span>${{p.label}}</span></div>`).join('');
+  nav.querySelectorAll('.nav-item').forEach(el=> el.addEventListener('click', ()=> showPage(el.dataset.page)));
+}}
+function showPage(id){{
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.page===id));
+  document.getElementById('pageTitle').textContent = PAGES.find(p=>p.id===id).label;
+}}
+function buildPages(){{
+  document.getElementById('appMain').innerHTML = PAGES.map(p=>`<div class="page" id="${{p.id}}"></div>`).join('');
+}}
+function renderAll(){{ renderAds(); renderSMM(); renderSEO(); }}
+
+document.getElementById('themeToggle').addEventListener('click', ()=>{{
+  const isDark = document.documentElement.getAttribute('data-theme')==='dark';
+  document.documentElement.setAttribute('data-theme', isDark?'light':'dark');
+  document.getElementById('themeIcon').innerHTML = isDark
+    ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'
+    : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+}});
+document.getElementById('resetLink').addEventListener('click', ()=>{{
+  if(confirm('Reset all data back to the API data? This clears anything you added.')){{
+    STORE = seedStore(); saveStore(); renderAll(); showPage('ads');
+  }}
+}});
+
+buildNav();
+buildPages();
+renderAll();
+showPage('ads');
 </script>
 </body>
 </html>"""
 
 
-CSS = """\
-:root{
+CSS = """:root{
   --text-primary:#1E1B4B; --text-secondary:#475569; --text-muted:#9CA3AF; --text-on-accent:#FFFFFF;
   --surface-base:#FFFFFF; --surface-card:rgba(255,255,255,0.85); --surface-card-elevated:rgba(255,255,255,0.95);
   --surface-card-header:rgba(0,0,0,0.02); --surface-input:#FFFFFF; --surface-hover:rgba(0,0,0,0.04);
@@ -146,6 +687,7 @@ body{margin:0; font-family:'Inter',system-ui,-apple-system,sans-serif; -webkit-f
 .nav-item.active{background:#fff; color:#6366F1; box-shadow:0 4px 12px rgba(99,102,241,0.20);}
 [data-theme="dark"] .nav-item.active{background:rgba(99,102,241,0.22); color:#A5B4FC; box-shadow:none;}
 .sidebar-footnote{margin-top:auto; padding:0.75rem 0.6rem 0.25rem; font-size:0.65rem; color:var(--text-muted); line-height:1.5;}
+.sidebar-footnote a{color:var(--accent-primary); cursor:pointer; text-decoration:none; font-weight:600;}
 .app-content{flex:1; min-width:0; display:flex; flex-direction:column;}
 .topbar{height:72px; flex-shrink:0; border-bottom:1px solid var(--border-subtle); display:flex; align-items:center; justify-content:space-between; padding:0 2rem;}
 .topbar-title{font-weight:800; font-size:1.15rem; letter-spacing:-0.02em; color:var(--text-primary);}
@@ -156,14 +698,11 @@ body{margin:0; font-family:'Inter',system-ui,-apple-system,sans-serif; -webkit-f
 .page{display:none; animation:fadeIn .25s ease-out;}
 .page.active{display:block;}
 @keyframes fadeIn{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
-
 h2.section-title{font-size:1.05rem; font-weight:800; letter-spacing:-0.01em; color:var(--text-primary); margin:2rem 0 0.9rem; display:flex; align-items:center; gap:0.5rem; justify-content:space-between;}
 h2.section-title:first-child{margin-top:0;}
 h2.section-title .title-txt{display:flex; align-items:center; gap:0.5rem;}
 p.section-desc{font-size:0.82rem; color:var(--text-muted); margin:-0.5rem 0 1rem;}
-
-.glass-card{background:var(--surface-card); border:1px solid var(--border-subtle); border-radius:1.5rem; box-shadow:0 2px 12px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04); padding:1.25rem; margin-bottom:1.5rem;}
-
+.glass-card{background:var(--surface-card); border:1px solid var(--border-subtle); border-radius:1.5rem; box-shadow:0 2px 12px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04); padding:1.25rem;}
 .kpi-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1rem; margin-bottom:1.5rem;}
 .kpi-card{position:relative; background:var(--surface-card); border:1px solid var(--border-subtle); border-radius:1rem; padding:1rem 1.1rem 0.9rem 1.35rem; box-shadow:0 2px 12px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04); overflow:hidden;}
 .kpi-card::before{content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent);}
@@ -171,7 +710,6 @@ p.section-desc{font-size:0.82rem; color:var(--text-muted); margin:-0.5rem 0 1rem
 .kpi-value{font-family:'Fraunces',ui-serif,Georgia,serif; font-size:1.7rem; font-weight:700; color:var(--text-primary); line-height:1.1;}
 .kpi-meta{display:flex; align-items:center; gap:0.4rem; margin-top:0.5rem; flex-wrap:wrap;}
 .kpi-note{font-size:0.72rem; color:var(--text-muted); margin-top:0.4rem; line-height:1.35;}
-
 .chip{display:inline-flex; align-items:center; gap:0.2rem; padding:0.16rem 0.5rem; border-radius:9999px; font-size:0.68rem; font-weight:700; white-space:nowrap;}
 .chip-up-good{background:rgba(16,185,129,0.12); color:#10B981;}
 .chip-up-bad{background:rgba(220,38,38,0.12); color:#DC2626;}
@@ -179,15 +717,11 @@ p.section-desc{font-size:0.82rem; color:var(--text-muted); margin:-0.5rem 0 1rem
 .chip-down-bad{background:rgba(220,38,38,0.12); color:#DC2626;}
 .chip-neutral{background:rgba(148,163,184,0.14); color:var(--text-secondary);}
 .chip-flat{background:rgba(148,163,184,0.14); color:var(--text-muted);}
-
 .badge{display:inline-flex; align-items:center; gap:0.3rem; padding:0.2rem 0.625rem; border-radius:9999px; font-size:0.7rem; font-weight:700; white-space:nowrap;}
 .badge-green{background:#D1FAE5; color:#059669;}
 .badge-amber{background:#FEF3C7; color:#B45309;}
 .badge-red{background:#FEE2E2; color:#DC2626;}
 .badge-flat{background:rgba(148,163,184,0.16); color:var(--text-muted);}
-.badge-api{background:rgba(14,165,233,0.12); color:#0EA5E9;}
-.badge-calc{background:rgba(124,58,237,0.12); color:#7C3AED;}
-
 .table-wrap{background:var(--surface-card); border:1px solid var(--border-subtle); border-radius:1.5rem; overflow:hidden; overflow-x:auto; box-shadow:0 2px 12px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04); margin-bottom:1.5rem;}
 table{border-collapse:collapse; width:100%; min-width:640px; font-size:0.8rem;}
 thead th{position:sticky; top:0; background:var(--surface-card-elevated); text-align:left; font-size:0.63rem; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-muted); padding:0.7rem 0.9rem; border-bottom:1px solid var(--border-subtle); white-space:nowrap;}
@@ -202,672 +736,65 @@ tbody tr.total-row td.name-cell{background:var(--surface-card-header);}
 td.num{text-align:right; font-variant-numeric:tabular-nums;}
 td.muted{color:var(--text-muted);}
 td.notes-cell{white-space:normal; min-width:200px; color:var(--text-muted); font-size:0.75rem;}
-tr.group-row td{background:var(--accent-primary-soft)!important; font-weight:800; color:var(--accent-section); text-transform:uppercase; letter-spacing:0.04em; font-size:0.7rem;}
-
 .pill-row{display:flex; align-items:center; gap:1.6rem; flex-wrap:wrap; margin-bottom:1.25rem;}
 .pill-btn{display:inline-flex; align-items:center; gap:0.45rem; background:none; border:none; cursor:pointer; font-family:inherit; font-size:0.85rem; font-weight:600; color:var(--text-muted); padding:0.15rem 0; transition:color .15s;}
 .pill-btn .dot{width:8px; height:8px; border-radius:50%; opacity:0.45; transition:opacity .15s, transform .15s;}
 .pill-btn.active{font-weight:700;}
 .pill-btn.active .dot{opacity:1; transform:scale(1.15);}
 .pill-btn:hover{color:var(--text-secondary);}
-
+.pill-add{display:inline-flex; align-items:center; gap:0.3rem; font-size:0.78rem; font-weight:700; color:var(--accent-primary); background:var(--accent-primary-soft); border:1px dashed var(--accent-primary); border-radius:9999px; padding:0.3rem 0.75rem 0.3rem 0.55rem; cursor:pointer; font-family:inherit;}
+.pill-add:hover{background:rgba(124,58,237,0.16);}
 .subhead{font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--accent-section); margin:1.5rem 0 0.6rem; display:flex; align-items:center; gap:0.4rem;}
-
+.subhead:first-child{margin-top:0;}
 .platform-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:1rem; margin-bottom:1.5rem;}
+.platform-card-head{font-weight:800; font-size:0.85rem; margin-bottom:0.7rem; display:flex; align-items:center; gap:0.45rem; color:var(--text-primary);}
 .stat-row{display:flex; justify-content:space-between; align-items:center; gap:0.5rem; padding:0.4rem 0; border-bottom:1px solid var(--border-subtle); font-size:0.78rem;}
 .stat-row:last-child{border-bottom:none;}
 .stat-row .lbl{color:var(--text-muted); font-weight:500;}
 .stat-row .valwrap{display:flex; align-items:center; gap:0.45rem;}
 .stat-val{font-weight:700; color:var(--text-primary); font-variant-numeric:tabular-nums;}
-
 .footer-note{font-size:0.72rem; color:var(--text-muted); text-align:center; padding:1.5rem 0 0.5rem; line-height:1.5;}
-.summary-block{white-space:pre-line; background:var(--surface-card); border-left:4px solid var(--accent-primary); border-radius:0.75rem; padding:1rem 1.25rem; color:var(--text-secondary); font-size:0.85rem; line-height:1.6; margin-bottom:1rem;}
-.summary-block ul{margin:6px 0; padding-left:20px;}
-.summary-block li{margin:4px 0;}
-
+::-webkit-scrollbar{width:8px; height:8px;}
+::-webkit-scrollbar-thumb{background:var(--border-default); border-radius:9999px;}
+.modal-overlay{position:fixed; inset:0; background:rgba(15,23,42,0.5); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; z-index:100; padding:1.5rem;}
+.modal-overlay.open{display:flex;}
+.modal-card{width:100%; max-width:640px; max-height:88vh; overflow-y:auto; background:var(--surface-card-elevated); border:1px solid var(--border-subtle); border-radius:2rem; box-shadow:0 32px 80px rgba(0,0,0,0.18); padding:1.6rem 1.75rem;}
+[data-theme="dark"] .modal-card{background:#1E293B;}
+.modal-head{display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:1.1rem;}
+.modal-eyebrow{font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:var(--accent-section);}
+.modal-title{font-size:1.05rem; font-weight:800; color:var(--text-primary); margin-top:0.2rem;}
+.modal-close{width:32px; height:32px; border-radius:50%; border:none; background:var(--surface-hover); color:var(--text-secondary); cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.field-group{margin-bottom:1rem;}
+.field-label{font-size:0.72rem; font-weight:700; color:var(--text-secondary); margin-bottom:0.35rem; display:block;}
+.field-input, .field-select{width:100%; padding:0.55rem 0.75rem; border-radius:0.75rem; border:1.5px solid var(--border-input); background:var(--surface-input); color:var(--text-primary); font-family:inherit; font-size:0.85rem;}
+.field-input:focus, .field-select:focus{outline:none; border-color:#6366F1; box-shadow:0 0 0 3px rgba(99,102,241,0.15);}
+.mini-table{width:100%; border-collapse:collapse; margin-bottom:0.5rem;}
+.mini-table th{font-size:0.62rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); text-align:left; padding:0.3rem 0.4rem; border-bottom:1px solid var(--border-subtle);}
+.mini-table td{padding:0.3rem 0.4rem; border-bottom:1px solid var(--border-subtle);}
+.mini-table td.mt-label{font-size:0.78rem; font-weight:600; color:var(--text-primary); white-space:nowrap;}
+.mini-table input{width:100%; padding:0.4rem 0.5rem; border-radius:0.5rem; border:1.5px solid var(--border-input); background:var(--surface-input); color:var(--text-primary); font-family:inherit; font-size:0.78rem;}
+.mini-table input:focus{outline:none; border-color:#6366F1;}
+.modal-actions{display:flex; justify-content:flex-end; gap:0.6rem; margin-top:1.2rem; position:sticky; bottom:0; background:var(--surface-card-elevated); padding-top:0.75rem;}
+[data-theme="dark"] .modal-actions{background:#1E293B;}
 .btn{display:inline-flex; align-items:center; gap:0.4rem; padding:0.6rem 1.1rem; border-radius:0.875rem; font-family:inherit; font-size:0.82rem; font-weight:700; cursor:pointer; border:none;}
 .btn-primary{background:#6366F1; color:#fff;}
 .btn-primary:hover{background:#4F46E5;}
 .btn-secondary{background:rgba(255,255,255,0.7); color:#374151; border:1px solid var(--border-subtle);}
 [data-theme="dark"] .btn-secondary{background:rgba(255,255,255,0.08); color:var(--text-secondary);}
-
-.confidence-bar{height:8px; border-radius:999px; background:var(--border-default); margin-top:6px; overflow:hidden; max-width:200px;}
-.confidence-fill{height:100%; border-radius:999px; background:linear-gradient(90deg,#6366F1,#10B981);}
-
-.channel-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; margin-top:1rem;}
-.channel-card{background:var(--surface-card); border:1px solid var(--border-subtle); border-radius:1rem; padding:1rem;}
-.ch-name{font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:var(--text-muted);}
-.ch-grade{font-size:1.5rem; font-weight:900; margin:0.25rem 0;}
-.grade{display:inline-block; width:32px; height:32px; line-height:32px; text-align:center; border-radius:8px; font-weight:900; font-size:16px;}
-.grade.A{background:#dcfce7; color:#166534;}
-.grade.B{background:#d1fae5; color:#065f46;}
-.grade.C{background:#ffedd5; color:#9a3412;}
-.grade.D,.grade.F{background:#fee2e2; color:#991b1b;}
-
-::-webkit-scrollbar{width:8px; height:8px;}
-::-webkit-scrollbar-thumb{background:var(--border-default); border-radius:9999px;}
-
 @media(max-width:900px){
   .app-shell{flex-direction:column;}
   .sidebar{width:100%; flex-direction:row; overflow-x:auto; border-right:none; border-bottom:1px solid var(--border-subtle); padding:0.75rem;}
   .sidebar .brand{display:none;}
   .sidebar-footnote{display:none;}
   .app-main{padding:1rem;}
-  .kpi-grid{grid-template-columns:1fr 1fr;}
 }
 @media print{
   body{background:#fff!important;}
-  .atmosphere,.sidebar,.topbar,.theme-toggle,.btn{display:none!important;}
+  .atmosphere,.sidebar,.topbar,.theme-toggle,.btn,.pill-add{display:none!important;}
   .app-shell{border:none; box-shadow:none; background:#fff!important; display:block!important;}
   .app-content{display:block!important;}
   .app-main{padding:0!important; overflow:visible!important;}
   .page{display:block!important; page-break-after:always;}
   .glass-card,.kpi-card,.table-wrap{box-shadow:none; border:1px solid #e5e7eb;}
   table{min-width:0!important; font-size:9px;}
-}
-"""
-
-
-JS = r"""
-/* ============================= FORMATTERS ============================= */
-const fmtINR = v => (v===null||v===undefined) ? null : '₹' + Math.round(v).toLocaleString('en-IN');
-const fmtNum = (v,d=0) => (v===null||v===undefined) ? null : Number(v).toLocaleString('en-IN',{minimumFractionDigits:d,maximumFractionDigits:d});
-const fmtPct = (v,d=1) => (v===null||v===undefined) ? null : (v<1&&v>-1?(v*100).toFixed(d):Number(v).toFixed(d))+'%';
-const fmtSigned = (v,d=1) => (v===null||v===undefined) ? null : (v>0?'+':'') + v.toFixed(d);
-function cell(val, cls){ if(val===null||val===undefined||val==='') return `<td class="num muted">—</td>`; return `<td class="num${cls?(' '+cls):''}">${val}</td>`; }
-function nameCell(label){ return `<td class="name-cell">${label}</td>`; }
-function momChip(delta, pct, direction){
-  if(delta===null||delta===undefined) return `<span class="chip chip-flat">—</span>`;
-  const isZero = Math.abs(delta) < 1e-9;
-  const up = delta > 0;
-  let cls = 'chip-neutral';
-  if(!isZero && direction==='up') cls = up ? 'chip-up-good' : 'chip-down-bad';
-  if(!isZero && direction==='down') cls = up ? 'chip-up-bad' : 'chip-down-good';
-  if(isZero) cls = 'chip-flat';
-  const arrow = isZero ? '→' : (up ? '↑' : '↓');
-  const dTxt = fmtSigned(delta);
-  const pTxt = (pct===null||pct===undefined) ? '' : ` (${fmtSigned(pct*100,1)}%)`;
-  return `<span class="chip ${cls}">${arrow} ${dTxt}${pTxt}</span>`;
-}
-function statusBadge(status){
-  if(status==='GREEN') return `<span class="badge badge-green">● GREEN</span>`;
-  if(status==='AMBER') return `<span class="badge badge-amber">● AMBER</span>`;
-  if(status==='RED') return `<span class="badge badge-red">● RED</span>`;
-  return `<span class="badge badge-flat">—</span>`;
-}
-function sourceBadge(src){
-  if(src==='api') return `<span class="badge badge-api" style="font-size:0.6rem">API</span>`;
-  if(src==='calc') return `<span class="badge badge-calc" style="font-size:0.6rem">Calc</span>`;
-  return '';
-}
-
-/* ============================= DATA UTILS ============================= */
-const ENTITIES = ['rh','pms','aif'];
-const ENTITY_LABELS = {rh:'Right Horizons', pms:'Right Horizons PMS', aif:'Right Horizons AIF'};
-const ENTITY_COLORS = {rh:'#7C3AED', pms:'#0EA5E9', aif:'#10B981'};
-const g = (obj, key, def) => (obj && typeof obj === 'object' && key in obj) ? obj[key] : (def===undefined?null:def);
-const safeNum = v => (v===null||v===undefined||v===''||v==='—') ? null : Number(v);
-
-function getEntityData(entity) { return API_DATA[entity] || {}; }
-
-/* ============================= KPI CARD BUILDER ============================= */
-function kpiCard(label, value, chipHtml, note, accent){
-  const accentStyle = accent ? `--accent:${accent}` : '--accent:#7C3AED';
-  return `<div class="kpi-card" style="${accentStyle}">
-    <div class="kpi-label">${label}</div>
-    <div class="kpi-value">${value || '—'}</div>
-    <div class="kpi-meta">${chipHtml || ''}</div>
-    ${note ? `<div class="kpi-note">${note}</div>` : ''}
-  </div>`;
-}
-
-/* ============================= OVERVIEW PAGE ============================= */
-function renderOverview(){
-  const el = document.getElementById('overview');
-  let html = '';
-
-  // AI Summary
-  const rhData = getEntityData('rh');
-  const aiSum = rhData.ai_summary;
-  if(aiSum && typeof aiSum === 'object'){
-    const exec = aiSum.executive_summary || '';
-    const confidence = safeNum(aiSum.confidence_score) || 0;
-    const working = aiSum.what_improved;
-    const dropped = aiSum.what_dropped;
-    const mainWin = aiSum.main_win || '';
-    const mainConcern = aiSum.main_concern || '';
-    const opportunity = aiSum.key_opportunity || '';
-    const focus = aiSum.recommended_focus || '';
-
-    html += `<h2 class="section-title"><span class="title-txt">Executive Summary</span>`;
-    if(confidence) html += `<span class="badge badge-green">Health: ${confidence}/100</span>`;
-    html += `</h2>`;
-
-    if(exec) html += `<div class="summary-block">${escHtml(exec)}</div>`;
-    if(mainWin) html += `<div class="glass-card"><span class="badge badge-green">Main Win</span><p style="margin:0.5rem 0 0;font-size:0.85rem">${escHtml(mainWin)}</p></div>`;
-    if(mainConcern) html += `<div class="glass-card"><span class="badge badge-red">Main Concern</span><p style="margin:0.5rem 0 0;font-size:0.85rem">${escHtml(mainConcern)}</p></div>`;
-    if(opportunity) html += `<div class="glass-card"><span class="badge badge-amber">Key Opportunity</span><p style="margin:0.5rem 0 0;font-size:0.85rem">${escHtml(opportunity)}</p></div>`;
-
-    if(working && Array.isArray(working)){
-      html += `<div class="glass-card"><span class="badge badge-green">What Improved</span><ul style="margin:0.5rem 0 0;padding-left:1.2rem;font-size:0.82rem;color:var(--text-secondary)">`;
-      working.forEach(w => html += `<li>${escHtml(String(w))}</li>`);
-      html += `</ul></div>`;
-    }
-    if(dropped && Array.isArray(dropped)){
-      html += `<div class="glass-card"><span class="badge badge-red">What Declined</span><ul style="margin:0.5rem 0 0;padding-left:1.2rem;font-size:0.82rem;color:var(--text-secondary)">`;
-      dropped.forEach(w => html += `<li>${escHtml(String(w))}</li>`);
-      html += `</ul></div>`;
-    }
-
-    // Channel grades
-    const grades = aiSum.channel_grades;
-    if(grades && typeof grades === 'object'){
-      html += `<h2 class="section-title"><span class="title-txt">Channel Grades</span></h2><div class="channel-grid">`;
-      Object.entries(grades).forEach(([ch, info]) => {
-        if(!info || typeof info !== 'object') return;
-        const grade = info.grade || '—';
-        const trend = info.trend || '';
-        const oneLiner = info.one_liner || '';
-        const arrow = {improving:'↑', stable:'→', declining:'↓'}[trend] || '';
-        html += `<div class="channel-card"><div class="ch-name">${escHtml(ch.toUpperCase())}</div>
-          <div class="ch-grade"><span class="grade ${grade}">${grade}</span> <span style="font-size:0.8rem;color:var(--text-muted)">${arrow} ${escHtml(trend)}</span></div>
-          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.3rem">${escHtml(oneLiner)}</div></div>`;
-      });
-      html += `</div>`;
-    }
-
-    // Next steps
-    const steps = aiSum.next_steps;
-    if(steps && Array.isArray(steps)){
-      html += `<h2 class="section-title"><span class="title-txt">Recommended Actions</span></h2>`;
-      steps.forEach(s => {
-        if(typeof s === 'object'){
-          const pri = (s.priority||'medium').toLowerCase();
-          const badgeCls = pri==='high'?'badge-red':pri==='low'?'badge-green':'badge-amber';
-          html += `<div class="glass-card" style="padding:0.9rem 1.1rem"><div style="display:flex;gap:0.6rem;align-items:flex-start">
-            <span class="badge ${badgeCls}" style="flex-shrink:0;margin-top:2px">${escHtml(pri)}</span>
-            <div><div style="font-weight:700;font-size:0.85rem">${escHtml(s.title||'')}</div>
-            <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem">${escHtml(s.description||s.expected_impact||'')}</div></div></div></div>`;
-        } else {
-          html += `<div class="glass-card" style="padding:0.9rem 1.1rem;font-size:0.85rem">${escHtml(String(s))}</div>`;
-        }
-      });
-    }
-
-    if(focus) html += `<div class="glass-card"><span class="badge badge-flat">Recommended Focus Next Period</span><p style="margin:0.5rem 0 0;font-size:0.85rem">${escHtml(focus)}</p></div>`;
-
-    if(confidence){
-      html += `<div style="margin-top:1rem"><div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);margin-bottom:0.3rem">OVERALL HEALTH SCORE</div>
-        <div class="confidence-bar" style="max-width:300px"><div class="confidence-fill" style="width:${Math.min(confidence,100)}%"></div></div>
-        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.3rem">${confidence}/100</div></div>`;
-    }
-  } else {
-    html += `<div class="glass-card" style="text-align:center;color:var(--text-muted);padding:2rem">
-      <p>No AI executive summary available. Generate one from the Reporting Room before exporting.</p></div>`;
-  }
-
-  // KPI snapshot across all entities
-  html += `<h2 class="section-title" style="margin-top:2rem"><span class="title-txt">KPI Snapshot — All Entities</span></h2>`;
-  ENTITIES.forEach(ent => {
-    const d = getEntityData(ent);
-    const gsc = d.gsc || {};
-    const ga4 = d.ga4 || {};
-    const fb = d.social_fb || {};
-    const ig = d.social_ig || {};
-    const ads = d.meta_ads || [];
-    const totalReach = (safeNum(ig.reach)||0) + (safeNum(fb.reach)||0);
-    const totalEng = (safeNum(ig.engagements)||0) + (safeNum(fb.engagements)||0);
-    const orgSessions = safeNum(ga4.organic_sessions) || safeNum(ga4.sessions) || 0;
-    const gscClicks = safeNum(gsc.clicks) || 0;
-    const adSpend = ads.reduce((s,c) => s + (safeNum(c.spend)||0), 0);
-    const adLeads = ads.reduce((s,c) => s + (safeNum(c.leads)||0), 0);
-
-    html += `<div class="subhead"><span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ENTITY_COLORS[ent]}"></span>${ENTITY_LABELS[ent]}</div>`;
-    html += `<div class="kpi-grid">`;
-    html += kpiCard('Total Reach', fmtNum(totalReach||null), sourceBadge('api'), null, ENTITY_COLORS[ent]);
-    html += kpiCard('Total Engagements', fmtNum(totalEng||null), sourceBadge('api'), null, ENTITY_COLORS[ent]);
-    html += kpiCard('Organic Sessions', fmtNum(orgSessions||null), sourceBadge('api'), null, ENTITY_COLORS[ent]);
-    html += kpiCard('GSC Clicks', fmtNum(gscClicks||null), sourceBadge('api'), null, ENTITY_COLORS[ent]);
-    html += kpiCard('Ad Spend', fmtINR(adSpend||null), sourceBadge('api'), null, ENTITY_COLORS[ent]);
-    html += kpiCard('Ad Leads', fmtNum(adLeads||null), sourceBadge('api'), null, ENTITY_COLORS[ent]);
-    html += `</div>`;
-  });
-
-  el.innerHTML = html;
-}
-
-/* ============================= ADS PAGE ============================= */
-function renderAds(){
-  const el = document.getElementById('ads');
-  let html = '<h2 class="section-title"><span class="title-txt">Meta Ads Performance</span><span class="badge badge-api">API Data</span></h2>';
-
-  ENTITIES.forEach(ent => {
-    const d = getEntityData(ent);
-    const ads = d.meta_ads || [];
-    if(!ads.length) return;
-
-    const ti = ads.reduce((s,c) => s + (safeNum(c.impressions)||0), 0);
-    const tc = ads.reduce((s,c) => s + (safeNum(c.clicks)||0), 0);
-    const tl = ads.reduce((s,c) => s + (safeNum(c.leads)||0), 0);
-    const ts = ads.reduce((s,c) => s + (safeNum(c.spend)||0), 0);
-    const tr = ads.reduce((s,c) => s + (safeNum(c.reach)||0), 0);
-    const ctr = ti > 0 ? (tc/ti*100) : 0;
-    const cpl = tl > 0 ? (ts/tl) : 0;
-
-    html += `<div class="subhead"><span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ENTITY_COLORS[ent]}"></span>${ENTITY_LABELS[ent]}</div>`;
-    html += `<div class="kpi-grid">`;
-    html += kpiCard('Impressions', fmtNum(ti||null), null, null, ENTITY_COLORS[ent]);
-    html += kpiCard('Clicks', fmtNum(tc||null), null, null, ENTITY_COLORS[ent]);
-    html += kpiCard('Leads', fmtNum(tl||null), null, null, ENTITY_COLORS[ent]);
-    html += kpiCard('CTR', ctr ? ctr.toFixed(2)+'%' : '—', null, null, ENTITY_COLORS[ent]);
-    html += kpiCard('Total Spend', fmtINR(ts||null), null, null, ENTITY_COLORS[ent]);
-    html += kpiCard('CPL', cpl ? fmtINR(cpl) : '—', null, null, ENTITY_COLORS[ent]);
-    html += `</div>`;
-
-    // Campaign table
-    const active = ads.filter(c => (safeNum(c.impressions)||0) > 0 || (safeNum(c.spend)||0) > 0);
-    if(active.length){
-      html += `<div class="table-wrap"><table><thead><tr>
-        <th class="name-cell">Campaign</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>Reach</th><th>Leads</th><th>Spend</th><th>CPL</th>
-      </tr></thead><tbody>`;
-      active.forEach(c => {
-        const name = c.campaign_name || c.name || '—';
-        const ci = safeNum(c.impressions);
-        const cc = safeNum(c.clicks);
-        const cctr = ci ? (cc/ci*100).toFixed(2)+'%' : '—';
-        const cr = safeNum(c.reach);
-        const cl = safeNum(c.leads);
-        const csp = safeNum(c.spend);
-        const ccpl = cl ? fmtINR(csp/cl) : '—';
-        html += `<tr>${nameCell(escHtml(name))}${cell(fmtNum(ci))}${cell(fmtNum(cc))}${cell(cctr)}${cell(fmtNum(cr))}${cell(fmtNum(cl))}${cell(fmtINR(csp))}${cell(ccpl)}</tr>`;
-      });
-      html += `</tbody></table></div>`;
-    }
-  });
-
-  if(!ENTITIES.some(e => (getEntityData(e).meta_ads||[]).length)){
-    html += `<div class="glass-card" style="text-align:center;color:var(--text-muted);padding:2rem">No ad campaign data available for this period.</div>`;
-  }
-
-  el.innerHTML = html;
-}
-
-/* ============================= SMM PAGE ============================= */
-let smmEntity = 'rh';
-function renderSMM(){
-  const el = document.getElementById('smm');
-  let html = `<div id="smmPills"></div>`;
-
-  const d = getEntityData(smmEntity);
-  const fb = d.social_fb || {};
-  const ig = d.social_ig || {};
-  const trend = d.social_trend || [];
-
-  // Platform cards
-  html += `<h2 class="section-title"><span class="title-txt">Social Media Overview</span><span class="badge badge-api">API Data</span></h2>`;
-  html += `<div class="platform-grid">`;
-
-  if(Object.keys(ig).length){
-    html += `<div class="glass-card"><div style="font-weight:800;font-size:0.85rem;margin-bottom:0.7rem">Instagram</div>`;
-    [['Followers','followers'],['New Followers','new_followers'],['Reach','reach'],['Impressions','views'],
-     ['Engagements','engagements'],['Engagement Rate','engagement_rate'],['Posts Published','posts_published'],
-     ['Video Views','video_views'],['Link Clicks','link_clicks'],['Saves/Shares','saves_shares']].forEach(([lbl,key]) => {
-      const v = ig[key];
-      const disp = key==='engagement_rate' ? (v ? (v<1?(v*100).toFixed(2):Number(v).toFixed(2))+'%' : '—') : (v ? fmtNum(v) : '—');
-      html += `<div class="stat-row"><span class="lbl">${lbl}</span><span class="valwrap"><span class="stat-val">${disp}</span></span></div>`;
-    });
-    html += `</div>`;
-  }
-
-  if(Object.keys(fb).length){
-    html += `<div class="glass-card"><div style="font-weight:800;font-size:0.85rem;margin-bottom:0.7rem">Facebook</div>`;
-    [['Page Likes','followers'],['New Followers','new_followers'],['Reach','reach'],['Views','views'],
-     ['Engagements','engagements'],['Engagement Rate','engagement_rate'],['Posts Published','posts_published'],
-     ['Video Views','video_views'],['Link Clicks','link_clicks'],['Saves/Shares','saves_shares']].forEach(([lbl,key]) => {
-      const v = fb[key] || fb[key==='followers'?'page_likes':key];
-      const disp = key==='engagement_rate' ? (v ? (v<1?(v*100).toFixed(2):Number(v).toFixed(2))+'%' : '—') : (v ? fmtNum(v) : '—');
-      html += `<div class="stat-row"><span class="lbl">${lbl}</span><span class="valwrap"><span class="stat-val">${disp}</span></span></div>`;
-    });
-    html += `</div>`;
-  }
-  html += `</div>`;
-
-  // SMM Trend table
-  if(trend.length){
-    html += `<h2 class="section-title"><span class="title-txt">Social Media Trend</span></h2>`;
-    const metrics = [
-      {k:'followers', label:'Followers', platform:'ig'},
-      {k:'new_followers', label:'New Followers', platform:'ig'},
-      {k:'reach', label:'Reach', platform:'ig'},
-      {k:'views', label:'Impressions/Views', platform:'ig'},
-      {k:'engagements', label:'Engagements', platform:'ig'},
-      {k:'engagement_rate', label:'Engagement Rate', platform:'ig', isPct:true},
-    ];
-
-    ['ig','fb','li'].forEach(plat => {
-      const platLabel = {ig:'Instagram',fb:'Facebook',li:'LinkedIn'}[plat];
-      const hasData = trend.some(t => t[plat]);
-      if(!hasData) return;
-
-      html += `<div style="font-weight:700;font-size:0.82rem;color:var(--text-primary);margin:1rem 0 0.5rem">${platLabel}</div>`;
-      html += `<div class="table-wrap"><table><thead><tr><th class="name-cell">Metric</th><th>MoM Δ</th>`;
-      trend.forEach((t,i) => {
-        const ps = t.period_start || '';
-        const pe = t.period_end || '';
-        html += `<th>${ps && pe ? ps+' – '+pe : (t.period||'W'+(i+1))}</th>`;
-      });
-      html += `</tr></thead><tbody>`;
-
-      metrics.forEach(m => {
-        const vals = trend.map(t => {
-          const src = t[plat] || {};
-          return safeNum(src[m.k]);
-        });
-        const last = vals[vals.length-1];
-        const prev = vals.length>=2 ? vals[vals.length-2] : null;
-        const delta = (last!==null && prev!==null) ? last-prev : null;
-        const pct = (delta!==null && prev) ? delta/prev : null;
-
-        html += `<tr>${nameCell(m.label)}<td>${momChip(delta, pct, 'up')}</td>`;
-        vals.forEach(v => {
-          const disp = m.isPct ? (v!==null ? (v<1?(v*100).toFixed(2):Number(v).toFixed(2))+'%' : null) : fmtNum(v);
-          html += cell(disp);
-        });
-        html += `</tr>`;
-      });
-      html += `</tbody></table></div>`;
-    });
-  }
-
-  if(!Object.keys(ig).length && !Object.keys(fb).length && !trend.length){
-    html += `<div class="glass-card" style="text-align:center;color:var(--text-muted);padding:2rem">No social media data available for this entity.</div>`;
-  }
-
-  el.innerHTML = html;
-
-  // Add entity pills
-  const pillDiv = document.getElementById('smmPills');
-  if(pillDiv){
-    pillDiv.innerHTML = '';
-    pillDiv.appendChild(entityPillRow(smmEntity, e => { smmEntity=e; renderSMM(); }));
-  }
-}
-
-/* ============================= SEO PAGE ============================= */
-let seoEntity = 'rh';
-function renderSEO(){
-  const el = document.getElementById('seo');
-  let html = `<div id="seoPills"></div>`;
-
-  const d = getEntityData(seoEntity);
-  const gsc = d.gsc || {};
-  const ga4 = d.ga4 || {};
-  const seoTrend = d.seo_trend || [];
-
-  html += `<h2 class="section-title"><span class="title-txt">Website & SEO Overview</span><span class="badge badge-api">API Data</span></h2>`;
-  html += `<div class="kpi-grid">`;
-  const orgSess = safeNum(ga4.organic_sessions) || safeNum(ga4.sessions) || 0;
-  const orgUsers = safeNum(ga4.organic_users) || safeNum(ga4.users) || 0;
-  const gscCl = safeNum(gsc.clicks) || 0;
-  const gscIm = safeNum(gsc.impressions) || 0;
-  const gscCtr = safeNum(gsc.ctr);
-  const gscPos = safeNum(gsc.position);
-  const bounce = safeNum(ga4.bounce_rate);
-  const dur = safeNum(ga4.avg_session_duration);
-  const leads = safeNum(ga4.leads);
-
-  html += kpiCard('Organic Sessions', fmtNum(orgSess||null), null, null, ENTITY_COLORS[seoEntity]);
-  html += kpiCard('Organic Users', fmtNum(orgUsers||null), null, null, ENTITY_COLORS[seoEntity]);
-  html += kpiCard('GSC Clicks', fmtNum(gscCl||null), null, null, ENTITY_COLORS[seoEntity]);
-  html += kpiCard('GSC Impressions', fmtNum(gscIm||null), null, null, ENTITY_COLORS[seoEntity]);
-  html += kpiCard('Avg Position', gscPos ? gscPos.toFixed(1) : '—', null, null, ENTITY_COLORS[seoEntity]);
-  html += kpiCard('CTR', gscCtr ? (gscCtr<1?(gscCtr*100).toFixed(2):gscCtr.toFixed(2))+'%' : '—', null, null, ENTITY_COLORS[seoEntity]);
-  html += kpiCard('Bounce Rate', bounce ? (bounce<1?(bounce*100).toFixed(1):bounce.toFixed(1))+'%' : '—', null, null, ENTITY_COLORS[seoEntity]);
-  html += kpiCard('Avg Session Duration', dur ? Math.round(dur)+'s' : '—', null, null, ENTITY_COLORS[seoEntity]);
-  html += `</div>`;
-
-  // SEO Trend
-  if(seoTrend.length){
-    html += `<h2 class="section-title"><span class="title-txt">SEO Trend</span></h2>`;
-    const trendMetrics = [
-      {k:'sessions', label:'Organic Sessions', g:'TRAFFIC'},
-      {k:'users', label:'Organic Users'},
-      {k:'leads', label:'Website Leads'},
-      {k:'avg_session_duration', label:'Avg Session Duration (sec)', g:'ENGAGEMENT'},
-      {k:'bounce_rate', label:'Bounce Rate', isPct:true, dir:'down'},
-      {k:'clicks', label:'GSC Clicks', g:'SEARCH CONSOLE'},
-      {k:'impressions', label:'GSC Impressions'},
-      {k:'position', label:'Avg Position', dir:'down'},
-    ];
-
-    html += `<div class="table-wrap"><table><thead><tr><th class="name-cell">Metric</th><th>MoM Δ</th><th>MoM %</th>`;
-    seoTrend.forEach((t,i) => {
-      const ps = t.period_start || '';
-      const pe = t.period_end || '';
-      html += `<th>${ps && pe ? ps+' – '+pe : (t.period||'W'+(i+1))}</th>`;
-    });
-    html += `</tr></thead><tbody>`;
-
-    let lastGroup = '';
-    trendMetrics.forEach(m => {
-      if(m.g && m.g !== lastGroup){
-        lastGroup = m.g;
-        html += `<tr class="group-row"><td colspan="${seoTrend.length+3}">${m.g}</td></tr>`;
-      }
-      const vals = seoTrend.map(t => safeNum(t[m.k]));
-      const last = vals[vals.length-1];
-      const prev = vals.length>=2 ? vals[vals.length-2] : null;
-      const delta = (last!==null && prev!==null) ? last-prev : null;
-      const pct = (delta!==null && prev) ? delta/prev : null;
-      const dir = m.dir || 'up';
-
-      html += `<tr>${nameCell(m.label)}<td>${momChip(delta, pct, dir)}</td>`;
-      html += `<td class="num${pct===null?' muted':''}">${pct===null?'—':fmtSigned(pct*100,1)+'%'}</td>`;
-      vals.forEach(v => {
-        const disp = m.isPct ? (v!==null ? (v<1?(v*100).toFixed(1):v.toFixed(1))+'%' : null) : fmtNum(v);
-        html += cell(disp);
-      });
-      html += `</tr>`;
-    });
-    html += `</tbody></table></div>`;
-  }
-
-  // Top queries
-  const queries = gsc.queries || [];
-  if(queries.length){
-    html += `<h2 class="section-title"><span class="title-txt">Top Search Queries</span></h2>`;
-    html += `<div class="table-wrap"><table><thead><tr><th class="name-cell">Query</th><th>Clicks</th><th>Impressions</th><th>CTR</th><th>Position</th></tr></thead><tbody>`;
-    queries.slice(0,20).forEach(q => {
-      const ctr = safeNum(q.ctr);
-      const ctrDisp = ctr ? (ctr<1?(ctr*100).toFixed(2):ctr.toFixed(2))+'%' : '—';
-      html += `<tr>${nameCell(escHtml(q.query||'—'))}${cell(fmtNum(safeNum(q.clicks)))}${cell(fmtNum(safeNum(q.impressions)))}${cell(ctrDisp)}${cell(safeNum(q.position)?Number(q.position).toFixed(1):null)}</tr>`;
-    });
-    html += `</tbody></table></div>`;
-  }
-
-  // Top pages
-  const pages = gsc.pages || [];
-  if(pages.length){
-    html += `<h2 class="section-title"><span class="title-txt">Top Pages (GSC)</span></h2>`;
-    html += `<div class="table-wrap"><table><thead><tr><th class="name-cell">Page</th><th>Clicks</th><th>Impressions</th><th>CTR</th><th>Position</th></tr></thead><tbody>`;
-    pages.slice(0,20).forEach(p => {
-      const ctr = safeNum(p.ctr);
-      const ctrDisp = ctr ? (ctr<1?(ctr*100).toFixed(2):ctr.toFixed(2))+'%' : '—';
-      html += `<tr><td class="name-cell" style="word-break:break-all;white-space:normal;max-width:300px">${escHtml(p.page||'—')}</td>${cell(fmtNum(safeNum(p.clicks)))}${cell(fmtNum(safeNum(p.impressions)))}${cell(ctrDisp)}${cell(safeNum(p.position)?Number(p.position).toFixed(1):null)}</tr>`;
-    });
-    html += `</tbody></table></div>`;
-  }
-
-  // GA4 top pages
-  const ga4Pages = ga4.pages || [];
-  if(ga4Pages.length){
-    html += `<h2 class="section-title"><span class="title-txt">Top Pages (GA4)</span></h2>`;
-    html += `<div class="table-wrap"><table><thead><tr><th class="name-cell">Page</th><th>Sessions/Views</th><th>Users</th><th>Bounce Rate</th></tr></thead><tbody>`;
-    ga4Pages.slice(0,20).forEach(p => {
-      const br = safeNum(p.bounceRate);
-      const brDisp = br ? (br<1?(br*100).toFixed(1):br.toFixed(1))+'%' : '—';
-      html += `<tr><td class="name-cell" style="word-break:break-all;white-space:normal;max-width:300px">${escHtml(p.page||p.pagePath||'—')}</td>${cell(fmtNum(safeNum(p.sessions)||safeNum(p.screenPageViews)))}${cell(fmtNum(safeNum(p.users)))}${cell(brDisp)}</tr>`;
-    });
-    html += `</tbody></table></div>`;
-  }
-
-  // Traffic sources
-  const sources = ga4.sources || [];
-  if(sources.length){
-    html += `<h2 class="section-title"><span class="title-txt">Traffic Sources</span></h2>`;
-    html += `<div class="table-wrap"><table><thead><tr><th class="name-cell">Source</th><th>Sessions</th><th>Users</th></tr></thead><tbody>`;
-    sources.slice(0,15).forEach(s => {
-      html += `<tr>${nameCell(escHtml(s.source||s.sessionSource||'—'))}${cell(fmtNum(safeNum(s.sessions)))}${cell(fmtNum(safeNum(s.users)))}</tr>`;
-    });
-    html += `</tbody></table></div>`;
-  }
-
-  el.innerHTML = html;
-  const pillDiv = document.getElementById('seoPills');
-  if(pillDiv){
-    pillDiv.innerHTML = '';
-    pillDiv.appendChild(entityPillRow(seoEntity, e => { seoEntity=e; renderSEO(); }));
-  }
-}
-
-/* ============================= PERFORMANCE PAGE ============================= */
-function renderPerformance(){
-  const el = document.getElementById('performance');
-  let html = '<h2 class="section-title"><span class="title-txt">Performance Overview — All Channels</span></h2>';
-
-  ENTITIES.forEach(ent => {
-    const d = getEntityData(ent);
-    const gsc = d.gsc || {};
-    const ga4 = d.ga4 || {};
-    const fb = d.social_fb || {};
-    const ig = d.social_ig || {};
-    const ads = d.meta_ads || [];
-
-    const hasData = Object.keys(gsc).length || Object.keys(ga4).length || Object.keys(fb).length || Object.keys(ig).length || ads.length;
-    if(!hasData) return;
-
-    html += `<div class="subhead"><span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ENTITY_COLORS[ent]}"></span>${ENTITY_LABELS[ent]}</div>`;
-    html += `<div class="table-wrap"><table><thead><tr><th class="name-cell">Metric</th><th>Value</th></tr></thead><tbody>`;
-
-    const igR = safeNum(ig.reach)||0, fbR = safeNum(fb.reach)||0;
-    const igE = safeNum(ig.engagements)||0, fbE = safeNum(fb.engagements)||0;
-    const totalReach = igR+fbR, totalEng = igE+fbE;
-    const engRate = totalReach>0 ? (totalEng/totalReach*100) : 0;
-
-    if(Object.keys(ig).length || Object.keys(fb).length){
-      html += `<tr class="group-row"><td colspan="2">SOCIAL MEDIA</td></tr>`;
-      html += `<tr>${nameCell('Total Reach')}${cell(fmtNum(totalReach||null))}</tr>`;
-      html += `<tr>${nameCell('Total Engagements')}${cell(fmtNum(totalEng||null))}</tr>`;
-      html += `<tr>${nameCell('Engagement Rate')}${cell(engRate?engRate.toFixed(2)+'%':'—')}</tr>`;
-    }
-    if(Object.keys(gsc).length || Object.keys(ga4).length){
-      html += `<tr class="group-row"><td colspan="2">SEO / ORGANIC</td></tr>`;
-      html += `<tr>${nameCell('GSC Clicks')}${cell(fmtNum(safeNum(gsc.clicks)))}</tr>`;
-      html += `<tr>${nameCell('GSC Impressions')}${cell(fmtNum(safeNum(gsc.impressions)))}</tr>`;
-      const ctr = safeNum(gsc.ctr); html += `<tr>${nameCell('GSC CTR')}${cell(ctr?(ctr<1?(ctr*100).toFixed(2):ctr.toFixed(2))+'%':'—')}</tr>`;
-      html += `<tr>${nameCell('Organic Sessions')}${cell(fmtNum(safeNum(ga4.organic_sessions)||safeNum(ga4.sessions)))}</tr>`;
-      html += `<tr>${nameCell('Organic Users')}${cell(fmtNum(safeNum(ga4.organic_users)||safeNum(ga4.users)))}</tr>`;
-    }
-    if(ads.length){
-      const ti = ads.reduce((s,c)=>s+(safeNum(c.impressions)||0),0);
-      const tc = ads.reduce((s,c)=>s+(safeNum(c.clicks)||0),0);
-      const tl = ads.reduce((s,c)=>s+(safeNum(c.leads)||0),0);
-      const ts = ads.reduce((s,c)=>s+(safeNum(c.spend)||0),0);
-      html += `<tr class="group-row"><td colspan="2">META ADS</td></tr>`;
-      html += `<tr>${nameCell('Ad Impressions')}${cell(fmtNum(ti||null))}</tr>`;
-      html += `<tr>${nameCell('Ad Clicks')}${cell(fmtNum(tc||null))}</tr>`;
-      html += `<tr>${nameCell('Ad Leads')}${cell(fmtNum(tl||null))}</tr>`;
-      html += `<tr>${nameCell('Total Spend')}${cell(fmtINR(ts||null))}</tr>`;
-      html += `<tr>${nameCell('CPL')}${cell(tl?fmtINR(ts/tl):'—')}</tr>`;
-    }
-    html += `</tbody></table></div>`;
-  });
-
-  el.innerHTML = html;
-}
-
-/* ============================= NOTES PAGE ============================= */
-function renderNotes(){
-  document.getElementById('notes').innerHTML = `
-    <h2 class="section-title"><span class="title-txt">Notes & Observations</span></h2>
-    <div class="glass-card">
-      <p style="color:var(--text-muted);font-size:0.85rem;line-height:1.6">
-        This section is available for manual annotations after downloading the report.
-        Add team observations, action items, and context notes here.
-      </p>
-      <div style="border:2px dashed var(--border-default);border-radius:1rem;padding:2rem;margin-top:1rem;text-align:center;color:var(--text-muted);font-size:0.82rem">
-        Space for notes and comments
-      </div>
-    </div>
-    <div class="footer-note">
-      SEBI Registration: INA000013880 (Investment Adviser), INP000007508 (PMS), IN/AIF2/24-25/1595 (AIF).<br>
-      Past performance is not indicative of future results. This report is auto-generated from live API data.
-    </div>`;
-}
-
-/* ============================= ENTITY PILL ROW ============================= */
-function entityPillRow(activeEntity, onSelect){
-  const wrap = document.createElement('div');
-  wrap.className = 'pill-row';
-  wrap.innerHTML = ENTITIES.map(e => {
-    const active = e===activeEntity;
-    return `<button type="button" class="pill-btn ${active?'active':''}" style="color:${active?ENTITY_COLORS[e]:''}" data-entity="${e}">
-      <span class="dot" style="background:${ENTITY_COLORS[e]}"></span>${ENTITY_LABELS[e]}
-    </button>`;
-  }).join('');
-  wrap.querySelectorAll('.pill-btn').forEach(b => b.addEventListener('click', () => onSelect(b.dataset.entity)));
-  return wrap;
-}
-
-/* ============================= ESCAPE ============================= */
-function escHtml(s){
-  if(s===null||s===undefined) return '—';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-/* ============================= NAV / SHELL ============================= */
-const ICONS = {
-  overview:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
-  ads:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>',
-  smm:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.6l6.8-3.2M8.6 13.4l6.8 3.2"/></svg>',
-  seo:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
-  performance:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
-  notes:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>',
-};
-const PAGES = [
-  {id:'overview', label:'Overview', icon:ICONS.overview},
-  {id:'ads', label:'Ads', icon:ICONS.ads},
-  {id:'smm', label:'SMM', icon:ICONS.smm},
-  {id:'seo', label:'Websites & SEO', icon:ICONS.seo},
-  {id:'performance', label:'Performance', icon:ICONS.performance},
-  {id:'notes', label:'Notes', icon:ICONS.notes},
-];
-function buildNav(){
-  const nav = document.getElementById('navList');
-  nav.innerHTML = PAGES.map(p=>`<div class="nav-item" data-page="${p.id}">${p.icon}<span>${p.label}</span></div>`).join('');
-  nav.querySelectorAll('.nav-item').forEach(el=> el.addEventListener('click', ()=> showPage(el.dataset.page)));
-}
-function showPage(id){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.page===id));
-  document.getElementById('pageTitle').textContent = PAGES.find(p=>p.id===id).label;
-}
-function buildPages(){
-  document.getElementById('appMain').innerHTML = PAGES.map(p=>`<div class="page" id="${p.id}"></div>`).join('');
-}
-function renderAll(){ renderOverview(); renderAds(); renderSMM(); renderSEO(); renderPerformance(); renderNotes(); }
-
-document.getElementById('themeToggle').addEventListener('click', ()=>{
-  const isDark = document.documentElement.getAttribute('data-theme')==='dark';
-  document.documentElement.setAttribute('data-theme', isDark?'light':'dark');
-  document.getElementById('themeIcon').innerHTML = isDark
-    ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'
-    : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
-});
-
-buildNav();
-buildPages();
-renderAll();
-showPage('overview');
-"""
+}"""
