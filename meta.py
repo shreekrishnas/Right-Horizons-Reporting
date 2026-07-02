@@ -45,6 +45,13 @@ def get_campaigns_summary(token: str, ad_account_id: str, start: str, end: str, 
         row = {"name": c["name"], "status": c.get("status", ""), "objective": c.get("objective", "")}
         if insights.get("data"):
             i = insights["data"][0]
+            leads = 0
+            for a in i.get("actions") or []:
+                if a.get("action_type") in ("lead", "onsite_conversion.lead_grouped", "offsite_conversion.fb_pixel_lead", "leadgen_grouped"):
+                    try:
+                        leads += int(float(a.get("value") or 0))
+                    except Exception:
+                        pass
             row.update({
                 "spend": float(i.get("spend", 0)),
                 "impressions": int(i.get("impressions", 0)),
@@ -52,9 +59,10 @@ def get_campaigns_summary(token: str, ad_account_id: str, start: str, end: str, 
                 "clicks": int(i.get("clicks", 0)),
                 "ctr": round(float(i.get("ctr", 0)), 2),
                 "cpc": round(float(i.get("cpc", 0)), 2),
+                "leads": leads,
             })
         else:
-            row.update({"spend": 0, "impressions": 0, "reach": 0, "clicks": 0, "ctr": 0, "cpc": 0})
+            row.update({"spend": 0, "impressions": 0, "reach": 0, "clicks": 0, "ctr": 0, "cpc": 0, "leads": 0})
         result.append(row)
     return result
 

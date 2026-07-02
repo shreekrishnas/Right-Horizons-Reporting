@@ -46,6 +46,16 @@ def _month_ranges(start: str, end: str) -> list:
     return buckets
 
 
+def _pct_frac(v):
+    """API percent values (28.7 == 28.7%) -> fraction (0.287) for the template's pct unit."""
+    if v is None:
+        return None
+    try:
+        return float(v) / 100.0
+    except Exception:
+        return None
+
+
 def _build_seed_store(all_monthly_data: dict, start: str, end: str) -> dict:
     """Convert per-month API data from all 3 entities into the STORE format.
 
@@ -126,8 +136,8 @@ def _build_seed_store(all_monthly_data: dict, start: str, end: str) -> dict:
                     'followers': ig.get('followers'),
                     'newFollowers': ig.get('new_followers'),
                     'posts': ig.get('posts_published'),
-                    'impressions': ig.get('views') or ig.get('impressions'),
-                    'engagementRate': ig.get('engagement_rate'),
+                    'impressions': ig.get('impressions') or ig.get('reach') or ig.get('views'),
+                    'engagementRate': _pct_frac(ig.get('engagement_rate')),
                     'ctr': None,
                 }
             if fb:
@@ -135,8 +145,8 @@ def _build_seed_store(all_monthly_data: dict, start: str, end: str) -> dict:
                     'followers': fb.get('followers') or fb.get('page_likes'),
                     'newFollowers': fb.get('new_followers'),
                     'posts': fb.get('posts_published'),
-                    'impressions': fb.get('views') or fb.get('impressions'),
-                    'engagementRate': fb.get('engagement_rate'),
+                    'impressions': fb.get('page_impressions') or fb.get('reach') or fb.get('views'),
+                    'engagementRate': _pct_frac(fb.get('engagement_rate')),
                     'ctr': None,
                 }
 
@@ -157,10 +167,10 @@ def _build_seed_store(all_monthly_data: dict, start: str, end: str) -> dict:
             site_data['sessions'] = ga4_data.get('sessions') or ga4_data.get('organic_sessions')
             site_data['uniqueVisitors'] = ga4_data.get('users') or ga4_data.get('organic_users')
             site_data['avgSessionDuration'] = ga4_data.get('avg_session_duration') or ga4_data.get('avg_session')
-            site_data['bounceRate'] = ga4_data.get('bounce_rate')
+            site_data['bounceRate'] = _pct_frac(ga4_data.get('bounce_rate'))
             site_data['organicTraffic'] = ga4_data.get('organic_sessions') or ga4_data.get('sessions')
             site_data['organicImpressions'] = gsc_data.get('impressions')
-            site_data['organicCTR'] = gsc_data.get('ctr')
+            site_data['organicCTR'] = _pct_frac(gsc_data.get('ctr'))
             site_data['avgKeywordPosition'] = gsc_data.get('position')
 
             store['seo']['sites'][entity_name][month_label] = site_data

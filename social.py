@@ -27,6 +27,25 @@ def _safe(fn, default=0):
         return default
 
 
+def _get_paged(path: str, token: str, params: dict, max_items: int = 500) -> list:
+    """Follow cursor pagination until max_items collected or pages run out."""
+    items = []
+    after = None
+    while len(items) < max_items:
+        p = dict(params)
+        if after:
+            p["after"] = after
+        data = _get(path, token, p)
+        batch = data.get("data", [])
+        if not batch:
+            break
+        items.extend(batch)
+        after = data.get("paging", {}).get("cursors", {}).get("after")
+        if not after or not data.get("paging", {}).get("next"):
+            break
+    return items[:max_items]
+
+
 # ── Facebook Pages ───────────────────────────────────────────────────────────
 
 def get_pages(token: str) -> list:
@@ -87,13 +106,12 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
         except Exception:
             pass
 
-    # Fetch posts with shares/saves detail
+    # Fetch posts with shares/saves detail (paginated so long ranges aren't cut at 100)
     try:
-        posts_data = _get(f"/{page_id}/posts", token, {
+        posts_list = _get_paged(f"/{page_id}/posts", token, {
             "fields": "id,shares",
             "since": start, "until": end, "limit": 100,
         })
-        posts_list = posts_data.get("data", [])
         result["posts_published"] = len(posts_list)
         total_shares = sum(p.get("shares", {}).get("count", 0) for p in posts_list)
         result["total_shares"] = total_shares
@@ -249,11 +267,25 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
         except Exception:
             pass
 
-    # Fetch media for the period
-    all_media = _safe(lambda: _get(f"/{ig_id}/media", token, {
-        "fields": "id,timestamp,media_type,like_count,comments_count",
-        "limit": 100,
-    }).get("data", []), [])
+    # Fetch media for the period (paginated; stop once past the start date)
+    def _fetch_media():
+        collected = []
+        after = None
+        for _ in range(10):
+            p = {"fields": "id,timestamp,media_type,like_count,comments_count", "limit": 100}
+            if after:
+                p["after"] = after
+            data = _get(f"/{ig_id}/media", token, p)
+            batch = data.get("data", [])
+            if not batch:
+                break
+            collected.extend(batch)
+            oldest = batch[-1].get("timestamp", "")[:10]
+            after = data.get("paging", {}).get("cursors", {}).get("after")
+            if not after or (oldest and oldest < start):
+                break
+        return collected
+    all_media = _safe(_fetch_media, [])
     media = [m for m in all_media if start <= m.get("timestamp", "")[:10] <= end]
 
     result["posts_published"] = len(media)
