@@ -53,7 +53,49 @@ def get_pages(token: str) -> list:
     return data.get("data", [])
 
 
+def resolve_page_token(token: str, page_id: str) -> str:
+    """Exchange a user/admin token for a page-specific access token.
+
+    A page access token only works for its own page. When the shared token
+    belongs to a user who admins multiple pages (RH, PMS, AIF), asking the
+    target page for its access_token yields a token that works for that
+    page's insights. Falls back to the original token on any failure.
+    """
+    try:
+        data = _get(f"/{page_id}", token, {"fields": "access_token"})
+        return data.get("access_token") or token
+    except Exception as e:
+        log.debug("resolve_page_token failed for %s: %s", page_id, e)
+        return token
+
+
+def diagnose_page_access(token: str, page_id: str) -> dict:
+    """Report whether the token can read the page and its insights."""
+    out = {"page_id": page_id, "page_ok": False, "insights_ok": False, "ig_linked": False}
+    try:
+        page = _get(f"/{page_id}", token, {"fields": "name,followers_count"})
+        out["page_ok"] = True
+        out["page_name"] = page.get("name", "")
+    except Exception as e:
+        out["error"] = str(e)[:300]
+        return out
+    p_token = resolve_page_token(token, page_id)
+    out["page_token_resolved"] = p_token != token
+    try:
+        _get(f"/{page_id}/insights", p_token, {"metric": "page_impressions", "period": "day"})
+        out["insights_ok"] = True
+    except Exception as e:
+        out["insights_error"] = str(e)[:300]
+    try:
+        ig = _get(f"/{page_id}", p_token, {"fields": "instagram_business_account"})
+        out["ig_linked"] = bool(ig.get("instagram_business_account"))
+    except Exception as e:
+        out["ig_error"] = str(e)[:300]
+    return out
+
+
 def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict:
+    token = resolve_page_token(token, page_id)
     page = _get(f"/{page_id}", token, {"fields": "name,fan_count,followers_count"})
     result = {
         "page_name": page.get("name", ""),
@@ -187,6 +229,7 @@ def get_page_posts(token: str, page_id: str, start: str, end: str, limit: int = 
 # ── Instagram ────────────────────────────────────────────────────────────────
 
 def get_ig_account(token: str, page_id: str) -> str | None:
+    token = resolve_page_token(token, page_id)
     data = _get(f"/{page_id}", token, {"fields": "instagram_business_account"})
     ig = data.get("instagram_business_account")
     return ig["id"] if ig else None

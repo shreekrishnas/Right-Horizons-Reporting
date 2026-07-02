@@ -345,6 +345,20 @@ def social_pages(domain: str = "rh"):
         raise HTTPException(502, f"Social API error: {e}")
 
 
+@app.get("/api/social/diagnose")
+def social_diagnose():
+    """Check Meta token access against every domain's page — shows the exact
+    Graph API error when a page can't be read (e.g. token bound to another page)."""
+    out = {}
+    for dom_key in ("rh", "pms", "aif", "akeana"):
+        token, page_id = _meta_creds(dom_key)
+        if not token or not page_id:
+            out[dom_key] = {"skipped": "no token or page id configured"}
+            continue
+        out[dom_key] = social.diagnose_page_access(token, page_id)
+    return out
+
+
 @app.get("/api/social/fb-comprehensive")
 def social_fb_comprehensive(start: str = "", end: str = "", domain: str = "rh"):
     token, page_id = _meta_creds(domain)
@@ -948,6 +962,7 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
                         pass
                 h_token, h_page_id = _meta_creds(dom_key)
                 if h_token and h_page_id:
+                    h_token = social.resolve_page_token(h_token, h_page_id)
                     try:
                         entity_data["social_fb"] = social.get_fb_comprehensive(h_token, h_page_id, m_start, m_end)
                     except Exception:
