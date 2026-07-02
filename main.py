@@ -346,16 +346,37 @@ def social_pages(domain: str = "rh"):
 
 
 @app.get("/api/social/diagnose")
-def social_diagnose():
+def social_diagnose(token: str = ""):
     """Check Meta token access against every domain's page — shows the exact
-    Graph API error when a page can't be read (e.g. token bound to another page)."""
+    Graph API error when a page can't be read (e.g. token bound to another page).
+
+    Pass ?token=... to test a specific token (instead of the configured env
+    tokens) against every page, and to list which pages that token can manage.
+    The token is never logged or stored."""
     out = {}
+    if token:
+        # Which pages does THIS token manage (each with its own page token)?
+        try:
+            from social import _get
+            accts = _get("/me/accounts", token, {"fields": "id,name,access_token", "limit": 100})
+            out["_token_manages_pages"] = [
+                {"id": p.get("id"), "name": p.get("name")} for p in accts.get("data", [])
+            ]
+        except Exception as e:
+            out["_token_manages_pages_error"] = str(e)[:300]
+        try:
+            me = _get("/me", token, {"fields": "id,name"})
+            out["_token_identity"] = {"id": me.get("id"), "name": me.get("name")}
+        except Exception as e:
+            out["_token_identity_error"] = str(e)[:300]
+
     for dom_key in ("rh", "pms", "aif", "akeana"):
-        token, page_id = _meta_creds(dom_key)
-        if not token or not page_id:
+        cfg_token, page_id = _meta_creds(dom_key)
+        use_token = token or cfg_token
+        if not use_token or not page_id:
             out[dom_key] = {"skipped": "no token or page id configured"}
             continue
-        out[dom_key] = social.diagnose_page_access(token, page_id)
+        out[dom_key] = social.diagnose_page_access(use_token, page_id)
     return out
 
 
