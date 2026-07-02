@@ -11,6 +11,18 @@ let seoPeriod = 'weekly';
 let ideaCat = 'all';
 let repPeriod = 'weekly';
 
+// Number of weekly/monthly periods spanning the selected date range (min 1, cap 12),
+// so the Social & SEO trend tabs cover the picked range instead of "5 periods from today".
+function _periodsForRange(period) {
+    try {
+        if (!dateStart || !dateEnd) return 5;
+        const s = new Date(dateStart), e = new Date(dateEnd);
+        const days = Math.round((e - s) / 86400000) + 1;
+        const n = period === 'weekly' ? Math.ceil(days / 7) : Math.ceil(days / 30);
+        return Math.min(Math.max(n, 1), 12);
+    } catch (e) { return 5; }
+}
+
 async function api(path, opts) {
     const resp = await fetch(`${API}${path}`, opts);
     if (!resp.ok) {
@@ -1262,7 +1274,7 @@ async function loadSocial() {
     if (!tableEl) return;
     tableEl.innerHTML = '<div class="empty-state"><p>Loading social media data...</p></div>';
     try {
-        const data = await api(`/api/social/trend?period=${socialPeriod}&periods=5&domain=${currentDomain}`);
+        const data = await api(`/api/social/trend?period=${socialPeriod}&periods=${_periodsForRange(socialPeriod)}&domain=${currentDomain}&end_date=${dateEnd}`);
         if (!data || data.length === 0) {
             tableEl.innerHTML = '<div class="empty-state"><p>No social data available</p></div>';
             return;
@@ -1349,7 +1361,7 @@ async function loadSEOWeekly() {
     if (!tableEl) return;
     tableEl.innerHTML = '<div class="empty-state"><p>Loading SEO data...</p></div>';
     try {
-        const data = await api(`/api/seo/trend?domain=${currentDomain}&period=${seoPeriod}&periods=5`);
+        const data = await api(`/api/seo/trend?domain=${currentDomain}&period=${seoPeriod}&periods=${_periodsForRange(seoPeriod)}&end_date=${dateEnd}`);
         if (!data || data.length === 0) {
             tableEl.innerHTML = '<div class="empty-state"><p>No SEO data available</p></div>';
             return;
