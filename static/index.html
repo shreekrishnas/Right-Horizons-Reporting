@@ -130,6 +130,7 @@
                     <button class="domain-tab" data-dash="social" onclick="switchDashTab('social')">Social</button>
                     <button class="domain-tab" data-dash="youtube" onclick="switchDashTab('youtube')">YouTube</button>
                     <button class="domain-tab" data-dash="linkedin" onclick="switchDashTab('linkedin')">LinkedIn</button>
+                    <button class="domain-tab" data-dash="seranking" onclick="switchDashTab('seranking')" style="display:none;" id="tab-seranking">SE Ranking</button>
                 </div>
 
                 <div id="dash-overview" class="dash-section">
@@ -399,6 +400,48 @@
                         </div>
                         <div id="li-summary" style="display:none;"><div class="section-label">Summary</div><div class="metrics-grid" id="li-metrics"></div></div>
                         <div id="li-table-wrap" style="display:none;"><div class="table-title">Data</div><div class="table-card" id="li-data-table"></div></div>
+                    </div>
+                </div>
+
+                <!-- SE Ranking Panel -->
+                <div id="dash-seranking" class="dash-section" style="display:none;">
+                    <div class="section">
+                        <div class="section-label">SE Ranking — Domain Intelligence</div>
+                        <div id="ser-loading" class="empty-state"><p>Loading SE Ranking data...</p></div>
+                        <div id="ser-error" style="display:none;"></div>
+
+                        <!-- Overview KPIs -->
+                        <div id="ser-overview" style="display:none;">
+                            <div class="metrics-grid" id="ser-kpi-grid"></div>
+                        </div>
+
+                        <!-- Keywords -->
+                        <div id="ser-keywords-section" style="display:none; margin-top:1.5rem;">
+                            <div class="table-title">Top Organic Keywords</div>
+                            <div class="table-card" id="ser-keywords-table"></div>
+                        </div>
+
+                        <!-- Backlinks -->
+                        <div id="ser-backlinks-section" style="display:none; margin-top:1.5rem;">
+                            <div class="table-title">Backlink Profile</div>
+                            <div class="metrics-grid" id="ser-bl-kpis"></div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-top:1rem;">
+                                <div>
+                                    <div class="table-title" style="font-size:0.8rem;">Top Referring Domains</div>
+                                    <div class="table-card" id="ser-ref-domains-table"></div>
+                                </div>
+                                <div>
+                                    <div class="table-title" style="font-size:0.8rem;">Top Anchors</div>
+                                    <div class="table-card" id="ser-anchors-table"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Competitors -->
+                        <div id="ser-competitors-section" style="display:none; margin-top:1.5rem;">
+                            <div class="table-title">Organic Competitors</div>
+                            <div class="table-card" id="ser-competitors-table"></div>
+                        </div>
                     </div>
                 </div>
 

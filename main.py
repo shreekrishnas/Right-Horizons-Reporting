@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from config import DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN, META_PAGE_ID, META_APP_ID, META_APP_SECRET, ADMIN_PASSWORD
 from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
 from config import YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN
-from config import OPENROUTER_API_KEY, TAVILY_API_KEY
+from config import OPENROUTER_API_KEY, TAVILY_API_KEY, SE_RANKING_API_KEY
 try:
     import web_search
 except Exception:
@@ -112,6 +112,10 @@ def admin_credentials(password: str = ""):
         "openrouter": {
             "api_key": _mask(OPENROUTER_API_KEY),
             "status": "Connected" if OPENROUTER_API_KEY else "Not configured",
+        },
+        "se_ranking": {
+            "api_key": _mask(SE_RANKING_API_KEY),
+            "status": "Connected" if SE_RANKING_API_KEY else "Not configured",
         },
         "domains": {
             k: {
@@ -584,6 +588,91 @@ def youtube_seo(payload: dict = Body(...)):
     if not topic:
         raise HTTPException(400, "topic parameter required")
     return youtube.generate_seo_metadata(topic, speaker, transcript)
+
+
+# ── SE Ranking ────────────────────────────────────────────────────────────────
+
+try:
+    import se_ranking as ser_mod
+except Exception:
+    ser_mod = None
+
+
+@app.get("/api/se-ranking/dashboard")
+def se_ranking_dashboard(domain: str = "akeana"):
+    if not ser_mod or not SE_RANKING_API_KEY:
+        raise HTTPException(503, "SE Ranking not configured")
+    d = DOMAINS.get(domain, {})
+    site_url = d.get("url", "").replace("https://", "").replace("http://", "").rstrip("/")
+    if not site_url:
+        raise HTTPException(400, f"No URL configured for domain '{domain}'")
+    source = d.get("se_ranking_source", "us")
+    try:
+        return ser_mod.full_dashboard(site_url, source)
+    except Exception as e:
+        raise HTTPException(502, f"SE Ranking error: {e}")
+
+
+@app.get("/api/se-ranking/overview")
+def se_ranking_overview(domain: str = "akeana", source: str = "us"):
+    if not ser_mod or not SE_RANKING_API_KEY:
+        raise HTTPException(503, "SE Ranking not configured")
+    d = DOMAINS.get(domain, {})
+    site_url = d.get("url", "").replace("https://", "").replace("http://", "").rstrip("/")
+    if not site_url:
+        raise HTTPException(400, f"No URL configured for domain '{domain}'")
+    try:
+        return ser_mod.domain_overview(site_url, source)
+    except Exception as e:
+        raise HTTPException(502, f"SE Ranking error: {e}")
+
+
+@app.get("/api/se-ranking/keywords")
+def se_ranking_keywords(domain: str = "akeana", source: str = "us", limit: int = 50):
+    if not ser_mod or not SE_RANKING_API_KEY:
+        raise HTTPException(503, "SE Ranking not configured")
+    d = DOMAINS.get(domain, {})
+    site_url = d.get("url", "").replace("https://", "").replace("http://", "").rstrip("/")
+    if not site_url:
+        raise HTTPException(400, f"No URL configured for domain '{domain}'")
+    try:
+        return {"keywords": ser_mod.domain_keywords(site_url, source, limit)}
+    except Exception as e:
+        raise HTTPException(502, f"SE Ranking error: {e}")
+
+
+@app.get("/api/se-ranking/competitors")
+def se_ranking_competitors(domain: str = "akeana", source: str = "us"):
+    if not ser_mod or not SE_RANKING_API_KEY:
+        raise HTTPException(503, "SE Ranking not configured")
+    d = DOMAINS.get(domain, {})
+    site_url = d.get("url", "").replace("https://", "").replace("http://", "").rstrip("/")
+    if not site_url:
+        raise HTTPException(400, f"No URL configured for domain '{domain}'")
+    try:
+        return {"competitors": ser_mod.domain_competitors(site_url, source)}
+    except Exception as e:
+        raise HTTPException(502, f"SE Ranking error: {e}")
+
+
+@app.get("/api/se-ranking/backlinks")
+def se_ranking_backlinks(domain: str = "akeana"):
+    if not ser_mod or not SE_RANKING_API_KEY:
+        raise HTTPException(503, "SE Ranking not configured")
+    d = DOMAINS.get(domain, {})
+    site_url = d.get("url", "").replace("https://", "").replace("http://", "").rstrip("/")
+    if not site_url:
+        raise HTTPException(400, f"No URL configured for domain '{domain}'")
+    try:
+        return {
+            "summary": ser_mod.backlinks_summary(site_url),
+            "authority": ser_mod.domain_authority(site_url),
+            "top_backlinks": ser_mod.backlinks_top(site_url),
+            "anchors": ser_mod.backlinks_anchors(site_url),
+            "referring_domains": ser_mod.backlinks_ref_domains(site_url),
+        }
+    except Exception as e:
+        raise HTTPException(502, f"SE Ranking error: {e}")
 
 
 # ── LinkedIn (Excel upload) ─────────────────────────────────────────────────

@@ -16,6 +16,7 @@ META_AD_ACCOUNT = os.getenv("META_AD_ACCOUNT", "act_267691143342137")
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+SE_RANKING_API_KEY = os.getenv("SE_RANKING_API_KEY", "")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "righthorizons@admin")
 
 YOUTUBE_CLIENT_ID = os.getenv("YOUTUBE_CLIENT_ID", "")

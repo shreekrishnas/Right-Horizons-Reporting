@@ -786,6 +786,7 @@ function switchDashTab(tab) {
     if (tab === 'youtube') loadYouTube();
     if (tab === 'seo') loadSEOWeekly();
     if (tab === 'meta') loadMeta();
+    if (tab === 'seranking') loadSERanking();
 }
 
 // ── Data loading (cache-aware) ──
@@ -1588,6 +1589,20 @@ function switchDomain(key) {
     const d = domains[key];
     if (d) document.getElementById('topbar-title').textContent = d.label;
     analyticsLoaded = {};
+
+    const hiddenForAkeana = ['meta', 'social', 'youtube', 'linkedin'];
+    const isAkeana = key === 'akeana';
+    hiddenForAkeana.forEach(tab => {
+        const btn = document.querySelector(`[data-dash="${tab}"]`);
+        if (btn) btn.style.display = isAkeana ? 'none' : '';
+    });
+    const serBtn = document.getElementById('tab-seranking');
+    if (serBtn) serBtn.style.display = isAkeana ? '' : 'none';
+
+    if (isAkeana && hiddenForAkeana.includes(currentDashTab)) {
+        switchDashTab('overview');
+    }
+
     loadAll();
     reloadActiveDashTab();
     if (currentView === 'analytics') loadAnalytics();
@@ -1728,6 +1743,141 @@ async function exchangeToken() {
         content.innerHTML = `<p style="color:#ef4444;">Error: ${esc(e.message)}</p>`;
     }
 }
+
+// ── SE Ranking ──
+let _serLoaded = false;
+async function loadSERanking() {
+    if (_serLoaded && currentDomain === _serLoadedDomain) return;
+    const loading = document.getElementById('ser-loading');
+    const errEl = document.getElementById('ser-error');
+    const overviewEl = document.getElementById('ser-overview');
+    const kwSection = document.getElementById('ser-keywords-section');
+    const blSection = document.getElementById('ser-backlinks-section');
+    const compSection = document.getElementById('ser-competitors-section');
+    [overviewEl, kwSection, blSection, compSection].forEach(el => { if (el) el.style.display = 'none'; });
+    if (errEl) { errEl.style.display = 'none'; errEl.innerHTML = ''; }
+    if (loading) loading.style.display = 'block';
+
+    try {
+        const data = await api(`/api/se-ranking/dashboard?domain=${currentDomain}`);
+        if (loading) loading.style.display = 'none';
+        _serLoaded = true;
+        _serLoadedDomain = currentDomain;
+
+        // Overview KPIs
+        const ov = data.overview || {};
+        const auth = (data.backlinks || {}).authority || {};
+        const blSum = (data.backlinks || {}).summary || {};
+        const kpiGrid = document.getElementById('ser-kpi-grid');
+        if (kpiGrid && overviewEl) {
+            const kpis = [
+                { label: 'Organic Keywords', value: formatNum(ov.keywords || ov.organic_keywords || 0), color: '#7C3AED' },
+                { label: 'Organic Traffic', value: formatNum(ov.traffic || ov.organic_traffic || 0), color: '#0EA5E9' },
+                { label: 'Traffic Cost ($)', value: formatNum(ov.cost || ov.organic_cost || 0), color: '#10B981' },
+                { label: 'Domain Authority', value: auth.domain_inlink_rank || auth.inlink_rank || '—', color: '#F59E0B' },
+                { label: 'Backlinks', value: formatNum(blSum.total || blSum.backlinks || 0), color: '#EF4444' },
+                { label: 'Referring Domains', value: formatNum(blSum.ref_domains || blSum.referring_domains || 0), color: '#8B5CF6' },
+            ];
+            kpiGrid.innerHTML = kpis.map(k => `
+                <div class="metric-card">
+                    <div class="accent-strip" style="background:${k.color}"></div>
+                    <div class="metric-label">${k.label}</div>
+                    <div class="metric-value">${k.value}</div>
+                </div>`).join('');
+            overviewEl.style.display = 'block';
+        }
+
+        // Keywords table
+        const keywords = data.keywords || [];
+        if (keywords.length && kwSection) {
+            const tbl = document.getElementById('ser-keywords-table');
+            let html = '<table><thead><tr><th>Keyword</th><th>Position</th><th>Volume</th><th>Traffic</th><th>CPC</th><th>URL</th></tr></thead><tbody>';
+            keywords.slice(0, 50).forEach(kw => {
+                html += `<tr>
+                    <td>${esc(kw.keyword || '')}</td>
+                    <td>${kw.position || kw.pos || '—'}</td>
+                    <td>${formatNum(kw.volume || kw.search_volume || 0)}</td>
+                    <td>${formatNum(kw.traffic || 0)}</td>
+                    <td>${kw.cpc ? '$' + Number(kw.cpc).toFixed(2) : '—'}</td>
+                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.75rem;">${esc(kw.url || kw.landing_page || '')}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            tbl.innerHTML = html;
+            kwSection.style.display = 'block';
+        }
+
+        // Backlinks
+        const bl = data.backlinks || {};
+        if (blSection) {
+            const blKpis = document.getElementById('ser-bl-kpis');
+            if (blKpis) {
+                const bk = [
+                    { label: 'Total Backlinks', value: formatNum(blSum.total || blSum.backlinks || 0) },
+                    { label: 'Dofollow', value: formatNum(blSum.dofollow || 0) },
+                    { label: 'Nofollow', value: formatNum(blSum.nofollow || 0) },
+                    { label: 'Ref Domains', value: formatNum(blSum.ref_domains || blSum.referring_domains || 0) },
+                ];
+                blKpis.innerHTML = bk.map(k => `
+                    <div class="metric-card">
+                        <div class="accent-strip" style="background:#8B5CF6"></div>
+                        <div class="metric-label">${k.label}</div>
+                        <div class="metric-value">${k.value}</div>
+                    </div>`).join('');
+            }
+
+            const refDomains = bl.referring_domains || [];
+            const refTbl = document.getElementById('ser-ref-domains-table');
+            if (refTbl && refDomains.length) {
+                let html = '<table><thead><tr><th>Domain</th><th>Backlinks</th><th>Authority</th></tr></thead><tbody>';
+                refDomains.slice(0, 20).forEach(rd => {
+                    html += `<tr><td>${esc(rd.domain || rd.target || '')}</td><td>${formatNum(rd.backlinks || rd.count || 0)}</td><td>${rd.inlink_rank || rd.authority || '—'}</td></tr>`;
+                });
+                html += '</tbody></table>';
+                refTbl.innerHTML = html;
+            }
+
+            const anchors = bl.anchors || [];
+            const anchorTbl = document.getElementById('ser-anchors-table');
+            if (anchorTbl && anchors.length) {
+                let html = '<table><thead><tr><th>Anchor</th><th>Backlinks</th><th>Domains</th></tr></thead><tbody>';
+                anchors.slice(0, 20).forEach(a => {
+                    html += `<tr><td>${esc(a.anchor || a.text || '')}</td><td>${formatNum(a.backlinks || a.count || 0)}</td><td>${formatNum(a.domains || a.ref_domains || 0)}</td></tr>`;
+                });
+                html += '</tbody></table>';
+                anchorTbl.innerHTML = html;
+            }
+            blSection.style.display = 'block';
+        }
+
+        // Competitors
+        const competitors = data.competitors || [];
+        if (competitors.length && compSection) {
+            const tbl = document.getElementById('ser-competitors-table');
+            let html = '<table><thead><tr><th>Domain</th><th>Common Keywords</th><th>Organic Keywords</th><th>Organic Traffic</th><th>Relevance</th></tr></thead><tbody>';
+            competitors.slice(0, 15).forEach(c => {
+                html += `<tr>
+                    <td>${esc(c.domain || '')}</td>
+                    <td>${formatNum(c.common_keywords || c.common || 0)}</td>
+                    <td>${formatNum(c.keywords || c.organic_keywords || 0)}</td>
+                    <td>${formatNum(c.traffic || c.organic_traffic || 0)}</td>
+                    <td>${c.relevance ? Number(c.relevance).toFixed(2) : '—'}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            tbl.innerHTML = html;
+            compSection.style.display = 'block';
+        }
+
+    } catch (e) {
+        if (loading) loading.style.display = 'none';
+        if (errEl) {
+            errEl.innerHTML = `<div class="error-msg">${esc(e.message)}</div>`;
+            errEl.style.display = 'block';
+        }
+    }
+}
+let _serLoadedDomain = '';
 
 // ── Calendar ──
 async function generateCalendar() {
