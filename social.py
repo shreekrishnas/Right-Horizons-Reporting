@@ -81,14 +81,52 @@ def diagnose_page_access(token: str, page_id: str) -> dict:
         return out
     p_token = resolve_page_token(token, page_id)
     out["page_token_resolved"] = p_token != token
-    try:
-        _get(f"/{page_id}/insights", p_token, {"metric": "page_impressions", "period": "day"})
-        out["insights_ok"] = True
-    except Exception as e:
-        out["insights_error"] = str(e)[:300]
+
+    # Probe a broad set of FB page-insight metrics and report which are
+    # actually valid on this API version — deprecations vary by version.
+    import datetime as _dt
+    until = _dt.date.today()
+    since = until - _dt.timedelta(days=30)
+    fb_candidates = [
+        "page_impressions", "page_impressions_unique", "page_impressions_organic_v2",
+        "page_post_engagements", "page_fans", "page_fan_adds", "page_fan_adds_unique",
+        "page_daily_follows", "page_daily_follows_unique", "page_follows",
+        "page_views_total", "page_video_views", "page_actions_post_reactions_total",
+    ]
+    valid, invalid = [], {}
+    for m in fb_candidates:
+        try:
+            _get(f"/{page_id}/insights", p_token, {
+                "metric": m, "period": "day",
+                "since": since.isoformat(), "until": until.isoformat(),
+            })
+            valid.append(m)
+        except Exception as e:
+            invalid[m] = str(e)[:120]
+    out["fb_valid_metrics"] = valid
+    out["fb_invalid_metrics"] = list(invalid.keys())
+    out["insights_ok"] = bool(valid)
+
     try:
         ig = _get(f"/{page_id}", p_token, {"fields": "instagram_business_account"})
-        out["ig_linked"] = bool(ig.get("instagram_business_account"))
+        ig_acct = ig.get("instagram_business_account")
+        out["ig_linked"] = bool(ig_acct)
+        if ig_acct:
+            ig_id = ig_acct["id"]
+            ig_candidates = ["reach", "impressions", "views", "accounts_engaged",
+                             "profile_views", "website_clicks", "total_interactions", "follower_count"]
+            ig_valid, ig_invalid = [], []
+            for m in ig_candidates:
+                try:
+                    _get(f"/{ig_id}/insights", p_token, {
+                        "metric": m, "period": "day", "metric_type": "total_value",
+                        "since": since.isoformat(), "until": until.isoformat(),
+                    })
+                    ig_valid.append(m)
+                except Exception:
+                    ig_invalid.append(m)
+            out["ig_valid_metrics"] = ig_valid
+            out["ig_invalid_metrics"] = ig_invalid
     except Exception as e:
         out["ig_error"] = str(e)[:300]
     return out
