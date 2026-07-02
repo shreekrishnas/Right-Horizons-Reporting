@@ -56,4 +56,15 @@ DOMAINS = {
         "meta_social_token": os.getenv("META_SOCIAL_TOKEN_AIF", ""),
         "meta_ad_account": os.getenv("META_AD_ACCOUNT_AIF", ""),
     },
+    "akeana": {
+        "label": "Akeana",
+        "short": "AKE",
+        "gsc_site": os.getenv("GSC_SITE_AKEANA", "sc-domain:akeana.com"),
+        "ga4_property": os.getenv("GA4_PROPERTY_AKEANA", "454994121"),
+        "color": "#F59E0B",
+        "url": os.getenv("AKEANA_URL", "https://www.akeana.com"),
+        "meta_page_id": os.getenv("META_PAGE_ID_AKEANA", ""),
+        "meta_social_token": os.getenv("META_SOCIAL_TOKEN_AKEANA", ""),
+        "meta_ad_account": os.getenv("META_AD_ACCOUNT_AKEANA", ""),
+    },
 }
