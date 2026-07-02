@@ -109,6 +109,105 @@ def get_organic_summary(creds: Credentials, property_id: str, start: str, end: s
     }
 
 
+def get_device_breakdown(creds: Credentials, property_id: str, start: str, end: str) -> list:
+    client = _client(creds)
+    resp = client.run_report(RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start, end_date=end)],
+        dimensions=[Dimension(name="deviceCategory")],
+        metrics=[Metric(name="totalUsers"), Metric(name="sessions")],
+        order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="totalUsers"), desc=True)],
+        limit=10,
+    ))
+    return [
+        {
+            "deviceCategory": r.dimension_values[0].value,
+            "users": int(float(r.metric_values[0].value)),
+            "sessions": int(float(r.metric_values[1].value)),
+        }
+        for r in resp.rows
+    ]
+
+
+def get_age_breakdown(creds: Credentials, property_id: str, start: str, end: str) -> list:
+    client = _client(creds)
+    resp = client.run_report(RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start, end_date=end)],
+        dimensions=[Dimension(name="userAgeBracket")],
+        metrics=[Metric(name="totalUsers"), Metric(name="sessions")],
+        order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="totalUsers"), desc=True)],
+        limit=10,
+    ))
+    return [
+        {
+            "ageGroup": r.dimension_values[0].value,
+            "users": int(float(r.metric_values[0].value)),
+            "sessions": int(float(r.metric_values[1].value)),
+        }
+        for r in resp.rows
+    ]
+
+
+def get_city_breakdown(creds: Credentials, property_id: str, start: str, end: str, limit: int = 10) -> list:
+    client = _client(creds)
+    resp = client.run_report(RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start, end_date=end)],
+        dimensions=[Dimension(name="city")],
+        metrics=[Metric(name="sessions"), Metric(name="totalUsers")],
+        order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="sessions"), desc=True)],
+        limit=limit,
+    ))
+    return [
+        {
+            "city": r.dimension_values[0].value,
+            "sessions": int(float(r.metric_values[0].value)),
+            "users": int(float(r.metric_values[1].value)),
+        }
+        for r in resp.rows
+    ]
+
+
+def get_weekly_users(creds: Credentials, property_id: str, start: str, end: str) -> list:
+    client = _client(creds)
+    resp = client.run_report(RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start, end_date=end)],
+        dimensions=[Dimension(name="isoYearIsoWeek")],
+        metrics=[Metric(name="totalUsers"), Metric(name="newUsers")],
+        order_bys=[OrderBy(dimension=OrderBy.DimensionOrderBy(dimension_name="isoYearIsoWeek"))],
+        limit=52,
+    ))
+    return [
+        {
+            "week": r.dimension_values[0].value,
+            "totalUsers": int(float(r.metric_values[0].value)),
+            "newUsers": int(float(r.metric_values[1].value)),
+        }
+        for r in resp.rows
+    ]
+
+
+def get_landing_pages(creds: Credentials, property_id: str, start: str, end: str, limit: int = 10) -> list:
+    client = _client(creds)
+    resp = client.run_report(RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start, end_date=end)],
+        dimensions=[Dimension(name="landingPagePlusQueryString")],
+        metrics=[Metric(name="sessions")],
+        order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="sessions"), desc=True)],
+        limit=limit,
+    ))
+    return [
+        {
+            "landingPage": r.dimension_values[0].value,
+            "sessions": int(float(r.metric_values[0].value)),
+        }
+        for r in resp.rows
+    ]
+
+
 def get_daily(creds: Credentials, property_id: str, start: str, end: str) -> list:
     client = _client(creds)
     resp = client.run_report(RunReportRequest(

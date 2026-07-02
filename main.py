@@ -843,6 +843,64 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
     fmt = format.lower()
     base = f"Report_{d['short']}_{period}_{start}_{end}"
 
+    if fmt == "html" and domain == "akeana":
+        import akeana_report
+        try:
+            creds = get_credentials()
+        except Exception:
+            creds = None
+        ake_cfg = DOMAINS.get("akeana", {})
+        ga4_data = {}
+        gsc_data = {}
+        ga4_extra = {}
+        if creds:
+            prop = ake_cfg.get("ga4_property")
+            site = ake_cfg.get("gsc_site")
+            if prop:
+                try:
+                    ga4_data["summary"] = ga4.get_summary(creds, prop, start, end)
+                except Exception:
+                    pass
+                try:
+                    ga4_extra["traffic_sources"] = ga4.get_traffic_sources(creds, prop, start, end)
+                except Exception:
+                    pass
+                try:
+                    ga4_extra["landing_pages"] = ga4.get_landing_pages(creds, prop, start, end, 10)
+                except Exception:
+                    pass
+                try:
+                    ga4_extra["cities"] = ga4.get_city_breakdown(creds, prop, start, end, 10)
+                except Exception:
+                    pass
+                try:
+                    ga4_extra["devices"] = ga4.get_device_breakdown(creds, prop, start, end)
+                except Exception:
+                    pass
+                try:
+                    ga4_extra["ages"] = ga4.get_age_breakdown(creds, prop, start, end)
+                except Exception:
+                    pass
+                try:
+                    ga4_extra["weekly_users"] = ga4.get_weekly_users(creds, prop, start, end)
+                except Exception:
+                    pass
+            if site:
+                try:
+                    gsc_data["summary"] = gsc.get_summary(creds, site, start, end)
+                except Exception:
+                    pass
+                try:
+                    gsc_data["queries"] = gsc.get_top_queries(creds, site, start, end, 50)
+                except Exception:
+                    pass
+        html_content = akeana_report.generate_akeana_report(ga4_data, gsc_data, ga4_extra, start, end)
+        return StreamingResponse(
+            io.BytesIO(html_content.encode("utf-8")),
+            media_type="text/html",
+            headers={"Content-Disposition": f'attachment; filename="{base}.html"'},
+        )
+
     if fmt == "html":
         import html_report
         import json as _json
