@@ -984,14 +984,19 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
                         except Exception as e:
                             _err(month_label, dom_key, "GA4", e)
 
+                # PMS/AIF have no Meta page/ad access with the shared token —
+                # their social & ads are entered manually, so skip Meta fetches
+                # entirely (avoids guaranteed permission errors in the report).
+                meta_manual = dom_cfg.get("meta_manual", False)
+
                 ad_account = dom_cfg.get("meta_ad_account", "")
-                if META_MARKETING_TOKEN and ad_account:
+                if not meta_manual and META_MARKETING_TOKEN and ad_account:
                     try:
                         entity_data["meta_ads"] = meta.get_campaigns_summary(META_MARKETING_TOKEN, ad_account, m_start, m_end)
                     except Exception as e:
                         _err(month_label, dom_key, "Meta Ads", e)
                 h_token, h_page_id = _meta_creds(dom_key)
-                if h_token and h_page_id:
+                if not meta_manual and h_token and h_page_id:
                     h_token = social.resolve_page_token(h_token, h_page_id)
                     try:
                         entity_data["social_fb"] = social.get_fb_comprehensive(h_token, h_page_id, m_start, m_end)
@@ -1006,6 +1011,12 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
 
                 month_entities[dom_key] = entity_data
             all_monthly_data[month_label] = month_entities
+
+        manual_doms = [DOMAINS[k]["label"] for k in report_domains
+                       if DOMAINS.get(k, {}).get("meta_manual")]
+        if manual_doms:
+            api_errors.append("Manual entry (by design): social & ads for "
+                              + ", ".join(manual_doms) + " — use Edit Data to fill.")
 
         report_mode = mode or purpose or "client"
         html_content = html_report.generate_html_report(all_monthly_data, start, end, report_mode=report_mode, api_status=api_errors)
