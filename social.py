@@ -82,16 +82,17 @@ def diagnose_page_access(token: str, page_id: str) -> dict:
     p_token = resolve_page_token(token, page_id)
     out["page_token_resolved"] = p_token != token
 
-    # Probe a broad set of FB page-insight metrics and report which are
+    # Probe a focused set of FB page-insight metrics and report which are
     # actually valid on this API version — deprecations vary by version.
-    import datetime as _dt
+    # THROTTLED: small delay between calls + trimmed candidate list, so this
+    # does not look like a burst and re-trip Meta's "unusual activity" guard.
+    import datetime as _dt, time as _time
     until = _dt.date.today()
     since = until - _dt.timedelta(days=30)
     fb_candidates = [
-        "page_impressions", "page_impressions_unique", "page_impressions_organic_v2",
-        "page_post_engagements", "page_fans", "page_fan_adds", "page_fan_adds_unique",
-        "page_daily_follows", "page_daily_follows_unique", "page_follows",
-        "page_views_total", "page_video_views", "page_actions_post_reactions_total",
+        "page_impressions", "page_impressions_unique",
+        "page_post_engagements", "page_fan_adds_unique",
+        "page_daily_follows_unique", "page_views_total",
     ]
     valid, invalid = [], {}
     for m in fb_candidates:
@@ -103,6 +104,7 @@ def diagnose_page_access(token: str, page_id: str) -> dict:
             valid.append(m)
         except Exception as e:
             invalid[m] = str(e)[:120]
+        _time.sleep(0.4)
     out["fb_valid_metrics"] = valid
     out["fb_invalid_metrics"] = list(invalid.keys())
     out["insights_ok"] = bool(valid)
@@ -113,8 +115,7 @@ def diagnose_page_access(token: str, page_id: str) -> dict:
         out["ig_linked"] = bool(ig_acct)
         if ig_acct:
             ig_id = ig_acct["id"]
-            ig_candidates = ["reach", "impressions", "views", "accounts_engaged",
-                             "profile_views", "website_clicks", "total_interactions", "follower_count"]
+            ig_candidates = ["reach", "views", "accounts_engaged", "total_interactions", "follower_count"]
             ig_valid, ig_invalid = [], []
             for m in ig_candidates:
                 try:
@@ -125,6 +126,7 @@ def diagnose_page_access(token: str, page_id: str) -> dict:
                     ig_valid.append(m)
                 except Exception:
                     ig_invalid.append(m)
+                _time.sleep(0.4)
             out["ig_valid_metrics"] = ig_valid
             out["ig_invalid_metrics"] = ig_invalid
     except Exception as e:
