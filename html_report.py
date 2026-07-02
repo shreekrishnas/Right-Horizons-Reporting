@@ -152,6 +152,21 @@ def _build_seed_store(all_monthly_data: dict, start: str, end: str) -> dict:
                     'ctr': None,
                 }
 
+            yt = d.get('youtube') or {}
+            if yt:
+                # YouTube: subscribers->followers, videos->posts, views->impressions,
+                # (likes+comments)/views -> engagement rate
+                yt_views = yt.get('views') or 0
+                yt_eng = (yt.get('likes') or 0) + (yt.get('comments') or 0)
+                month_data['YouTube'] = {
+                    'followers': yt.get('subscribers'),
+                    'newFollowers': None,
+                    'posts': yt.get('videos_published'),
+                    'impressions': yt_views or None,
+                    'engagementRate': (yt_eng / yt_views) if yt_views else None,
+                    'ctr': None,
+                }
+
             store['smm'][entity_name][month_label] = month_data
 
         # --- SEO / Sites: per-entity GSC + GA4 for this month ---

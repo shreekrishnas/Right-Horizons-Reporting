@@ -1018,6 +1018,19 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
                     except Exception as e:
                         _err(month_label, dom_key, "Instagram", e)
 
+                # YouTube (single RH channel) — fills the SMM YouTube row.
+                if dom_key == "rh" and YOUTUBE_REFRESH_TOKEN:
+                    try:
+                        yt_creds = get_youtube_credentials()
+                        yt = youtube.get_monthly_summary(yt_creds, m_start, m_end)
+                        try:
+                            yt["subscribers"] = youtube.get_channel_stats(yt_creds).get("subscribers")
+                        except Exception:
+                            pass
+                        entity_data["youtube"] = yt
+                    except Exception as e:
+                        _err(month_label, dom_key, "YouTube", e)
+
                 month_entities[dom_key] = entity_data
             all_monthly_data[month_label] = month_entities
 
