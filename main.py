@@ -980,6 +980,15 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
                                 ga4_sum["organic_users"] = org.get("organic_users", 0)
                             except Exception as e:
                                 _err(month_label, dom_key, "GA4 organic", e)
+                            # Mobile traffic % from device breakdown
+                            try:
+                                devs = ga4.get_device_breakdown(creds, prop, m_start, m_end)
+                                tot = sum(int(d.get("sessions") or 0) for d in devs)
+                                mob = sum(int(d.get("sessions") or 0) for d in devs
+                                          if (d.get("deviceCategory") or "").lower() == "mobile")
+                                ga4_sum["mobile_traffic_pct"] = round(mob / tot * 100, 1) if tot else None
+                            except Exception as e:
+                                _err(month_label, dom_key, "GA4 device", e)
                             entity_data["ga4"] = ga4_sum
                         except Exception as e:
                             _err(month_label, dom_key, "GA4", e)

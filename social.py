@@ -296,12 +296,15 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
                     follows = unfollows = 0
                     for bd in tv.get("breakdowns", []):
                         for r in bd.get("results", []):
-                            dims = r.get("dimension_values", [])
+                            # Dimension values are like "FOLLOWS"/"UNFOLLOWS" or
+                            # "FOLLOWER"/"UNFOLLOWER" — match by substring, and
+                            # test UNFOLLOW first since it contains "FOLLOW".
+                            dims = " ".join(str(x).upper() for x in r.get("dimension_values", []))
                             v = r.get("value", 0)
-                            if "FOLLOW" in dims:
-                                follows += v
-                            elif "UNFOLLOW" in dims:
+                            if "UNFOLLOW" in dims:
                                 unfollows += v
+                            elif "FOLLOW" in dims:
+                                follows += v
                     if follows or unfollows:
                         result["new_followers"] = follows - unfollows
                     elif isinstance(val, dict):
@@ -375,6 +378,10 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
     result["engagement_rate"] = round((eng / reach * 100), 2) if reach > 0 else 0
     result["reach"] = reach
     result["profile_visits"] = result.get("profile_views", 0)
+    # CTR = website clicks / views (impressions equivalent)
+    clicks = result.get("website_clicks", 0) or 0
+    denom = result.get("views", 0) or reach
+    result["ctr"] = round((clicks / denom * 100), 2) if denom else 0
 
     return result
 

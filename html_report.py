@@ -139,7 +139,7 @@ def _build_seed_store(all_monthly_data: dict, start: str, end: str) -> dict:
                     'posts': ig.get('posts_published'),
                     'impressions': ig.get('views') or ig.get('reach'),
                     'engagementRate': _pct_frac(ig.get('engagement_rate')),
-                    'ctr': None,
+                    'ctr': _pct_frac(ig.get('ctr')),
                 }
             if fb:
                 # FB: page reach/impressions deprecated by Meta; use page views
@@ -174,6 +174,7 @@ def _build_seed_store(all_monthly_data: dict, start: str, end: str) -> dict:
             site_data['organicImpressions'] = gsc_data.get('impressions')
             site_data['organicCTR'] = _pct_frac(gsc_data.get('ctr'))
             site_data['avgKeywordPosition'] = gsc_data.get('position')
+            site_data['mobileTrafficPct'] = _pct_frac(ga4_data.get('mobile_traffic_pct'))
 
             store['seo']['sites'][entity_name][month_label] = site_data
 
@@ -568,8 +569,7 @@ function renderSMM(){
         return [mo, d ? d[m.k] : null];
       })),
     }));
-    tablesHTML += `<div class="platform-tag" style="display:inline-flex;align-items:center;gap:0.4rem;font-size:0.8rem;font-weight:700;color:var(--text-primary);margin:1.1rem 0 0.5rem;">${SMM_PLATFORM_ICON[p]} ${p}</div>`;
-    tablesHTML += dynamicTrendTable(rows, months, 'num', 'FY Avg', 'avg', 'Metric', 'smm_'+smmEntity+'_'+p);
+    tablesHTML += dynamicTrendTable(rows, months, 'num', 'FY Avg', 'avg', SMM_PLATFORM_ICON[p]+' '+p, 'smm_'+smmEntity+'_'+p);
   });
   const el = document.getElementById('smm');
   el.innerHTML = `<div id="smmEntityPills"></div><div id="smmActions"></div><div id="smmBody"></div>`;
