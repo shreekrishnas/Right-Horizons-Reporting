@@ -2646,11 +2646,13 @@ function _repDomain() {
 }
 
 function _getSelectedChannels() {
+    // Report sections (seo/ads/smm) map to the preview endpoint's channel names.
+    const map = { seo: ['gsc', 'ga4'], ads: ['meta'], smm: ['social'] };
     const chs = [];
     document.querySelectorAll('.rr-switch.on[data-channel]').forEach(el => {
-        chs.push(el.dataset.channel);
+        (map[el.dataset.channel] || [el.dataset.channel]).forEach(c => chs.push(c));
     });
-    return chs.length ? chs.join(',') : 'gsc,ga4,meta,social,youtube';
+    return chs.length ? chs.join(',') : 'gsc,ga4,meta,social';
 }
 
 function _deltaHtml(d) {
@@ -2901,7 +2903,12 @@ function exportReportFmt(fmt) {
     const end = document.getElementById('rep-end').value;
     const dom = _repDomain();
     const purpose = document.getElementById('rep-purpose')?.value || 'client';
-    window.location.href = `/api/reports/export?period=${repPeriod}&domain=${dom}&start=${start}&end=${end}&format=${fmt}&mode=${_exportMode}&purpose=${purpose}`;
+    // Which report sections are toggled on (seo / ads / smm)
+    const sections = Array.from(document.querySelectorAll('.rr-switch[data-channel]'))
+        .filter(s => s.classList.contains('on'))
+        .map(s => s.dataset.channel);
+    const secParam = sections.length ? `&sections=${sections.join(',')}` : '';
+    window.location.href = `/api/reports/export?period=${repPeriod}&domain=${dom}&start=${start}&end=${end}&format=${fmt}&mode=${_exportMode}&purpose=${purpose}${secParam}`;
 }
 
 function resetReportFilters() {

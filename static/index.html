@@ -905,15 +905,6 @@
                             </div>
 
                             <div class="rr-field">
-                                <label class="rr-label">Compare With</label>
-                                <select id="rep-comparison" class="rr-select">
-                                    <option value="previous_period">Previous period</option>
-                                    <option value="previous_month">Previous month</option>
-                                    <option value="none">No comparison</option>
-                                </select>
-                            </div>
-
-                            <div class="rr-field">
                                 <label class="rr-label">Report Purpose</label>
                                 <select id="rep-purpose" class="rr-select">
                                     <option value="client">Client Report</option>
@@ -924,13 +915,11 @@
                             </div>
 
                             <div class="rr-field">
-                                <label class="rr-label">Channels to Include</label>
+                                <label class="rr-label">Report Sections</label>
                                 <div class="rr-checklist">
-                                    <div class="rr-check"><span>SEO / GSC</span><span class="rr-switch on" data-channel="gsc" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></span></div>
-                                    <div class="rr-check"><span>GA4 Website</span><span class="rr-switch on" data-channel="ga4" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></span></div>
-                                    <div class="rr-check"><span>Meta Ads</span><span class="rr-switch on" data-channel="meta" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></span></div>
-                                    <div class="rr-check"><span>Social</span><span class="rr-switch on" data-channel="social" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></span></div>
-                                    <div class="rr-check"><span>YouTube</span><span class="rr-switch on" data-channel="youtube" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></span></div>
+                                    <div class="rr-check"><span>Websites &amp; SEO<br><small style="color:var(--text-muted);font-size:11px;">GA4 + Search Console</small></span><span class="rr-switch on" data-channel="seo" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></span></div>
+                                    <div class="rr-check"><span>Ads<br><small style="color:var(--text-muted);font-size:11px;">Meta advertising</small></span><span class="rr-switch on" data-channel="ads" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></span></div>
+                                    <div class="rr-check"><span>Social (SMM)<br><small style="color:var(--text-muted);font-size:11px;">Facebook + Instagram</small></span><span class="rr-switch on" data-channel="smm" role="switch" aria-checked="true" tabindex="0" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></span></div>
                                 </div>
                             </div>
 

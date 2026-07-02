@@ -866,7 +866,7 @@ def reports_generate(period: str = "weekly", domain: str = "rh", start: str = ""
 
 
 @app.get("/api/reports/export")
-def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", end: str = "", format: str = "excel", mode: str = "client", purpose: str = "client"):
+def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", end: str = "", format: str = "excel", mode: str = "client", purpose: str = "client", sections: str = ""):
     today = _today_ist()
     if not end:
         end = today.isoformat()
@@ -1028,7 +1028,8 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
                               + ", ".join(manual_doms) + " — use Edit Data to fill.")
 
         report_mode = mode or purpose or "client"
-        html_content = html_report.generate_html_report(all_monthly_data, start, end, report_mode=report_mode, api_status=api_errors)
+        sec_list = [s.strip() for s in sections.split(",") if s.strip()] if sections else None
+        html_content = html_report.generate_html_report(all_monthly_data, start, end, report_mode=report_mode, api_status=api_errors, sections=sec_list)
         return StreamingResponse(
             io.BytesIO(html_content.encode("utf-8")),
             media_type="text/html",

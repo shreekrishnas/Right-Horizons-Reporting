@@ -181,9 +181,13 @@ def _build_seed_store(all_monthly_data: dict, start: str, end: str) -> dict:
     return store
 
 
-def generate_html_report(all_monthly_data: dict, start: str, end: str, report_mode: str = "client", api_status: list | None = None) -> str:
+def generate_html_report(all_monthly_data: dict, start: str, end: str, report_mode: str = "client", api_status: list | None = None, sections: list | None = None) -> str:
     now = datetime.now(_IST)
     ts = now.strftime('%d %b %Y, %I:%M %p IST')
+    # Which report tabs to show (ads / smm / seo). None => all.
+    valid_sections = {'ads', 'smm', 'seo'}
+    sec = [s for s in sections if s in valid_sections] if sections else None
+    sections_js = _json.dumps(sec) if sec else 'null'
     # Unique per export so a fresh download never shows a previous report's
     # localStorage (stale months, notes, edits). Reopening the SAME file
     # keeps its own edits because the id is baked into the file.
@@ -813,11 +817,13 @@ const ICONS = {
   smm:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.6l6.8-3.2M8.6 13.4l6.8 3.2"/></svg>',
   seo:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
 };
-const PAGES = [
+const ENABLED_SECTIONS = __SECTIONS__;
+const ALL_PAGES = [
   {id:'ads', label:'Ads', icon:ICONS.ads},
   {id:'smm', label:'SMM', icon:ICONS.smm},
   {id:'seo', label:'Websites & SEO', icon:ICONS.seo},
 ];
+const PAGES = ALL_PAGES.filter(p => !ENABLED_SECTIONS || ENABLED_SECTIONS.includes(p.id));
 function buildNav(){
   const nav = document.getElementById('navList');
   nav.innerHTML = PAGES.map(p=>`<div class="nav-item" data-page="${p.id}">${p.icon}<span>${p.label}</span></div>`).join('');
@@ -832,7 +838,12 @@ function showPage(id){
 function buildPages(){
   document.getElementById('appMain').innerHTML = PAGES.map(p=>`<div class="page" id="${p.id}"></div>`).join('');
 }
-function renderAll(){ renderAds(); renderSMM(); renderSEO(); }
+function hasPage(id){ return PAGES.some(p=>p.id===id); }
+function renderAll(){
+  if(hasPage('ads')) renderAds();
+  if(hasPage('smm')) renderSMM();
+  if(hasPage('seo')) renderSEO();
+}
 
 document.getElementById('themeToggle').addEventListener('click', ()=>{
   const isDark = document.documentElement.getAttribute('data-theme')==='dark';
@@ -843,14 +854,14 @@ document.getElementById('themeToggle').addEventListener('click', ()=>{
 });
 document.getElementById('resetLink').addEventListener('click', ()=>{
   if(confirm('Reset all data back to the API data? This clears anything you added.')){
-    STORE = seedStore(); saveStore(); renderAll(); showPage('ads');
+    STORE = seedStore(); saveStore(); renderAll(); if(PAGES.length) showPage(PAGES[0].id);
   }
 });
 
 buildNav();
 buildPages();
 renderAll();
-showPage('ads');
+if(PAGES.length) showPage(PAGES[0].id);
 </script>
 """
 
@@ -861,6 +872,7 @@ showPage('ads');
     full = full.replace('__END__', _esc(end))
     full = full.replace('__REPORT_ID__', _esc(report_id))
     full = full.replace('__API_STATUS__', status_html)
+    full = full.replace('__SECTIONS__', sections_js)
     full = full.replace('__SEED_JSON__', seed_json)
     return full
 
