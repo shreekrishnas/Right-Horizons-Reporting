@@ -926,6 +926,15 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
 
         month_buckets = html_report._month_ranges(start, end)
         all_monthly_data = {}
+        api_errors = []
+
+        def _err(month, dom, source, e):
+            msg = str(e)
+            msg = msg.replace("\n", " ")[:120]
+            api_errors.append(f"{month} · {dom.upper()} · {source}: {msg}")
+
+        if not creds:
+            api_errors.append("Google credentials unavailable — GSC and GA4 skipped for all months")
 
         for month_label, m_start, m_end in month_buckets:
             month_entities = {}
@@ -938,8 +947,8 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
                     try:
                         gsc_sum = gsc.get_summary(creds, dom_cfg["gsc_site"], m_start, m_end)
                         entity_data["gsc"] = gsc_sum
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        _err(month_label, dom_key, "GSC", e)
                     prop = dom_cfg.get("ga4_property")
                     if prop:
                         try:
@@ -948,37 +957,37 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
                                 org = ga4.get_organic_summary(creds, prop, m_start, m_end)
                                 ga4_sum["organic_sessions"] = org.get("organic_sessions", 0)
                                 ga4_sum["organic_users"] = org.get("organic_users", 0)
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                _err(month_label, dom_key, "GA4 organic", e)
                             entity_data["ga4"] = ga4_sum
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            _err(month_label, dom_key, "GA4", e)
 
                 ad_account = dom_cfg.get("meta_ad_account", "")
                 if META_MARKETING_TOKEN and ad_account:
                     try:
                         entity_data["meta_ads"] = meta.get_campaigns_summary(META_MARKETING_TOKEN, ad_account, m_start, m_end)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        _err(month_label, dom_key, "Meta Ads", e)
                 h_token, h_page_id = _meta_creds(dom_key)
                 if h_token and h_page_id:
                     h_token = social.resolve_page_token(h_token, h_page_id)
                     try:
                         entity_data["social_fb"] = social.get_fb_comprehensive(h_token, h_page_id, m_start, m_end)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        _err(month_label, dom_key, "Facebook", e)
                     try:
                         ig_id = social.get_ig_account(h_token, h_page_id)
                         if ig_id:
                             entity_data["social_ig"] = social.get_ig_comprehensive(h_token, ig_id, m_start, m_end)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        _err(month_label, dom_key, "Instagram", e)
 
                 month_entities[dom_key] = entity_data
             all_monthly_data[month_label] = month_entities
 
         report_mode = mode or purpose or "client"
-        html_content = html_report.generate_html_report(all_monthly_data, start, end, report_mode=report_mode)
+        html_content = html_report.generate_html_report(all_monthly_data, start, end, report_mode=report_mode, api_status=api_errors)
         return StreamingResponse(
             io.BytesIO(html_content.encode("utf-8")),
             media_type="text/html",

@@ -178,10 +178,27 @@ def _build_seed_store(all_monthly_data: dict, start: str, end: str) -> dict:
     return store
 
 
-def generate_html_report(all_monthly_data: dict, start: str, end: str, report_mode: str = "client") -> str:
-    ts = datetime.now(_IST).strftime('%d %b %Y, %I:%M %p IST')
+def generate_html_report(all_monthly_data: dict, start: str, end: str, report_mode: str = "client", api_status: list | None = None) -> str:
+    now = datetime.now(_IST)
+    ts = now.strftime('%d %b %Y, %I:%M %p IST')
+    # Unique per export so a fresh download never shows a previous report's
+    # localStorage (stale months, notes, edits). Reopening the SAME file
+    # keeps its own edits because the id is baked into the file.
+    report_id = f"{start}_{end}_{now.strftime('%Y%m%d%H%M%S')}"
     seed = _build_seed_store(all_monthly_data, start, end)
     seed_json = _json.dumps(seed, default=str)
+
+    if api_status:
+        items = ''.join(
+            f'<div style="margin-top:0.3rem;color:var(--status-danger);">⚠ {_esc(str(e)[:90])}</div>'
+            for e in api_status[:15]
+        )
+        more = f'<div style="margin-top:0.3rem;">…and {len(api_status) - 15} more</div>' if len(api_status) > 15 else ''
+        status_html = (f'<div style="margin-top:0.6rem;border-top:1px solid var(--border-subtle);padding-top:0.5rem;">'
+                       f'<b>Data source issues ({len(api_status)})</b>{items}{more}</div>')
+    else:
+        status_html = ('<div style="margin-top:0.6rem;border-top:1px solid var(--border-subtle);padding-top:0.5rem;color:var(--status-success);">'
+                       '✓ All API sources fetched without errors</div>')
 
     html_part = """<!DOCTYPE html>
 <html lang="en">
@@ -212,7 +229,8 @@ __CSS__
       <div id="navList"></div>
       <div class="sidebar-footnote">
         Generated __TIMESTAMP__<br>
-        Data is saved in this browser. <a id="resetLink">Reset to API data</a>
+        Edits are saved in this browser for this report only. <a id="resetLink">Reset to API data</a>
+        __API_STATUS__
       </div>
     </aside>
     <div class="app-content">
@@ -243,7 +261,7 @@ __CSS__
 
     js_part = """
 <script>
-const STORAGE_KEY = 'rh_marketing_report_v2';
+const STORAGE_KEY = 'rh_report___REPORT_ID__';
 const API_SEED = __SEED_JSON__;
 const ADS_CHANNELS = ['Google Ads','LinkedIn Ads','Meta (FB + Insta)','SEO / Organic Search','Content Marketing','Email Marketing','Webinars','Offline Events','Referrals (Client)','Referrals (Partner/CA)','Social Media (Organic)','PR / Media'];
 const SMM_PLATFORMS = ['LinkedIn','YouTube','Instagram','Facebook','Twitter / X'];
@@ -839,6 +857,8 @@ showPage('ads');
     full = full.replace('__TIMESTAMP__', _esc(ts))
     full = full.replace('__START__', _esc(start))
     full = full.replace('__END__', _esc(end))
+    full = full.replace('__REPORT_ID__', _esc(report_id))
+    full = full.replace('__API_STATUS__', status_html)
     full = full.replace('__SEED_JSON__', seed_json)
     return full
 
