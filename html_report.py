@@ -251,7 +251,7 @@ __CSS__
       <div id="navList"></div>
       <div class="sidebar-footnote">
         Generated __TIMESTAMP__<br>
-        Edits are saved in this browser for this report only. <a id="resetLink">Reset to API data</a>
+        💡 Click any value in a table to edit it — MoM and totals update instantly. Edits are saved in this browser for this report only. <a id="resetLink">Reset to API data</a>
         __API_STATUS__
       </div>
     </aside>
@@ -433,6 +433,77 @@ function monthSelectField(months){
   </div>`;
 }
 
+/* ===== INLINE CELL EDITING ===== */
+// Editable value cell: click to edit; MoM & FY recompute on save.
+function editableCell(displayHtml, rawVal, edit, unit, cls, note){
+  const hasNote = note && note.trim();
+  const noteAttr = hasNote ? ` data-note="${note.replace(/"/g,'&quot;')}"` : '';
+  const rv = (rawVal===null||rawVal===undefined) ? '' : rawVal;
+  const shown = (displayHtml===null||displayHtml===undefined) ? '<span style="color:var(--text-muted)">—</span>' : displayHtml;
+  return `<td class="num editable-cell${cls?(' '+cls):''}${hasNote?' has-note':''}"${noteAttr} `
+    + `data-edit='${JSON.stringify(edit).replace(/'/g,"&#39;")}' data-unit="${unit}" data-rawval="${rv}" `
+    + `style="cursor:text;${hasNote?'border-bottom:2px dotted var(--status-info);':''}" title="Click to edit">`
+    + `${shown}${hasNote?'<span class="note-dot">📝</span>':''}</td>`;
+}
+
+function writeCell(edit, month, rawStr, unit){
+  let v;
+  if(rawStr===''||rawStr==null){ v = null; }
+  else { v = parseFloat(rawStr); if(isNaN(v)) v = null; else if(unit==='pct') v = v/100; }
+  if(edit.kind==='ads'){
+    if(!STORE.ads[month]) STORE.ads[month] = {};
+    if(!STORE.ads[month][edit.ch]) STORE.ads[month][edit.ch] = {spend:0,leads:0,notes:''};
+    STORE.ads[month][edit.ch][edit.field] = (v==null?0:v);
+  } else if(edit.kind==='smm'){
+    if(!STORE.smm[edit.entity]) STORE.smm[edit.entity] = {};
+    if(!STORE.smm[edit.entity][month]) STORE.smm[edit.entity][month] = {};
+    if(!STORE.smm[edit.entity][month][edit.platform]) STORE.smm[edit.entity][month][edit.platform] = blankPlatform();
+    STORE.smm[edit.entity][month][edit.platform][edit.key] = v;
+  } else if(edit.kind==='content'){
+    if(!STORE.seo.content[month]) STORE.seo.content[month] = {};
+    STORE.seo.content[month][edit.type] = (v==null?0:v);
+  } else if(edit.kind==='site'){
+    if(!STORE.seo.sites[edit.entity]) STORE.seo.sites[edit.entity] = {};
+    if(!STORE.seo.sites[edit.entity][month]) STORE.seo.sites[edit.entity][month] = {};
+    STORE.seo.sites[edit.entity][month][edit.key] = v;
+  }
+  addMonthName(month); saveStore();
+}
+
+function rerenderActive(){
+  const active = (document.querySelector('.nav-item.active')||{}).dataset;
+  const id = active ? active.page : (PAGES[0]&&PAGES[0].id);
+  if(id==='ads') renderAds();
+  else if(id==='smm') renderSMM();
+  else if(id==='seo') renderSEO();
+}
+
+// One delegated handler for all editable cells
+document.addEventListener('click', function(e){
+  const td = e.target.closest && e.target.closest('.editable-cell');
+  if(!td || td.querySelector('input')) return;
+  const edit = JSON.parse(td.getAttribute('data-edit').replace(/&#39;/g,"'"));
+  const unit = td.getAttribute('data-unit');
+  const raw = td.getAttribute('data-rawval');
+  const month = edit.month;
+  const disp = (raw==='' ? '' : (unit==='pct' ? (parseFloat(raw)*100) : parseFloat(raw)));
+  const inp = document.createElement('input');
+  inp.type = 'number'; inp.step = 'any'; inp.value = disp;
+  inp.style.cssText = 'width:90px;padding:2px 4px;border:1.5px solid #6366F1;border-radius:4px;font:inherit;text-align:right;';
+  td.textContent = ''; td.appendChild(inp); inp.focus(); inp.select();
+  let done = false;
+  const commit = (save)=>{
+    if(done) return; done = true;
+    if(save) writeCell(edit, month, inp.value, unit);
+    rerenderActive();
+  };
+  inp.addEventListener('keydown', ev=>{
+    if(ev.key==='Enter'){ ev.preventDefault(); commit(true); }
+    else if(ev.key==='Escape'){ commit(false); }
+  });
+  inp.addEventListener('blur', ()=> commit(true));
+});
+
 /* ===== DYNAMIC TREND TABLE (with notes) ===== */
 function dynamicTrendTable(rows, months, unitDefault, fyLabel, fyType, labelHeader, noteSection){
   let head = `<tr><th class="name-cell">${labelHeader||'Metric'}</th><th>MoM Δ</th><th>MoM %</th>`;
@@ -456,7 +527,11 @@ function dynamicTrendTable(rows, months, unitDefault, fyLabel, fyType, labelHead
     months.forEach(m=>{
       const v = r.values[m];
       const note = noteSection ? getNote(noteSection, m, r.label) : '';
-      tr += cell(fmtByUnit(v,unit), v===0?'muted':'', note);
+      if(r.edit){
+        tr += editableCell(fmtByUnit(v,unit), v, Object.assign({month:m}, r.edit), unit, v===0?'muted':'', note);
+      } else {
+        tr += cell(fmtByUnit(v,unit), v===0?'muted':'', note);
+      }
     });
     tr += cell(fmtByUnit(fy,unit));
     tr += `</tr>`;
@@ -468,11 +543,11 @@ function dynamicTrendTable(rows, months, unitDefault, fyLabel, fyType, labelHead
 /* ===== ADS TAB ===== */
 function renderAds(){
   const months = monthsWithData(STORE.ads);
-  const spendRows = ADS_CHANNELS.map(c=>({label:c, unit:'inr', direction:null,
+  const spendRows = ADS_CHANNELS.map(c=>({label:c, unit:'inr', direction:null, edit:{kind:'ads', field:'spend', ch:c},
     values: Object.fromEntries(months.map(m=>[m, STORE.ads[m][c] ? STORE.ads[m][c].spend : null]))}));
   const spendTotal = {label:'TOTAL SPEND', unit:'inr', direction:null, isTotal:true,
     values: Object.fromEntries(months.map(m=>[m, ADS_CHANNELS.reduce((s,c)=> s+((STORE.ads[m][c]&&STORE.ads[m][c].spend)||0),0)]))};
-  const leadsRows = ADS_CHANNELS.map(c=>({label:c, unit:'num', direction:'up',
+  const leadsRows = ADS_CHANNELS.map(c=>({label:c, unit:'num', direction:'up', edit:{kind:'ads', field:'leads', ch:c},
     values: Object.fromEntries(months.map(m=>[m, STORE.ads[m][c] ? STORE.ads[m][c].leads : null]))}));
   const leadsTotal = {label:'TOTAL LEADS', unit:'num', direction:'up', isTotal:true,
     values: Object.fromEntries(months.map(m=>[m, ADS_CHANNELS.reduce((s,c)=> s+((STORE.ads[m][c]&&STORE.ads[m][c].leads)||0),0)]))};
@@ -583,6 +658,7 @@ function renderSMM(){
   SMM_PLATFORMS.forEach(p=>{
     const rows = metricDefs.map(m=>({
       label:m.label, unit:m.unit, direction:m.dir,
+      edit:{kind:'smm', entity:smmEntity, platform:p, key:m.k},
       values: Object.fromEntries(months.map(mo=>{
         const d = STORE.smm[smmEntity][mo] ? STORE.smm[smmEntity][mo][p] : null;
         return [mo, d ? d[m.k] : null];
@@ -686,13 +762,14 @@ function openEditSMMMonth(entity){
 let seoSiteEntity = 'Right Horizons';
 function renderSEO(){
   const contentMonths = monthsWithData(STORE.seo.content);
-  const contentRows = CONTENT_TYPES.map(t=>({label:t, unit:'num', direction:'up', values: Object.fromEntries(contentMonths.map(m=>[m, STORE.seo.content[m][t]]))}));
+  const contentRows = CONTENT_TYPES.map(t=>({label:t, unit:'num', direction:'up', edit:{kind:'content', type:t}, values: Object.fromEntries(contentMonths.map(m=>[m, STORE.seo.content[m][t]]))}));
   const totalRow = {label:'TOTAL CONTENT PUBLISHED', unit:'num', direction:'up', isTotal:true,
     values: Object.fromEntries(contentMonths.map(m=>[m, CONTENT_TYPES.reduce((s,t)=> s + (STORE.seo.content[m][t]||0), 0)]))};
   const siteMonths = monthsWithData(STORE.seo.sites[seoSiteEntity]);
   const siteRows = SITE_METRICS.map(m=>({
     label:m.label, unit:m.unit,
     direction: (m.key==='bounceRate'||m.key==='avgKeywordPosition'||m.key==='pageLoadSpeed') ? 'down' : (m.key==='avgSessionDuration'||m.key==='mobileTrafficPct'||m.key==='domainAuthority' ? null : 'up'),
+    edit:{kind:'site', entity:seoSiteEntity, key:m.key},
     values: Object.fromEntries(siteMonths.map(mo=>[mo, STORE.seo.sites[seoSiteEntity][mo]?.[m.key] ?? null])),
   }));
   const el = document.getElementById('seo');
@@ -982,6 +1059,7 @@ thead th.name-cell{background:var(--surface-card-elevated);}
 tbody td.name-cell{background:var(--surface-card);}
 tbody tr.total-row td.name-cell{background:var(--surface-card-header);}
 td.num{text-align:right; font-variant-numeric:tabular-nums;}
+td.editable-cell:hover{background:rgba(99,102,241,0.10); box-shadow:inset 0 0 0 1px rgba(99,102,241,0.35);}
 td.muted{color:var(--text-muted);}
 td.has-note{position:relative;}
 .note-dot{font-size:0.55rem; margin-left:0.2rem; vertical-align:super;}
