@@ -58,24 +58,35 @@ def get_recent_videos(creds: Credentials, max_results: int = 10) -> list:
     return results
 
 
-def get_videos_in_range(creds: Credentials, start: str, end: str, max_results: int = 50) -> list:
-    """Videos published between start and end (YYYY-MM-DD), with view/like/comment stats."""
+def get_videos_in_range(creds: Credentials, start: str, end: str, max_scan: int = 200) -> list:
+    """Videos published between start and end (YYYY-MM-DD), with view/like/comment stats.
+
+    NOTE: YouTube's search API forbids combining forMine=true with
+    publishedAfter/publishedBefore (returns HTTP 400), so we page through
+    the newest videos ordered by date and filter to the range on our side.
+    """
     yt = _service(creds)
-    published_after = start + "T00:00:00Z"
-    published_before = end + "T23:59:59Z"
     collected = []
     page_token = None
-    while len(collected) < max_results:
-        search = yt.search().list(
-            forMine=True, type="video", order="date", part="snippet",
-            maxResults=min(50, max_results - len(collected)),
-            publishedAfter=published_after, publishedBefore=published_before,
-            pageToken=page_token,
-        ).execute()
+    scanned = 0
+    while scanned < max_scan:
+        kwargs = dict(forMine=True, type="video", order="date", part="snippet", maxResults=50)
+        if page_token:
+            kwargs["pageToken"] = page_token
+        search = yt.search().list(**kwargs).execute()
         items = search.get("items", [])
-        collected.extend(items)
+        if not items:
+            break
+        scanned += len(items)
+        stop = False
+        for it in items:
+            pub = it.get("snippet", {}).get("publishedAt", "")[:10]
+            if pub and pub < start:
+                stop = True  # results are newest-first; everything after is older
+            if pub and start <= pub <= end:
+                collected.append(it)
         page_token = search.get("nextPageToken")
-        if not page_token or not items:
+        if not page_token or stop:
             break
 
     video_ids = [it["id"]["videoId"] for it in collected if it.get("id", {}).get("videoId")]
