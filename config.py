@@ -45,9 +45,9 @@ DOMAINS = {
         "meta_page_id": os.getenv("META_PAGE_ID_PMS", "117532164550609"),
         "meta_social_token": os.getenv("META_SOCIAL_TOKEN_PMS", ""),
         "meta_ad_account": os.getenv("META_AD_ACCOUNT_PMS", ""),
-        # No page access for this token; social/ads entered manually.
-        # Set META_MANUAL_PMS=0 once a PMS token/ad account is available.
-        "meta_manual": os.getenv("META_MANUAL_PMS", "1") == "1",
+        # Token now has PMS page access, so social auto-fetches. Set
+        # META_MANUAL_PMS=1 to force manual entry again.
+        "meta_manual": os.getenv("META_MANUAL_PMS", "0") == "1",
     },
     "aif": {
         "label": "Right Horizons AIF",
@@ -59,9 +59,9 @@ DOMAINS = {
         "meta_page_id": os.getenv("META_PAGE_ID_AIF", "1069286109601470"),
         "meta_social_token": os.getenv("META_SOCIAL_TOKEN_AIF", ""),
         "meta_ad_account": os.getenv("META_AD_ACCOUNT_AIF", ""),
-        # No page access for this token; social/ads entered manually.
-        # Set META_MANUAL_AIF=0 once an AIF token/ad account is available.
-        "meta_manual": os.getenv("META_MANUAL_AIF", "1") == "1",
+        # Token now has AIF page access, so social auto-fetches. Set
+        # META_MANUAL_AIF=1 to force manual entry again.
+        "meta_manual": os.getenv("META_MANUAL_AIF", "0") == "1",
     },
     "akeana": {
         "label": "Akeana",
