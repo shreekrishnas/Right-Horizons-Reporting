@@ -115,7 +115,7 @@ def diagnose_page_access(token: str, page_id: str) -> dict:
         out["ig_linked"] = bool(ig_acct)
         if ig_acct:
             ig_id = ig_acct["id"]
-            ig_candidates = ["reach", "views", "accounts_engaged", "total_interactions", "follower_count"]
+            ig_candidates = ["reach", "views", "accounts_engaged", "total_interactions", "follows_and_unfollows", "follower_count"]
             ig_valid, ig_invalid = [], []
             for m in ig_candidates:
                 try:
@@ -163,6 +163,8 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
             log.debug("FB metric %s failed: %s", metric, e)
 
     # New followers: page_daily_follows_unique (page_fan_adds is deprecated)
+    # new_followers stays None (→ "—") unless the API genuinely returns it.
+    result["new_followers_raw"] = None
     try:
         data = _get(f"/{page_id}/insights", token, {
             "metric": "page_daily_follows_unique", "period": "day",
@@ -172,17 +174,22 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
             result["new_followers_raw"] = sum(v.get("value", 0) for v in item.get("values", []))
     except Exception as e:
         log.debug("FB page_daily_follows_unique failed: %s", e)
-        result.setdefault("new_followers_raw", 0)
 
-    # Fetch posts with shares/saves detail (paginated so long ranges aren't cut at 100)
+    # Fetch posts (paginated + de-duped by id, filtered strictly to the range)
     try:
         posts_list = _get_paged(f"/{page_id}/posts", token, {
-            "fields": "id,shares",
+            "fields": "id,created_time,shares",
             "since": start, "until": end, "limit": 100,
         })
-        result["posts_published"] = len(posts_list)
-        total_shares = sum(p.get("shares", {}).get("count", 0) for p in posts_list)
-        result["total_shares"] = total_shares
+        seen, uniq = set(), []
+        for p in posts_list:
+            pid = p.get("id")
+            d = p.get("created_time", "")[:10]
+            if pid and pid not in seen and (not d or start <= d <= end):
+                seen.add(pid)
+                uniq.append(p)
+        result["posts_published"] = len(uniq)
+        result["total_shares"] = sum(p.get("shares", {}).get("count", 0) for p in uniq)
     except Exception:
         result["posts_published"] = 0
         result["total_shares"] = 0
@@ -200,7 +207,7 @@ def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict
     # FB page reach/impressions are no longer exposed by the API, so engagement
     # rate is measured against total followers (a standard alternate definition).
     result["engagement_rate"] = round((eng / followers * 100), 2) if followers > 0 else 0
-    result["new_followers"] = result.get("new_followers_raw", 0)
+    result["new_followers"] = result.get("new_followers_raw")  # None if unavailable
     result["reach"] = None            # not available on current Graph API
     result["engagements"] = eng
     result["views"] = result.get("page_views_total", 0)
@@ -282,6 +289,8 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
         "reach", "views", "accounts_engaged", "total_interactions",
         "follows_and_unfollows", "profile_views", "website_clicks",
     ]
+    # new_followers stays None (→ "—") unless the API genuinely returns it.
+    result["new_followers"] = None
     for metric in _ig_metrics:
         try:
             data = _get(f"/{ig_id}/insights", token, {
@@ -309,40 +318,42 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
                         result["new_followers"] = follows - unfollows
                     elif isinstance(val, dict):
                         result["new_followers"] = val.get("follows", 0) - val.get("unfollows", 0)
-                    else:
+                    elif isinstance(val, (int, float)):
                         result["new_followers"] = val
                 else:
                     result[item["name"]] = val if not isinstance(val, dict) else 0
         except Exception as e:
             log.debug("IG metric %s failed: %s", metric, e)
-            if metric == "follows_and_unfollows":
-                result.setdefault("new_followers", 0)
-            else:
+            if metric != "follows_and_unfollows":
                 result.setdefault(metric, 0)
 
-    # (follower_count insight metric is deprecated on the current API version,
-    # so no fallback here — new_followers comes from follows_and_unfollows.)
-
-    # Fetch media for the period (paginated; stop once past the start date)
+    # Fetch ALL media, then filter strictly by date — deterministic, so
+    # collaboration posts (which carry the original post date and can appear
+    # out of order) are counted the same way every run.
     def _fetch_media():
         collected = []
         after = None
-        for _ in range(10):
-            p = {"fields": "id,timestamp,media_type,like_count,comments_count", "limit": 100}
+        for _ in range(20):  # hard cap ~2000 items
+            p = {"fields": "id,timestamp,media_type,media_product_type,like_count,comments_count", "limit": 100}
             if after:
                 p["after"] = after
             data = _get(f"/{ig_id}/media", token, p)
             batch = data.get("data", [])
-            if not batch:
-                break
             collected.extend(batch)
-            oldest = batch[-1].get("timestamp", "")[:10]
             after = data.get("paging", {}).get("cursors", {}).get("after")
-            if not after or (oldest and oldest < start):
+            if not after or not batch:
                 break
         return collected
     all_media = _safe(_fetch_media, [])
-    media = [m for m in all_media if start <= m.get("timestamp", "")[:10] <= end]
+    # De-dupe by id (collab posts can appear twice) and filter to the range
+    seen_ids = set()
+    media = []
+    for m in all_media:
+        mid = m.get("id")
+        d = m.get("timestamp", "")[:10]
+        if mid and mid not in seen_ids and start <= d <= end:
+            seen_ids.add(mid)
+            media.append(m)
 
     result["posts_published"] = len(media)
     video_media = [m for m in media if m.get("media_type") in ("VIDEO", "REELS", "REEL")]
