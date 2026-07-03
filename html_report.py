@@ -117,7 +117,7 @@ def _build_seed_store(all_monthly_data: dict, start: str, end: str) -> dict:
                 existing['leads'] += entity_leads
                 entity_label = ENTITY_MAP.get(dom_key, dom_key)
                 note_parts = [existing['notes']] if existing['notes'] else []
-                note_parts.append(f'{entity_label}: ₹{entity_spend:,.0f} / {entity_leads} leads ({len(meta_ads)} campaigns)')
+                note_parts.append(f'{entity_label}: ₹{entity_spend:,.0f} / {entity_leads} leads (account total)')
                 existing['notes'] = '; '.join(note_parts)
 
         store['ads'][month_label] = ads_month

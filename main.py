@@ -957,82 +957,105 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
         if not creds:
             api_errors.append("Google credentials unavailable — GSC and GA4 skipped for all months")
 
-        for month_label, m_start, m_end in month_buckets:
-            month_entities = {}
-            for dom_key in report_domains:
-                dom_cfg = DOMAINS.get(dom_key, {})
-                if not dom_cfg:
-                    continue
-                entity_data = {}
-                if creds:
-                    try:
-                        gsc_sum = gsc.get_summary(creds, dom_cfg["gsc_site"], m_start, m_end)
-                        entity_data["gsc"] = gsc_sum
-                    except Exception as e:
-                        _err(month_label, dom_key, "GSC", e)
-                    prop = dom_cfg.get("ga4_property")
-                    if prop:
-                        try:
-                            ga4_sum = ga4.get_summary(creds, prop, m_start, m_end)
-                            try:
-                                org = ga4.get_organic_summary(creds, prop, m_start, m_end)
-                                ga4_sum["organic_sessions"] = org.get("organic_sessions", 0)
-                                ga4_sum["organic_users"] = org.get("organic_users", 0)
-                            except Exception as e:
-                                _err(month_label, dom_key, "GA4 organic", e)
-                            # Mobile traffic % from device breakdown
-                            try:
-                                devs = ga4.get_device_breakdown(creds, prop, m_start, m_end)
-                                tot = sum(int(d.get("sessions") or 0) for d in devs)
-                                mob = sum(int(d.get("sessions") or 0) for d in devs
-                                          if (d.get("deviceCategory") or "").lower() == "mobile")
-                                ga4_sum["mobile_traffic_pct"] = round(mob / tot * 100, 1) if tot else None
-                            except Exception as e:
-                                _err(month_label, dom_key, "GA4 device", e)
-                            entity_data["ga4"] = ga4_sum
-                        except Exception as e:
-                            _err(month_label, dom_key, "GA4", e)
-
-                # PMS/AIF have no Meta page/ad access with the shared token —
-                # their social & ads are entered manually, so skip Meta fetches
-                # entirely (avoids guaranteed permission errors in the report).
-                meta_manual = dom_cfg.get("meta_manual", False)
-
-                ad_account = dom_cfg.get("meta_ad_account", "")
-                if not meta_manual and META_MARKETING_TOKEN and ad_account:
-                    try:
-                        entity_data["meta_ads"] = meta.get_campaigns_summary(META_MARKETING_TOKEN, ad_account, m_start, m_end)
-                    except Exception as e:
-                        _err(month_label, dom_key, "Meta Ads", e)
+        # Resolve per-domain Meta page tokens + IG ids ONCE (not per month),
+        # and the YouTube channel subscribers ONCE, to cut redundant calls.
+        dom_meta = {}
+        for dom_key in report_domains:
+            dom_cfg = DOMAINS.get(dom_key, {})
+            info = {"manual": dom_cfg.get("meta_manual", False), "ptoken": None, "pid": None, "ig_id": None}
+            if not info["manual"]:
                 h_token, h_page_id = _meta_creds(dom_key)
-                if not meta_manual and h_token and h_page_id:
-                    h_token = social.resolve_page_token(h_token, h_page_id)
+                if h_token and h_page_id:
+                    info["pid"] = h_page_id
                     try:
-                        entity_data["social_fb"] = social.get_fb_comprehensive(h_token, h_page_id, m_start, m_end)
+                        info["ptoken"] = social.resolve_page_token(h_token, h_page_id)
+                        info["ig_id"] = social.get_ig_account(info["ptoken"], h_page_id)
                     except Exception as e:
-                        _err(month_label, dom_key, "Facebook", e)
-                    try:
-                        ig_id = social.get_ig_account(h_token, h_page_id)
-                        if ig_id:
-                            entity_data["social_ig"] = social.get_ig_comprehensive(h_token, ig_id, m_start, m_end)
-                    except Exception as e:
-                        _err(month_label, dom_key, "Instagram", e)
+                        _err("setup", dom_key, "Meta page", e)
+            dom_meta[dom_key] = info
 
-                # YouTube (single RH channel) — fills the SMM YouTube row.
-                if dom_key == "rh" and YOUTUBE_REFRESH_TOKEN:
+        yt_creds = None
+        yt_subs = None
+        if YOUTUBE_REFRESH_TOKEN:
+            try:
+                yt_creds = get_youtube_credentials()
+                yt_subs = youtube.get_channel_stats(yt_creds).get("subscribers")
+            except Exception as e:
+                _err("setup", "rh", "YouTube channel", e)
+
+        def fetch_entity(month_label, m_start, m_end, dom_key):
+            dom_cfg = DOMAINS.get(dom_key, {})
+            entity_data = {}
+            errs = []
+            def le(src, e):
+                errs.append((month_label, dom_key, src, e))
+            if creds:
+                try:
+                    entity_data["gsc"] = gsc.get_summary(creds, dom_cfg["gsc_site"], m_start, m_end)
+                except Exception as e:
+                    le("GSC", e)
+                prop = dom_cfg.get("ga4_property")
+                if prop:
                     try:
-                        yt_creds = get_youtube_credentials()
-                        yt = youtube.get_monthly_summary(yt_creds, m_start, m_end)
+                        ga4_sum = ga4.get_summary(creds, prop, m_start, m_end)
                         try:
-                            yt["subscribers"] = youtube.get_channel_stats(yt_creds).get("subscribers")
-                        except Exception:
-                            pass
-                        entity_data["youtube"] = yt
+                            org = ga4.get_organic_summary(creds, prop, m_start, m_end)
+                            ga4_sum["organic_sessions"] = org.get("organic_sessions", 0)
+                            ga4_sum["organic_users"] = org.get("organic_users", 0)
+                        except Exception as e:
+                            le("GA4 organic", e)
+                        try:
+                            devs = ga4.get_device_breakdown(creds, prop, m_start, m_end)
+                            tot = sum(int(d.get("sessions") or 0) for d in devs)
+                            mob = sum(int(d.get("sessions") or 0) for d in devs
+                                      if (d.get("deviceCategory") or "").lower() == "mobile")
+                            ga4_sum["mobile_traffic_pct"] = round(mob / tot * 100, 1) if tot else None
+                        except Exception as e:
+                            le("GA4 device", e)
+                        entity_data["ga4"] = ga4_sum
                     except Exception as e:
-                        _err(month_label, dom_key, "YouTube", e)
+                        le("GA4", e)
 
-                month_entities[dom_key] = entity_data
-            all_monthly_data[month_label] = month_entities
+            info = dom_meta.get(dom_key, {})
+            if not info.get("manual"):
+                ad_account = dom_cfg.get("meta_ad_account", "")
+                if META_MARKETING_TOKEN and ad_account:
+                    try:
+                        # Account-level total (1 call) instead of per-campaign loop
+                        entity_data["meta_ads"] = [meta.get_account_summary(META_MARKETING_TOKEN, ad_account, m_start, m_end)]
+                    except Exception as e:
+                        le("Meta Ads", e)
+                if info.get("ptoken") and info.get("pid"):
+                    try:
+                        entity_data["social_fb"] = social.get_fb_comprehensive(info["ptoken"], info["pid"], m_start, m_end)
+                    except Exception as e:
+                        le("Facebook", e)
+                    if info.get("ig_id"):
+                        try:
+                            entity_data["social_ig"] = social.get_ig_comprehensive(info["ptoken"], info["ig_id"], m_start, m_end, fast=True)
+                        except Exception as e:
+                            le("Instagram", e)
+
+            if dom_key == "rh" and yt_creds is not None:
+                try:
+                    yt = youtube.get_monthly_summary(yt_creds, m_start, m_end)
+                    yt["subscribers"] = yt_subs
+                    entity_data["youtube"] = yt
+                except Exception as e:
+                    le("YouTube", e)
+
+            return (month_label, dom_key, entity_data, errs)
+
+        tasks = [(ml, ms, me, dk) for (ml, ms, me) in month_buckets for dk in report_domains
+                 if DOMAINS.get(dk)]
+        for ml, _ms, _me in month_buckets:
+            all_monthly_data[ml] = {}
+        import concurrent.futures as _cf
+        with _cf.ThreadPoolExecutor(max_workers=8) as ex:
+            for ml, dk, entity_data, errs in ex.map(lambda t: fetch_entity(*t), tasks):
+                all_monthly_data[ml][dk] = entity_data
+                for (m, d, s, e) in errs:
+                    _err(m, d, s, e)
 
         manual_doms = [DOMAINS[k]["label"] for k in report_domains
                        if DOMAINS.get(k, {}).get("meta_manual")]

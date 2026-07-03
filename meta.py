@@ -67,6 +67,38 @@ def get_campaigns_summary(token: str, ad_account_id: str, start: str, end: str, 
     return result
 
 
+def get_account_summary(token: str, ad_account_id: str, start: str, end: str) -> dict:
+    """Single account-level insights call: total spend, impressions, clicks, leads.
+
+    Much faster than get_campaigns_summary (which does one call per campaign),
+    so it avoids serverless timeouts when only monthly totals are needed."""
+    data = _get(
+        f"/{ad_account_id}/insights", token,
+        {
+            "fields": "spend,impressions,reach,clicks,actions",
+            "time_range": f'{{"since":"{start}","until":"{end}"}}',
+        },
+    )
+    rows = data.get("data", [])
+    if not rows:
+        return {"spend": 0.0, "impressions": 0, "clicks": 0, "leads": 0}
+    i = rows[0]
+    leads = 0
+    for a in i.get("actions") or []:
+        if a.get("action_type") in ("lead", "onsite_conversion.lead_grouped",
+                                    "offsite_conversion.fb_pixel_lead", "leadgen_grouped"):
+            try:
+                leads += int(float(a.get("value") or 0))
+            except Exception:
+                pass
+    return {
+        "spend": float(i.get("spend", 0)),
+        "impressions": int(i.get("impressions", 0)),
+        "clicks": int(i.get("clicks", 0)),
+        "leads": leads,
+    }
+
+
 def get_daily_spend(token: str, ad_account_id: str, start: str, end: str) -> list:
     data = _get(
         f"/{ad_account_id}/insights", token,

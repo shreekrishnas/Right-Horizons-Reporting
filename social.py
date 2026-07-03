@@ -269,7 +269,7 @@ def get_ig_insights(token: str, ig_id: str, start: str, end: str) -> dict:
     return get_ig_comprehensive(token, ig_id, start, end)
 
 
-def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
+def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str, fast: bool = False) -> dict:
     profile = _get(f"/{ig_id}", token, {
         "fields": "username,name,followers_count,follows_count,media_count",
     })
@@ -333,15 +333,21 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
     def _fetch_media():
         collected = []
         after = None
-        for _ in range(20):  # hard cap ~2000 items
+        past_pages = 0
+        for _ in range(8):  # bounded for serverless speed
             p = {"fields": "id,timestamp,media_type,media_product_type,like_count,comments_count", "limit": 100}
             if after:
                 p["after"] = after
             data = _get(f"/{ig_id}/media", token, p)
             batch = data.get("data", [])
             collected.extend(batch)
+            # Stop once a whole page predates the range; one extra page as a
+            # safety net for out-of-order collaboration posts.
+            newest = batch[0].get("timestamp", "")[:10] if batch else ""
+            if newest and newest < start:
+                past_pages += 1
             after = data.get("paging", {}).get("cursors", {}).get("after")
-            if not after or not batch:
+            if not after or not batch or past_pages >= 1:
                 break
         return collected
     all_media = _safe(_fetch_media, [])
@@ -372,17 +378,19 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str) -> dict:
     result["video_views"] = views if (views > 0 and len(video_media) > 0) else 0
     result["link_clicks"] = result.get("website_clicks", 0)
 
-    # Fetch saves from individual media insights
+    # Saves require one insights call PER post (slow). Skip in fast mode
+    # (the report doesn't use saves_shares) to avoid serverless timeouts.
     total_saves = 0
-    for m in media[:50]:
-        try:
-            mi = _get(f"/{m['id']}/insights", token, {"metric": "saved"})
-            for item in mi.get("data", []):
-                vals = item.get("values", [])
-                if vals:
-                    total_saves += vals[0].get("value", 0)
-        except Exception:
-            pass
+    if not fast:
+        for m in media[:50]:
+            try:
+                mi = _get(f"/{m['id']}/insights", token, {"metric": "saved"})
+                for item in mi.get("data", []):
+                    vals = item.get("values", [])
+                    if vals:
+                        total_saves += vals[0].get("value", 0)
+            except Exception:
+                pass
     result["saves_shares"] = total_saves
 
     eng = result.get("engagements", 0)
