@@ -345,6 +345,33 @@ def social_pages(domain: str = "rh"):
         raise HTTPException(502, f"Social API error: {e}")
 
 
+@app.get("/api/social/ig-follows-debug")
+def ig_follows_debug(domain: str = "rh", start: str = "", end: str = ""):
+    """Return the RAW Instagram follows_and_unfollows response so we can see the
+    exact breakdown structure and parse new-followers correctly."""
+    from social import _get, resolve_page_token, get_ig_account
+    token, page_id = _meta_creds(domain)
+    if not token or not page_id:
+        return {"error": "no token/page for domain " + domain}
+    today = _today_ist()
+    if not end:
+        end = today.isoformat()
+    if not start:
+        start = (today - timedelta(days=30)).isoformat()
+    try:
+        ptoken = resolve_page_token(token, page_id)
+        ig_id = get_ig_account(ptoken, page_id)
+        if not ig_id:
+            return {"error": "no IG account linked for " + domain}
+        raw = _get(f"/{ig_id}/insights", ptoken, {
+            "metric": "follows_and_unfollows", "period": "day",
+            "metric_type": "total_value", "since": start, "until": end,
+        })
+        return {"domain": domain, "ig_id": ig_id, "start": start, "end": end, "raw": raw}
+    except Exception as e:
+        return {"error": str(e)[:500]}
+
+
 @app.get("/api/social/diagnose")
 def social_diagnose(token: str = ""):
     """Check Meta token access against every domain's page — shows the exact
