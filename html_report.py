@@ -335,6 +335,45 @@ function getNote(section, month, key){
   return (STORE.notes || {})[`${section}|${month}|${key}`] || '';
 }
 
+/* ===== CUSTOM METRIC LABELS (rename) ===== */
+if(!STORE.labels) STORE.labels = {};
+function getLabel(orig){ return (STORE.labels || {})[orig] || orig; }
+function setLabel(orig, name){
+  if(!STORE.labels) STORE.labels = {};
+  if(name && name.trim() && name.trim()!==orig) STORE.labels[orig] = name.trim();
+  else delete STORE.labels[orig];
+  saveStore();
+}
+
+/* ===== GENERIC NOTES MODAL (Add Note at top of a section) ===== */
+function openNotesModal(title, entries, months){
+  if(!months.length){ alert('No months yet — add a month first.'); return; }
+  const monthOpts = months.map(m=>`<option value="${m}">${m}</option>`).join('');
+  const metricOpts = entries.map((e,i)=>`<option value="${i}">${e.label}</option>`).join('');
+  openModal('Notes · ' + title, 'Add or edit a note', `
+    <div class="field-group"><label class="field-label">Month</label>
+      <select class="field-select" id="note_month">${monthOpts}</select></div>
+    <div class="field-group"><label class="field-label">Metric</label>
+      <select class="field-select" id="note_metric">${metricOpts}</select></div>
+    <div class="field-group"><label class="field-label">Note (appears on hover over that value 📝)</label>
+      <textarea class="field-input" id="note_text" rows="3" placeholder="Type a comment for this metric…"></textarea></div>
+    <div style="font-size:0.68rem;color:var(--text-muted);">Leave blank and save to remove the note.</div>`,
+  'Save Note', ()=>{
+    const m = document.getElementById('note_month').value;
+    const e = entries[+document.getElementById('note_metric').value];
+    setNote(e.key, m, e.noteKey || e.label, document.getElementById('note_text').value.trim());
+    closeModal(); rerenderActive();
+  });
+  const load = ()=>{
+    const m = document.getElementById('note_month').value;
+    const e = entries[+document.getElementById('note_metric').value];
+    document.getElementById('note_text').value = getNote(e.key, m, e.noteKey || e.label);
+  };
+  document.getElementById('note_month').addEventListener('change', load);
+  document.getElementById('note_metric').addEventListener('change', load);
+  load();
+}
+
 /* ===== FORMATTERS ===== */
 const fmtINR = v => (v===null||v===undefined) ? null : '₹' + Math.round(v).toLocaleString('en-IN');
 const fmtNum = (v,d=0) => (v===null||v===undefined) ? null : Number(v).toLocaleString('en-IN',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -354,7 +393,9 @@ function cell(val, cls, noteText){
   if(val===null||val===undefined||val==='') return `<td${noteAttr} style="${hasNote?'cursor:help;border-bottom:2px dotted var(--status-info);':''}"><span style="color:var(--text-muted)">—</span>${hasNote?'<span class="note-dot">📝</span>':''}</td>`;
   return `<td${noteAttr} style="${hasNote?'cursor:help;border-bottom:2px dotted var(--status-info);':''}">${val}${hasNote?'<span class="note-dot">📝</span>':''}</td>`;
 }
-function nameCell(label){ return `<td class="name-cell">${label}</td>`; }
+function nameCell(label){
+  return `<td class="name-cell editable-name" data-orig="${String(label).replace(/"/g,'&quot;')}" title="Click to rename">${getLabel(label)}</td>`;
+}
 
 function momChip(delta, pct, direction, deltaFmt){
   if(delta===null||delta===undefined) return `<span class="chip chip-flat">—</span>`;
@@ -371,16 +412,18 @@ function momChip(delta, pct, direction, deltaFmt){
 }
 
 /* ===== SECTION ACTION BUTTONS ===== */
-function sectionActions(addLabel, onAdd, editLabel, onEdit){
+function sectionActions(addLabel, onAdd, editLabel, onEdit, notesLabel, onNotes){
   const w = document.createElement('div');
   w.className = 'pill-row';
   w.style.marginBottom = '0.75rem';
   let html = '';
   if(addLabel) html += `<button type="button" class="pill-add" id="__secAdd"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>${addLabel}</button>`;
   if(editLabel) html += `<button type="button" class="pill-add" id="__secEdit" style="background:rgba(14,165,233,0.08);color:#0EA5E9;border-color:#0EA5E9"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>${editLabel}</button>`;
+  if(notesLabel) html += `<button type="button" class="pill-add" id="__secNote" style="background:rgba(245,158,11,0.10);color:#B45309;border-color:#F59E0B">📝 ${notesLabel}</button>`;
   w.innerHTML = html;
   if(onAdd && w.querySelector('#__secAdd')) w.querySelector('#__secAdd').addEventListener('click', onAdd);
   if(onEdit && w.querySelector('#__secEdit')) w.querySelector('#__secEdit').addEventListener('click', onEdit);
+  if(onNotes && w.querySelector('#__secNote')) w.querySelector('#__secNote').addEventListener('click', onNotes);
   // give unique ids
   const uid = Math.random().toString(36).slice(2,8);
   w.querySelectorAll('[id^="__sec"]').forEach(b=>{ b.id = b.id + '_' + uid; });
@@ -508,6 +551,28 @@ document.addEventListener('click', function(e){
   inp.addEventListener('blur', ()=> commit(true));
 });
 
+// Click a metric name to rename it (applies wherever that metric appears)
+document.addEventListener('click', function(e){
+  const td = e.target.closest && e.target.closest('.editable-name');
+  if(!td || td.querySelector('input')) return;
+  const orig = td.getAttribute('data-orig');
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.value = getLabel(orig);
+  inp.style.cssText = 'width:100%;padding:2px 4px;border:1.5px solid #6366F1;border-radius:4px;font:inherit;';
+  td.textContent = ''; td.appendChild(inp); inp.focus(); inp.select();
+  let done = false;
+  const commit = (save)=>{
+    if(done) return; done = true;
+    if(save) setLabel(orig, inp.value);
+    rerenderActive();
+  };
+  inp.addEventListener('keydown', ev=>{
+    if(ev.key==='Enter'){ ev.preventDefault(); commit(true); }
+    else if(ev.key==='Escape'){ commit(false); }
+  });
+  inp.addEventListener('blur', ()=> commit(true));
+});
+
 /* ===== DYNAMIC TREND TABLE (with notes) ===== */
 function dynamicTrendTable(rows, months, unitDefault, fyLabel, fyType, labelHeader, noteSection){
   let head = `<tr><th class="name-cell">${labelHeader||'Metric'}</th><th>MoM Δ</th><th>MoM %</th>`;
@@ -566,7 +631,8 @@ function renderAds(){
 
   const el = document.getElementById('ads');
   el.innerHTML = `<div id="adsActions"></div><div id="adsBody"></div>`;
-  document.getElementById('adsActions').appendChild(sectionActions('Add Month', openAddAdsMonth, 'Edit Data', openEditAdsMonth));
+  const adsNoteEntries = ADS_CHANNELS.map(c=>({key:'ads_spend', label:c}));
+  document.getElementById('adsActions').appendChild(sectionActions('Add Month', openAddAdsMonth, 'Edit Data', openEditAdsMonth, 'Add Note', ()=>openNotesModal('Ads', adsNoteEntries, months)));
   document.getElementById('adsBody').innerHTML = `
     <h2 class="section-title"><span class="title-txt">💰 Monthly Spend by Channel (₹)</span></h2>
     ${dynamicTrendTable([...spendRows, spendTotal], months, 'inr', 'FY Total', 'sum', 'Channel', 'ads_spend')}
@@ -673,7 +739,9 @@ function renderSMM(){
   const el = document.getElementById('smm');
   el.innerHTML = `<div id="smmEntityPills"></div><div id="smmActions"></div><div id="smmBody"></div>`;
   document.getElementById('smmEntityPills').appendChild(entityPillRow(smmEntity, e=>{ smmEntity=e; renderSMM(); }));
-  document.getElementById('smmActions').appendChild(sectionActions('Add Month', ()=>openAddSMMMonth(smmEntity), 'Edit Data', ()=>openEditSMMMonth(smmEntity)));
+  const smmNoteEntries = [];
+  SMM_PLATFORMS.forEach(p=> metricDefs.forEach(m=> smmNoteEntries.push({key:'smm_'+smmEntity+'_'+p, label:p+' — '+m.label, noteKey:m.label})));
+  document.getElementById('smmActions').appendChild(sectionActions('Add Month', ()=>openAddSMMMonth(smmEntity), 'Edit Data', ()=>openEditSMMMonth(smmEntity), 'Add Note', ()=>openNotesModal('SMM · '+smmEntity, smmNoteEntries, months)));
   document.getElementById('smmBody').innerHTML = tablesHTML;
   initTooltips();
 }
@@ -787,9 +855,11 @@ function renderSEO(){
     <div id="seoSiteActions"></div>
     ${dynamicTrendTable(siteRows, siteMonths, 'num', 'FY Avg', 'avg', 'Metric', 'seo_site_'+seoSiteEntity)}
   `;
-  document.getElementById('contentActions').appendChild(sectionActions('Add Month (Content)', openAddContentMonth, 'Edit Content', openEditContentMonth));
+  const contentNoteEntries = CONTENT_TYPES.map(t=>({key:'seo_content', label:t}));
+  document.getElementById('contentActions').appendChild(sectionActions('Add Month (Content)', openAddContentMonth, 'Edit Content', openEditContentMonth, 'Add Note', ()=>openNotesModal('Content', contentNoteEntries, contentMonths)));
   document.getElementById('seoEntityPills').appendChild(entityPillRow(seoSiteEntity, e=>{ seoSiteEntity=e; renderSEO(); }));
-  document.getElementById('seoSiteActions').appendChild(sectionActions(`Add Month (${seoSiteEntity})`, ()=>openAddSiteMonth(seoSiteEntity), `Edit Site Data`, ()=>openEditSiteMonth(seoSiteEntity)));
+  const siteNoteEntries = SITE_METRICS.map(m=>({key:'seo_site_'+seoSiteEntity, label:m.label}));
+  document.getElementById('seoSiteActions').appendChild(sectionActions(`Add Month (${seoSiteEntity})`, ()=>openAddSiteMonth(seoSiteEntity), `Edit Site Data`, ()=>openEditSiteMonth(seoSiteEntity), 'Add Note', ()=>openNotesModal('Website · '+seoSiteEntity, siteNoteEntries, siteMonths)));
   initTooltips();
 }
 function openAddContentMonth(){
