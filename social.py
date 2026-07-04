@@ -309,14 +309,15 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str, fast: boo
                     follows = unfollows = 0
                     for bd in tv.get("breakdowns", []):
                         for r in bd.get("results", []):
-                            # Dimension values are like "FOLLOWS"/"UNFOLLOWS" or
-                            # "FOLLOWER"/"UNFOLLOWER" — match by substring, and
-                            # test UNFOLLOW first since it contains "FOLLOW".
+                            # Instagram returns follow_type = "FOLLOWER" (accounts
+                            # that followed = gains) and "NON_FOLLOWER" (accounts
+                            # that unfollowed = losses). Check NON_FOLLOWER/UNFOLLOW
+                            # first since both contain the substring "FOLLOW".
                             dims = " ".join(str(x).upper() for x in r.get("dimension_values", []))
                             v = r.get("value", 0)
-                            if "UNFOLLOW" in dims:
+                            if "NON_FOLLOWER" in dims or "UNFOLLOW" in dims:
                                 unfollows += v
-                            elif "FOLLOW" in dims:
+                            elif "FOLLOWER" in dims or "FOLLOW" in dims:
                                 follows += v
                     if follows or unfollows:
                         result["new_followers"] = follows - unfollows
