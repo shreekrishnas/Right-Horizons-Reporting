@@ -363,14 +363,26 @@ def ig_follows_debug(domain: str = "rh", start: str = "", end: str = ""):
         ig_id = get_ig_account(ptoken, page_id)
         if not ig_id:
             return {"error": "no IG account linked for " + domain}
-        raw = _get(f"/{ig_id}/insights", ptoken, {
-            "metric": "follows_and_unfollows", "period": "day",
-            "metric_type": "total_value", "breakdown": "follow_type",
-            "since": start, "until": end,
-        })
-        return {"domain": domain, "ig_id": ig_id, "start": start, "end": end, "raw": raw}
     except Exception as e:
         return {"error": str(e)[:500]}
+
+    variants = {
+        "v1_totalvalue_breakdown": {"metric": "follows_and_unfollows", "period": "day",
+                                     "metric_type": "total_value", "breakdown": "follow_type"},
+        "v2_totalvalue_only": {"metric": "follows_and_unfollows", "period": "day",
+                                "metric_type": "total_value"},
+        "v3_timeseries": {"metric": "follows_and_unfollows", "period": "day"},
+        "v4_reach_followtype": {"metric": "reach", "period": "day",
+                                 "metric_type": "total_value", "breakdown": "follow_type"},
+    }
+    out = {"domain": domain, "ig_id": ig_id, "start": start, "end": end, "variants": {}}
+    for name, p in variants.items():
+        p = dict(p); p["since"] = start; p["until"] = end
+        try:
+            out["variants"][name] = _get(f"/{ig_id}/insights", ptoken, p).get("data")
+        except Exception as e:
+            out["variants"][name] = {"error": str(e)[:300]}
+    return out
 
 
 @app.get("/api/social/diagnose")
