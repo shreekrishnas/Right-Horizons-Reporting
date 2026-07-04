@@ -293,11 +293,15 @@ def get_ig_comprehensive(token: str, ig_id: str, start: str, end: str, fast: boo
     result["new_followers"] = None
     for metric in _ig_metrics:
         try:
-            data = _get(f"/{ig_id}/insights", token, {
+            params = {
                 "metric": metric, "period": "day",
                 "metric_type": "total_value",
                 "since": start, "until": end,
-            })
+            }
+            # follows_and_unfollows needs the follow_type breakdown to return data
+            if metric == "follows_and_unfollows":
+                params["breakdown"] = "follow_type"
+            data = _get(f"/{ig_id}/insights", token, params)
             for item in data.get("data", []):
                 tv = item.get("total_value", {})
                 val = tv.get("value", 0)

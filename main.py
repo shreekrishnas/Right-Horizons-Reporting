@@ -365,7 +365,8 @@ def ig_follows_debug(domain: str = "rh", start: str = "", end: str = ""):
             return {"error": "no IG account linked for " + domain}
         raw = _get(f"/{ig_id}/insights", ptoken, {
             "metric": "follows_and_unfollows", "period": "day",
-            "metric_type": "total_value", "since": start, "until": end,
+            "metric_type": "total_value", "breakdown": "follow_type",
+            "since": start, "until": end,
         })
         return {"domain": domain, "ig_id": ig_id, "start": start, "end": end, "raw": raw}
     except Exception as e:
