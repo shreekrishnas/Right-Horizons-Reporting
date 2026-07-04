@@ -770,21 +770,28 @@ def export_report(domain: str = "rh", start: str = "", end: str = ""):
 # ── Meta Token Exchange ─────────────────────────────────────────────────
 
 @app.get("/api/meta/exchange-token")
-def meta_exchange_token(token: str = ""):
-    """Exchange a short-lived token for a 60-day long-lived token."""
+def meta_exchange_token(token: str = "", app_id: str = "", app_secret: str = ""):
+    """Exchange a short-lived token for a 60-day long-lived token.
+
+    The app_id/app_secret MUST belong to the same Facebook app that issued the
+    token. Pass ?app_id=&app_secret= to exchange a token from a different app
+    (e.g. the 'Righthorizons Pms' app for PMS/AIF); otherwise the env
+    META_APP_ID/SECRET (the RH app) are used."""
     if not token:
         raise HTTPException(400, "token parameter required")
-    if not META_APP_ID or not META_APP_SECRET:
-        raise HTTPException(400, "META_APP_ID and META_APP_SECRET must be set in environment variables")
+    cid = app_id or META_APP_ID
+    csecret = app_secret or META_APP_SECRET
+    if not cid or not csecret:
+        raise HTTPException(400, "app_id and app_secret required (either as params or META_APP_ID/SECRET env vars)")
     import requests
     resp = requests.get("https://graph.facebook.com/v21.0/oauth/access_token", params={
         "grant_type": "fb_exchange_token",
-        "client_id": META_APP_ID,
-        "client_secret": META_APP_SECRET,
+        "client_id": cid,
+        "client_secret": csecret,
         "fb_exchange_token": token,
     }, timeout=30)
     if not resp.ok:
-        raise HTTPException(502, f"Facebook error: {resp.text}")
+        raise HTTPException(502, f"Facebook error: {resp.text} — make sure app_id/app_secret match the app that issued the token")
     data = resp.json()
     long_token = data.get("access_token", "")
     expires_in = data.get("expires_in", 0)
