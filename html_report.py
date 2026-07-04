@@ -154,17 +154,21 @@ def _build_seed_store(all_monthly_data: dict, start: str, end: str) -> dict:
 
             yt = d.get('youtube') or {}
             if yt:
-                # YouTube: subscribers(total)->followers, subscribers_gained->newFollowers,
-                # videos->posts, in-period views->impressions, (likes+comments)/views->eng.
-                # views / new subs come from the Analytics API (true in-period);
-                # left as None (—) if Analytics scope isn't granted.
+                # YouTube: subscribers(total)->followers, NET subs (gained-lost)
+                # ->newFollowers to match YouTube Studio's headline subscriber
+                # change (and how IG net-followers works). videos->posts,
+                # in-period views->impressions, (likes+comments)/views->eng.
+                # From the Analytics API (true in-period); None (—) if no scope.
                 yt_views = yt.get('views')
                 yt_likes = yt.get('likes')
                 yt_comments = yt.get('comments')
                 yt_eng = ((yt_likes or 0) + (yt_comments or 0)) if (yt_likes is not None or yt_comments is not None) else None
+                yt_net = yt.get('net_subscribers')
+                if yt_net is None:
+                    yt_net = yt.get('subscribers_gained')
                 month_data['YouTube'] = {
                     'followers': yt.get('subscribers'),
-                    'newFollowers': yt.get('subscribers_gained'),
+                    'newFollowers': yt_net,
                     'posts': yt.get('videos_published'),
                     'impressions': yt_views,
                     'engagementRate': (yt_eng / yt_views) if (yt_eng is not None and yt_views) else None,
