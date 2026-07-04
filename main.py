@@ -615,6 +615,27 @@ def youtube_videos(limit: int = 10):
         raise HTTPException(502, f"YouTube error: {e}")
 
 
+@app.get("/api/youtube/analytics-test")
+def youtube_analytics_test():
+    """Confirm the token has the yt-analytics.readonly scope (needed for
+    accurate monthly views / new subscribers)."""
+    try:
+        creds = get_youtube_credentials()
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    end = _today_ist()
+    start = end - timedelta(days=30)
+    try:
+        data = youtube.get_analytics_summary(creds, start.isoformat(), end.isoformat())
+        return {"ok": True, "scope": "yt-analytics.readonly present ✓",
+                "last_30_days": data}
+    except Exception as e:
+        return {"ok": False,
+                "scope_error": str(e)[:400],
+                "hint": "If this mentions permission/scope/insufficient, the token lacks "
+                        "yt-analytics.readonly — re-run youtube_oauth.py and update YOUTUBE_REFRESH_TOKEN."}
+
+
 @app.post("/api/youtube/seo")
 def youtube_seo(payload: dict = Body(...)):
     topic = payload.get("topic", "").strip()
