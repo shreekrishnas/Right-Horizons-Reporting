@@ -154,16 +154,20 @@ def _build_seed_store(all_monthly_data: dict, start: str, end: str) -> dict:
 
             yt = d.get('youtube') or {}
             if yt:
-                # YouTube: subscribers->followers, videos->posts, views->impressions,
-                # (likes+comments)/views -> engagement rate
-                yt_views = yt.get('views') or 0
-                yt_eng = (yt.get('likes') or 0) + (yt.get('comments') or 0)
+                # YouTube: subscribers(total)->followers, subscribers_gained->newFollowers,
+                # videos->posts, in-period views->impressions, (likes+comments)/views->eng.
+                # views / new subs come from the Analytics API (true in-period);
+                # left as None (—) if Analytics scope isn't granted.
+                yt_views = yt.get('views')
+                yt_likes = yt.get('likes')
+                yt_comments = yt.get('comments')
+                yt_eng = ((yt_likes or 0) + (yt_comments or 0)) if (yt_likes is not None or yt_comments is not None) else None
                 month_data['YouTube'] = {
                     'followers': yt.get('subscribers'),
-                    'newFollowers': None,
+                    'newFollowers': yt.get('subscribers_gained'),
                     'posts': yt.get('videos_published'),
-                    'impressions': yt_views or None,
-                    'engagementRate': (yt_eng / yt_views) if yt_views else None,
+                    'impressions': yt_views,
+                    'engagementRate': (yt_eng / yt_views) if (yt_eng is not None and yt_views) else None,
                     'ctr': None,
                 }
 

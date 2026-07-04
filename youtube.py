@@ -10,6 +10,38 @@ def _service(creds: Credentials):
     return build("youtube", "v3", credentials=creds)
 
 
+def _analytics(creds: Credentials):
+    return build("youtubeAnalytics", "v2", credentials=creds)
+
+
+def get_analytics_summary(creds: Credentials, start: str, end: str) -> dict:
+    """TRUE per-period YouTube metrics via the Analytics API: views, subscribers
+    gained/lost, likes, comments, watch time — for the given date range only.
+    Requires the yt-analytics.readonly scope. Raises on failure so callers can
+    fall back."""
+    ya = _analytics(creds)
+    resp = ya.reports().query(
+        ids="channel==MINE",
+        startDate=start, endDate=end,
+        metrics="views,estimatedMinutesWatched,subscribersGained,subscribersLost,likes,comments,shares",
+    ).execute()
+    rows = resp.get("rows") or []
+    if not rows:
+        return {"views": 0, "watch_minutes": 0, "subscribers_gained": 0,
+                "subscribers_lost": 0, "likes": 0, "comments": 0, "shares": 0}
+    r = rows[0]
+    return {
+        "views": int(r[0]),
+        "watch_minutes": int(r[1]),
+        "subscribers_gained": int(r[2]),
+        "subscribers_lost": int(r[3]),
+        "net_subscribers": int(r[2]) - int(r[3]),
+        "likes": int(r[4]),
+        "comments": int(r[5]),
+        "shares": int(r[6]),
+    }
+
+
 def get_channel_stats(creds: Credentials) -> dict:
     yt = _service(creds)
     resp = yt.channels().list(mine=True, part="snippet,statistics").execute()
@@ -110,14 +142,36 @@ def get_videos_in_range(creds: Credentials, start: str, end: str, max_scan: int 
 
 
 def get_monthly_summary(creds: Credentials, start: str, end: str) -> dict:
-    """Aggregate YouTube activity for a date range: videos published + their stats."""
+    """Per-period YouTube metrics. Videos published come from the Data API
+    (accurate count). Views / new subscribers / engagement come from the
+    Analytics API (true in-period values). If Analytics isn't available
+    (scope not granted), in-period views/subscribers are left as None rather
+    than falling back to misleading cumulative video totals."""
     vids = get_videos_in_range(creds, start, end)
-    return {
+    out = {
         "videos_published": len(vids),
-        "views": sum(v["views"] for v in vids),
-        "likes": sum(v["likes"] for v in vids),
-        "comments": sum(v["comments"] for v in vids),
+        "views": None,
+        "subscribers_gained": None,
+        "net_subscribers": None,
+        "likes": None,
+        "comments": None,
+        "analytics_ok": False,
     }
+    try:
+        a = get_analytics_summary(creds, start, end)
+        out.update({
+            "views": a["views"],
+            "watch_minutes": a["watch_minutes"],
+            "subscribers_gained": a["subscribers_gained"],
+            "net_subscribers": a.get("net_subscribers"),
+            "likes": a["likes"],
+            "comments": a["comments"],
+            "analytics_ok": True,
+        })
+    except Exception as e:
+        log.debug("YouTube Analytics unavailable: %s", e)
+        out["analytics_error"] = str(e)[:200]
+    return out
 
 
 _SEO_SYSTEM = """You are the YouTube SEO strategist for Right Horizons (Indian SEBI-registered PMS & AIF firm).

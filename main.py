@@ -1041,6 +1041,10 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
                     yt = youtube.get_monthly_summary(yt_creds, m_start, m_end)
                     yt["subscribers"] = yt_subs
                     entity_data["youtube"] = yt
+                    if not yt.get("analytics_ok"):
+                        le("YouTube Analytics", Exception(
+                            "monthly views/new-subscribers need the yt-analytics.readonly "
+                            "scope — re-authorize the YouTube token to enable them"))
                 except Exception as e:
                     le("YouTube", e)
 
