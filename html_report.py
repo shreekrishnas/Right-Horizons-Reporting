@@ -345,32 +345,38 @@ function setLabel(orig, name){
   saveStore();
 }
 
-/* ===== GENERIC NOTES MODAL (Add Note at top of a section) ===== */
+/* ===== GENERIC NOTES MODAL — every metric listed with its own note field ===== */
 function openNotesModal(title, entries, months){
   if(!months.length){ alert('No months yet — add a month first.'); return; }
   const monthOpts = months.map(m=>`<option value="${m}">${m}</option>`).join('');
-  const metricOpts = entries.map((e,i)=>`<option value="${i}">${e.label}</option>`).join('');
-  openModal('Notes · ' + title, 'Add or edit a note', `
+  const rowsHTML = entries.map((e,i)=>`<tr>
+    <td class="mt-label">${e.label}</td>
+    <td><input type="text" class="note-inp" data-i="${i}" placeholder="add a note…"></td>
+  </tr>`).join('');
+  openModal('Notes · ' + title, 'Add a note to any metric (shows on hover 📝)', `
     <div class="field-group"><label class="field-label">Month</label>
       <select class="field-select" id="note_month">${monthOpts}</select></div>
-    <div class="field-group"><label class="field-label">Metric</label>
-      <select class="field-select" id="note_metric">${metricOpts}</select></div>
-    <div class="field-group"><label class="field-label">Note (appears on hover over that value 📝)</label>
-      <textarea class="field-input" id="note_text" rows="3" placeholder="Type a comment for this metric…"></textarea></div>
-    <div style="font-size:0.68rem;color:var(--text-muted);">Leave blank and save to remove the note.</div>`,
-  'Save Note', ()=>{
+    <div class="field-group"><label class="field-label">Notes — one per metric</label>
+      <div style="overflow-x:auto;max-height:52vh;overflow-y:auto;"><table class="mini-table">
+        <thead><tr><th style="width:45%">Metric</th><th>Note</th></tr></thead>
+        <tbody id="noteRows">${rowsHTML}</tbody></table></div></div>
+    <div style="font-size:0.68rem;color:var(--text-muted);">Fill any rows and Save. Clear a field to remove its note. Switch month to note a different month.</div>`,
+  'Save Notes', ()=>{
     const m = document.getElementById('note_month').value;
-    const e = entries[+document.getElementById('note_metric').value];
-    setNote(e.key, m, e.noteKey || e.label, document.getElementById('note_text').value.trim());
+    document.querySelectorAll('#noteRows .note-inp').forEach(inp=>{
+      const e = entries[+inp.dataset.i];
+      setNote(e.key, m, e.noteKey || e.label, inp.value.trim());
+    });
     closeModal(); rerenderActive();
   });
   const load = ()=>{
     const m = document.getElementById('note_month').value;
-    const e = entries[+document.getElementById('note_metric').value];
-    document.getElementById('note_text').value = getNote(e.key, m, e.noteKey || e.label);
+    document.querySelectorAll('#noteRows .note-inp').forEach(inp=>{
+      const e = entries[+inp.dataset.i];
+      inp.value = getNote(e.key, m, e.noteKey || e.label);
+    });
   };
   document.getElementById('note_month').addEventListener('change', load);
-  document.getElementById('note_metric').addEventListener('change', load);
   load();
 }
 

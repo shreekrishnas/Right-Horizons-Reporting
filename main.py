@@ -790,6 +790,7 @@ def meta_exchange_token(token: str = ""):
     expires_in = data.get("expires_in", 0)
 
     page_token = ""
+    all_pages = []
     if long_token:
         try:
             pr = requests.get(f"https://graph.facebook.com/v21.0/me/accounts", params={
@@ -798,19 +799,29 @@ def meta_exchange_token(token: str = ""):
             }, timeout=30)
             if pr.ok:
                 for page in pr.json().get("data", []):
+                    all_pages.append({
+                        "id": page.get("id"),
+                        "name": page.get("name"),
+                        "page_token": page.get("access_token", ""),
+                    })
                     if page["id"] == META_PAGE_ID:
                         page_token = page.get("access_token", "")
-                        break
         except Exception:
             pass
 
+    # Map pages to the env var they should be set as
+    env_map = {"296408333709162": "META_SOCIAL_TOKEN (RH)",
+               "117532164550609": "META_SOCIAL_TOKEN_PMS",
+               "1069286109601470": "META_SOCIAL_TOKEN_AIF"}
+    for p in all_pages:
+        p["set_as_env_var"] = env_map.get(p["id"], "(not a configured domain)")
+
     return {
         "long_lived_token": long_token,
-        "expires_in_seconds": expires_in,
         "expires_in_days": round(expires_in / 86400, 1) if expires_in else "unknown",
-        "page_token": page_token,
-        "page_token_note": "This page token never expires. Use it as META_SOCIAL_TOKEN." if page_token else "Could not get page token.",
-        "instructions": "Update these in Vercel: META_MARKETING_TOKEN = long_lived_token, META_SOCIAL_TOKEN = page_token (or long_lived_token if no page_token)",
+        "pages": all_pages,
+        "note": "Each page_token below NEVER expires (derived from a long-lived user token). "
+                "Copy each into the matching Vercel env var (see set_as_env_var), then redeploy.",
     }
 
 
