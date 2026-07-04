@@ -533,6 +533,7 @@ function rerenderActive(){
   if(id==='ads') renderAds();
   else if(id==='smm') renderSMM();
   else if(id==='seo') renderSEO();
+  else if(id==='dashboard') renderDashboard();
 }
 
 // One delegated handler for all editable cells
@@ -987,11 +988,145 @@ function initTooltips(){
   });
 }
 
+/* ===== DASHBOARD (graphical overview — reads STORE, reflects manual edits) ===== */
+function fmtCompact(v){
+  if(v===null||v===undefined) return '—';
+  const a = Math.abs(v);
+  if(a>=1e7) return (v/1e7).toFixed(2)+'Cr';
+  if(a>=1e5) return (v/1e5).toFixed(2)+'L';
+  if(a>=1e3) return (v/1e3).toFixed(1)+'k';
+  return Math.round(v).toLocaleString('en-IN');
+}
+function _adsTotals(){
+  return monthsWithData(STORE.ads).map(m=>{
+    let spend=0, leads=0;
+    ADS_CHANNELS.forEach(c=>{ const d=STORE.ads[m][c]; if(d){ spend+=(d.spend||0); leads+=(d.leads||0); } });
+    return {label:m, spend, leads, cpl: leads? spend/leads : null};
+  });
+}
+function _siteByMonth(key){
+  const months = STORE.monthOrder.filter(m=> SMM_ENTITIES.some(e=> STORE.seo.sites[e] && STORE.seo.sites[e][m]));
+  return months.map(m=>{
+    let sum=0, any=false;
+    SMM_ENTITIES.forEach(e=>{ const d = STORE.seo.sites[e] && STORE.seo.sites[e][m]; if(d && d[key]!=null){ sum+=d[key]; any=true; } });
+    return {label:m, value: any? sum : null};
+  });
+}
+function _entityShort(e){ return e.replace('Right Horizons','RH').trim() || 'RH'; }
+
+// ---- SVG chart primitives (theme-aware text via CSS vars; hover via <title>) ----
+function svgVBars(rows, color){
+  const vals = rows.map(r=> r.value==null?0:r.value);
+  const max = Math.max(...vals, 1);
+  const W=340,H=170,pad=22, n=rows.length||1, bw=(W-2*pad)/n;
+  let s='';
+  s += `<line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="var(--border-subtle)" stroke-width="1"/>`;
+  rows.forEach((r,i)=>{
+    const v = r.value==null?0:r.value;
+    const h = Math.max((v/max)*(H-2*pad), v>0?2:0);
+    const x = pad + i*bw + bw*0.18, w = bw*0.64, y = H-pad-h;
+    s += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${color}"><title>${r.label}: ${r.disp!=null?r.disp:v}</title></rect>`;
+    if(r.value!=null) s += `<text x="${(x+w/2).toFixed(1)}" y="${(y-4).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--text-secondary)">${r.disp!=null?r.disp:fmtCompact(v)}</text>`;
+    s += `<text x="${(x+w/2).toFixed(1)}" y="${(H-pad+13).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${r.label}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-height:180px">${s}</svg>`;
+}
+function svgLine(rows, color){
+  const W=340,H=170,pad=22,n=rows.length;
+  const nums = rows.map(r=>r.value).filter(v=>v!=null);
+  const max = Math.max(...nums,1), min = Math.min(...nums,0);
+  const xs = i=> n>1? pad + i*(W-2*pad)/(n-1) : W/2;
+  const ys = v=> H-pad - ((v-min)/((max-min)||1))*(H-2*pad);
+  let d='', area='', dots='', labels='', started=false;
+  rows.forEach((r,i)=>{
+    labels += `<text x="${xs(i).toFixed(1)}" y="${(H-pad+13).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${r.label}</text>`;
+    if(r.value==null) return;
+    const X=xs(i).toFixed(1), Y=ys(r.value).toFixed(1);
+    d += (started?'L':'M')+X+' '+Y+' ';
+    area += (started?'L':'M'+X+' '+(H-pad)+' L')+X+' '+Y+' ';
+    dots += `<circle cx="${X}" cy="${Y}" r="3" fill="${color}"><title>${r.label}: ${r.disp!=null?r.disp:r.value}</title></circle>`;
+    dots += `<text x="${X}" y="${(ys(r.value)-6).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="var(--text-secondary)">${r.disp!=null?r.disp:fmtCompact(r.value)}</text>`;
+    started=true;
+  });
+  if(started) area += 'L'+xs(rows.length-1).toFixed(1)+' '+(H-pad)+' Z';
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-height:180px"><line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="var(--border-subtle)"/><path d="${area}" fill="${color}" opacity="0.10"/><path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>${dots}${labels}</svg>`;
+}
+function svgHBars(rows){
+  const max = Math.max(...rows.map(r=>r.value==null?0:r.value),1);
+  const rowH=28, labelW=70, W=340, H=rows.length*rowH+6;
+  let s='';
+  rows.forEach((r,i)=>{
+    const v=r.value==null?0:r.value, w=Math.max((v/max)*(W-labelW-56), v>0?2:0), y=i*rowH+7;
+    s += `<text x="0" y="${y+11}" font-size="10" fill="var(--text-secondary)">${r.label}</text>`;
+    s += `<rect x="${labelW}" y="${y}" width="${w.toFixed(1)}" height="15" rx="3" fill="${r.color||'#7C3AED'}"><title>${r.label}: ${r.disp!=null?r.disp:v}</title></rect>`;
+    s += `<text x="${(labelW+w+5).toFixed(1)}" y="${y+11}" font-size="9" font-weight="700" fill="var(--text-secondary)">${r.value==null?'—':(r.disp!=null?r.disp:fmtCompact(v))}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%">${s}</svg>`;
+}
+function chartCard(title, sub, svg){
+  return `<div class="glass-card"><div style="font-size:0.82rem;font-weight:800;color:var(--text-primary)">${title}</div>`
+    + (sub?`<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:0.4rem">${sub}</div>`:'<div style="margin-bottom:0.4rem"></div>')
+    + svg + `</div>`;
+}
+function kpiTile(label, disp, delta, pct, direction, deltaFmt){
+  const chip = (delta===null||delta===undefined) ? '' : momChip(delta, pct, direction, deltaFmt);
+  return `<div class="glass-card" style="padding:0.9rem 1rem">
+    <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);font-weight:800">${label}</div>
+    <div style="font-size:1.45rem;font-weight:900;color:var(--text-primary);margin:0.15rem 0 0.3rem;letter-spacing:-0.02em">${disp}</div>
+    <div>${chip}</div></div>`;
+}
+
+function renderDashboard(){
+  const el = document.getElementById('dashboard');
+  if(!el) return;
+  const ads = _adsTotals();
+  const aL = ads[ads.length-1]||{}, aP = ads[ads.length-2]||{};
+  const dchip = (cur,prev)=>{ if(cur==null||prev==null) return [null,null]; return [cur-prev, prev? (cur-prev)/prev : null]; };
+
+  // KPIs (latest month vs previous)
+  const [dsp,psp]=dchip(aL.spend,aP.spend), [dld,pld]=dchip(aL.leads,aP.leads), [dcp,pcp]=dchip(aL.cpl,aP.cpl);
+  const sess=_siteByMonth('sessions'), org=_siteByMonth('organicTraffic');
+  const sL=sess[sess.length-1]||{}, sP=sess[sess.length-2]||{}, oL=org[org.length-1]||{}, oP=org[org.length-2]||{};
+  const [dse,pse]=dchip(sL.value,sP.value), [dor,por]=dchip(oL.value,oP.value);
+  const rhMonths = monthsWithData(STORE.smm['Right Horizons']||{});
+  const rhLast = rhMonths[rhMonths.length-1];
+  const ytSubs = rhLast && STORE.smm['Right Horizons'][rhLast]['YouTube'] ? STORE.smm['Right Horizons'][rhLast]['YouTube'].followers : null;
+
+  const kpis = [
+    kpiTile('Total Ad Spend', aL.spend!=null?fmtINR(aL.spend):'—', dsp, psp, null, dsp==null?null:fmtINR(Math.abs(dsp))),
+    kpiTile('Total Leads', aL.leads!=null?fmtCompact(aL.leads):'—', dld, pld, 'up', dld==null?null:fmtCompact(Math.abs(dld))),
+    kpiTile('Blended CPL', aL.cpl!=null?fmtINR(aL.cpl):'—', dcp, pcp, 'down', dcp==null?null:fmtINR(Math.abs(dcp))),
+    kpiTile('Website Sessions', sL.value!=null?fmtCompact(sL.value):'—', dse, pse, 'up', dse==null?null:fmtCompact(Math.abs(dse))),
+    kpiTile('Organic Traffic', oL.value!=null?fmtCompact(oL.value):'—', dor, por, 'up', dor==null?null:fmtCompact(Math.abs(dor))),
+    kpiTile('YouTube Subscribers', ytSubs!=null?fmtCompact(ytSubs):'—', null, null, 'up', null),
+  ].join('');
+
+  // Charts
+  const leadRows = ads.map(a=>({label:a.label, value:a.leads, disp:fmtCompact(a.leads)}));
+  const spendRows = ads.map(a=>({label:a.label, value:a.spend, disp:fmtCompact(a.spend)}));
+  const sessRows = sess.map(s=>({label:s.label, value:s.value, disp:s.value==null?'—':fmtCompact(s.value)}));
+  const entRows = SMM_ENTITIES.map(e=>{ const dd=STORE.seo.sites[e] && STORE.seo.sites[e][sL.label]; return {label:_entityShort(e), value: dd? dd.sessions : null, color:ENTITY_COLOR[e], disp: dd&&dd.sessions!=null?fmtCompact(dd.sessions):'—'}; });
+  const follRows = SMM_PLATFORMS.map((p,i)=>{ const d=rhLast && STORE.smm['Right Horizons'][rhLast][p]; return {label:p, value:d?d.followers:null, color:'#7C3AED', disp:d&&d.followers!=null?fmtCompact(d.followers):'—'}; });
+
+  el.innerHTML = `
+    <h2 class="section-title"><span class="title-txt">📊 Executive Overview</span></h2>
+    <div style="font-size:0.72rem;color:var(--text-muted);margin:-0.4rem 0 1rem">Top metrics across Ads, Website/SEO and Social — reflects your manual edits. Latest month vs previous.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.7rem;margin-bottom:1.4rem">${kpis}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem">
+      ${chartCard('Leads by Month','Total across all channels', svgVBars(leadRows, '#7C3AED'))}
+      ${chartCard('Ad Spend by Month','₹ total across all channels', svgVBars(spendRows, '#0EA5E9'))}
+      ${chartCard('Website Sessions Trend','All entities combined', svgLine(sessRows, '#10B981'))}
+      ${chartCard('Sessions by Entity','Latest month', svgHBars(entRows))}
+      ${chartCard('RH Followers by Platform','Latest month', svgHBars(follRows))}
+    </div>`;
+}
+
 /* ===== NAV / SHELL ===== */
 const ICONS = {
   ads:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>',
   smm:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.6l6.8-3.2M8.6 13.4l6.8 3.2"/></svg>',
   seo:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+  dashboard:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>',
 };
 const ENABLED_SECTIONS = __SECTIONS__;
 const ALL_PAGES = [
@@ -999,7 +1134,9 @@ const ALL_PAGES = [
   {id:'smm', label:'SMM', icon:ICONS.smm},
   {id:'seo', label:'Websites & SEO', icon:ICONS.seo},
 ];
-const PAGES = ALL_PAGES.filter(p => !ENABLED_SECTIONS || ENABLED_SECTIONS.includes(p.id));
+// Section tabs respect the export toggles; the Dashboard always shows last.
+const PAGES = ALL_PAGES.filter(p => !ENABLED_SECTIONS || ENABLED_SECTIONS.includes(p.id))
+  .concat([{id:'dashboard', label:'Dashboard', icon:ICONS.dashboard}]);
 function buildNav(){
   const nav = document.getElementById('navList');
   nav.innerHTML = PAGES.map(p=>`<div class="nav-item" data-page="${p.id}">${p.icon}<span>${p.label}</span></div>`).join('');
@@ -1010,6 +1147,8 @@ function showPage(id){
   document.getElementById(id).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.page===id));
   document.getElementById('pageTitle').textContent = PAGES.find(p=>p.id===id).label;
+  // Dashboard aggregates every section — rebuild on open so it reflects edits
+  if(id==='dashboard') renderDashboard();
 }
 function buildPages(){
   document.getElementById('appMain').innerHTML = PAGES.map(p=>`<div class="page" id="${p.id}"></div>`).join('');
@@ -1019,6 +1158,7 @@ function renderAll(){
   if(hasPage('ads')) renderAds();
   if(hasPage('smm')) renderSMM();
   if(hasPage('seo')) renderSEO();
+  if(hasPage('dashboard')) renderDashboard();
 }
 
 document.getElementById('themeToggle').addEventListener('click', ()=>{
