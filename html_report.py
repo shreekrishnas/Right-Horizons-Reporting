@@ -989,6 +989,8 @@ function initTooltips(){
 }
 
 /* ===== DASHBOARD (graphical overview — reads STORE, reflects manual edits) ===== */
+// Categorical palette (CVD-validated): purple, blue, green, amber, pink
+const HUES = ['#7C3AED','#0EA5E9','#10B981','#F59E0B','#EC4899'];
 function fmtCompact(v){
   if(v===null||v===undefined) return '—';
   const a = Math.abs(v);
@@ -1064,61 +1066,166 @@ function svgHBars(rows){
   return `<svg viewBox="0 0 ${W} ${H}" width="100%">${s}</svg>`;
 }
 function chartCard(title, sub, svg){
-  return `<div class="glass-card"><div style="font-size:0.82rem;font-weight:800;color:var(--text-primary)">${title}</div>`
-    + (sub?`<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:0.4rem">${sub}</div>`:'<div style="margin-bottom:0.4rem"></div>')
+  return `<div class="glass-card" style="padding:1.1rem 1.15rem"><div style="font-size:0.82rem;font-weight:800;color:var(--text-primary)">${title}</div>`
+    + (sub?`<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:0.5rem">${sub}</div>`:'<div style="margin-bottom:0.5rem"></div>')
     + svg + `</div>`;
 }
-function kpiTile(label, disp, delta, pct, direction, deltaFmt){
+// KPI tile with sparkline of its own trend
+function kpiTile(label, disp, delta, pct, direction, deltaFmt, sparkVals, color){
   const chip = (delta===null||delta===undefined) ? '' : momChip(delta, pct, direction, deltaFmt);
-  return `<div class="glass-card" style="padding:0.9rem 1rem">
-    <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);font-weight:800">${label}</div>
-    <div style="font-size:1.45rem;font-weight:900;color:var(--text-primary);margin:0.15rem 0 0.3rem;letter-spacing:-0.02em">${disp}</div>
-    <div>${chip}</div></div>`;
+  const spark = (sparkVals && sparkVals.filter(v=>v!=null).length>1) ? sparkline(sparkVals, color||'#7C3AED') : '';
+  return `<div class="glass-card" style="padding:0.85rem 1rem;position:relative;overflow:hidden">
+    <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);font-weight:800">${label}</div>
+    <div style="font-size:1.4rem;font-weight:900;color:var(--text-primary);margin:0.12rem 0 0.28rem;letter-spacing:-0.02em">${disp}</div>
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:0.5rem">
+      <div>${chip}</div>
+      <div style="width:70px;opacity:0.9">${spark}</div>
+    </div></div>`;
 }
+function sparkline(vals, color){
+  const nums = vals.filter(v=>v!=null);
+  if(nums.length<2) return '';
+  const max=Math.max(...nums), min=Math.min(...nums), W=70,H=26;
+  const xs=i=> vals.length>1? i*W/(vals.length-1):W/2;
+  const ys=v=> H-2 - ((v-min)/((max-min)||1))*(H-4);
+  let d='', started=false, lastX=0,lastY=0;
+  vals.forEach((v,i)=>{ if(v==null) return; const X=xs(i),Y=ys(v); d+=(started?'L':'M')+X.toFixed(1)+' '+Y.toFixed(1)+' '; lastX=X;lastY=Y; started=true; });
+  return `<svg viewBox="0 0 ${W} ${H}" width="70" height="26"><path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="2.4" fill="${color}"/></svg>`;
+}
+// Multi-series line chart with legend
+function svgMultiLine(series, fmt){
+  const labels = (series[0]&&series[0].rows)? series[0].rows.map(r=>r.label):[];
+  const all = series.flatMap(s=>s.rows.map(r=>r.value)).filter(v=>v!=null);
+  const max=Math.max(...all,1), min=Math.min(...all,0);
+  const W=360,H=180,pad=26,n=labels.length;
+  const xs=i=> n>1? pad+i*(W-2*pad)/(n-1):W/2;
+  const ys=v=> H-pad-((v-min)/((max-min)||1))*(H-2*pad);
+  let g='';
+  for(let k=0;k<=2;k++){ const y=(pad+k*(H-2*pad)/2).toFixed(1); g+=`<line x1="${pad}" y1="${y}" x2="${W-pad}" y2="${y}" stroke="var(--border-subtle)" stroke-width="1"/>`; }
+  series.forEach(s=>{
+    let d='',dots='',started=false;
+    s.rows.forEach((r,i)=>{ if(r.value==null) return; const X=xs(i).toFixed(1),Y=ys(r.value).toFixed(1); d+=(started?'L':'M')+X+' '+Y+' '; dots+=`<circle cx="${X}" cy="${Y}" r="2.6" fill="${s.color}"><title>${s.name} · ${r.label}: ${fmt?fmt(r.value):r.value}</title></circle>`; started=true; });
+    g+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round"/>${dots}`;
+  });
+  labels.forEach((l,i)=>{ g+=`<text x="${xs(i).toFixed(1)}" y="${H-pad+13}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${l}</text>`; });
+  const legend = series.map(s=>`<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:0.68rem;color:var(--text-secondary)"><span style="width:10px;height:3px;border-radius:2px;background:${s.color}"></span>${s.name}</span>`).join('');
+  return `<div style="margin-bottom:4px">${legend}</div><svg viewBox="0 0 ${W} ${H}" width="100%" style="max-height:190px">${g}</svg>`;
+}
+
+// ---- entity-scoped data (dashEntity = 'All' or an entity name) ----
+let dashEntity = 'All';
+function _scopeEntities(){ return dashEntity==='All' ? SMM_ENTITIES : [dashEntity]; }
+const _RATE_KEYS = ['organicCTR','avgKeywordPosition','bounceRate','mobileTrafficPct','avgSessionDuration','domainAuthority','pageLoadSpeed'];
+function _siteScoped(key){
+  const ents=_scopeEntities();
+  const months = STORE.monthOrder.filter(m=> ents.some(e=> STORE.seo.sites[e] && STORE.seo.sites[e][m]));
+  const rate=_RATE_KEYS.includes(key);
+  return months.map(m=>{
+    let sum=0,cnt=0,any=false;
+    ents.forEach(e=>{ const d=STORE.seo.sites[e]&&STORE.seo.sites[e][m]; if(d&&d[key]!=null){ sum+=d[key]; cnt++; any=true; } });
+    return {label:m, value: any? (rate? sum/cnt : sum) : null};
+  });
+}
+function _socialScoped(platform, key){
+  const ents=_scopeEntities();
+  const months = STORE.monthOrder.filter(m=> ents.some(e=> STORE.smm[e] && STORE.smm[e][m]));
+  const rate=['engagementRate','ctr'].includes(key);
+  return months.map(m=>{
+    let sum=0,cnt=0,any=false;
+    ents.forEach(e=>{ const d=STORE.smm[e]&&STORE.smm[e][m]&&STORE.smm[e][m][platform]; if(d&&d[key]!=null){ sum+=d[key]; cnt++; any=true; } });
+    return {label:m, value: any? (rate? sum/cnt : sum) : null};
+  });
+}
+function _lastNonNull(rows){ for(let i=rows.length-1;i>=0;i--){ if(rows[i] && rows[i].value!=null) return rows[i]; } return {}; }
+function _prevNonNull(rows){ let seen=0; for(let i=rows.length-1;i>=0;i--){ if(rows[i]&&rows[i].value!=null){ seen++; if(seen===2) return rows[i]; } } return {}; }
 
 function renderDashboard(){
   const el = document.getElementById('dashboard');
   if(!el) return;
-  const ads = _adsTotals();
-  const aL = ads[ads.length-1]||{}, aP = ads[ads.length-2]||{};
-  const dchip = (cur,prev)=>{ if(cur==null||prev==null) return [null,null]; return [cur-prev, prev? (cur-prev)/prev : null]; };
+  const dchip=(cur,prev)=>{ if(cur==null||prev==null) return [null,null]; return [cur-prev, prev?(cur-prev)/prev:null]; };
+  const adsOnly = (dashEntity==='All' || dashEntity==='Right Horizons'); // ads/YT are RH-scoped
 
-  // KPIs (latest month vs previous)
-  const [dsp,psp]=dchip(aL.spend,aP.spend), [dld,pld]=dchip(aL.leads,aP.leads), [dcp,pcp]=dchip(aL.cpl,aP.cpl);
-  const sess=_siteByMonth('sessions'), org=_siteByMonth('organicTraffic');
-  const sL=sess[sess.length-1]||{}, sP=sess[sess.length-2]||{}, oL=org[org.length-1]||{}, oP=org[org.length-2]||{};
-  const [dse,pse]=dchip(sL.value,sP.value), [dor,por]=dchip(oL.value,oP.value);
-  const rhMonths = monthsWithData(STORE.smm['Right Horizons']||{});
-  const rhLast = rhMonths[rhMonths.length-1];
-  const ytSubs = rhLast && STORE.smm['Right Horizons'][rhLast]['YouTube'] ? STORE.smm['Right Horizons'][rhLast]['YouTube'].followers : null;
+  // --- data series (entity-scoped) ---
+  const ads=_adsTotals(), aL=ads[ads.length-1]||{}, aP=ads[ads.length-2]||{};
+  const sess=_siteScoped('sessions'), org=_siteScoped('organicTraffic');
+  const impr=_siteScoped('organicImpressions'), ctr=_siteScoped('organicCTR');
+  const pos=_siteScoped('avgKeywordPosition'), bounce=_siteScoped('bounceRate'), mobile=_siteScoped('mobileTrafficPct');
+  const sL=_lastNonNull(sess), sP=_prevNonNull(sess), oL=_lastNonNull(org), oP=_prevNonNull(org);
+  const iL=_lastNonNull(impr), iP=_prevNonNull(impr), cL=_lastNonNull(ctr), cP=_prevNonNull(ctr);
+  const pL=_lastNonNull(pos), pP=_prevNonNull(pos);
 
-  const kpis = [
-    kpiTile('Total Ad Spend', aL.spend!=null?fmtINR(aL.spend):'—', dsp, psp, null, dsp==null?null:fmtINR(Math.abs(dsp))),
-    kpiTile('Total Leads', aL.leads!=null?fmtCompact(aL.leads):'—', dld, pld, 'up', dld==null?null:fmtCompact(Math.abs(dld))),
-    kpiTile('Blended CPL', aL.cpl!=null?fmtINR(aL.cpl):'—', dcp, pcp, 'down', dcp==null?null:fmtINR(Math.abs(dcp))),
-    kpiTile('Website Sessions', sL.value!=null?fmtCompact(sL.value):'—', dse, pse, 'up', dse==null?null:fmtCompact(Math.abs(dse))),
-    kpiTile('Organic Traffic', oL.value!=null?fmtCompact(oL.value):'—', dor, por, 'up', dor==null?null:fmtCompact(Math.abs(dor))),
-    kpiTile('YouTube Subscribers', ytSubs!=null?fmtCompact(ytSubs):'—', null, null, 'up', null),
+  // social (sum followers across platforms for scope; engagement avg on Instagram)
+  const igFoll=_socialScoped('Instagram','followers'), fbFoll=_socialScoped('Facebook','followers');
+  const totFollRows = igFoll.map((r,i)=>({label:r.label, value:(r.value||0)+((fbFoll[i]&&fbFoll[i].value)||0) || null}));
+  const tfL=_lastNonNull(totFollRows), tfP=_prevNonNull(totFollRows);
+
+  const [dsp,psp]=dchip(aL.spend,aP.spend),[dld,pld]=dchip(aL.leads,aP.leads),[dcp,pcp]=dchip(aL.cpl,aP.cpl);
+  const [dse,pse]=dchip(sL.value,sP.value),[dor,por]=dchip(oL.value,oP.value);
+  const [dim,pim]=dchip(iL.value,iP.value),[dct,pct2]=dchip(cL.value,cP.value),[dpo,ppo]=dchip(pL.value,pP.value);
+  const [dtf,ptf]=dchip(tfL.value,tfP.value);
+
+  const sV=sess.map(r=>r.value), oV=org.map(r=>r.value), iV=impr.map(r=>r.value), cV=ctr.map(r=>r.value), spV=ads.map(a=>a.spend), ldV=ads.map(a=>a.leads), tfV=totFollRows.map(r=>r.value);
+
+  const kpis=[
+    kpiTile('Website Sessions', sL.value!=null?fmtCompact(sL.value):'—', dse,pse,'up', dse==null?null:fmtCompact(Math.abs(dse)), sV, '#10B981'),
+    kpiTile('Organic Traffic', oL.value!=null?fmtCompact(oL.value):'—', dor,por,'up', dor==null?null:fmtCompact(Math.abs(dor)), oV, '#10B981'),
+    kpiTile('Organic Impressions', iL.value!=null?fmtCompact(iL.value):'—', dim,pim,'up', dim==null?null:fmtCompact(Math.abs(dim)), iV, '#0EA5E9'),
+    kpiTile('Organic CTR', cL.value!=null?(cL.value*100).toFixed(2)+'%':'—', dct,pct2,'up', dct==null?null:(Math.abs(dct)*100).toFixed(2)+'pp', cV, '#0EA5E9'),
+    kpiTile('Avg Keyword Position', pL.value!=null?pL.value.toFixed(1):'—', dpo,ppo,'down', dpo==null?null:Math.abs(dpo).toFixed(1), pos.map(r=>r.value), '#F59E0B'),
+    kpiTile('Ad Spend', adsOnly&&aL.spend!=null?fmtINR(aL.spend):'—', adsOnly?dsp:null,psp,null, dsp==null?null:fmtINR(Math.abs(dsp)), adsOnly?spV:null, '#7C3AED'),
+    kpiTile('Leads', adsOnly&&aL.leads!=null?fmtCompact(aL.leads):'—', adsOnly?dld:null,pld,'up', dld==null?null:fmtCompact(Math.abs(dld)), adsOnly?ldV:null, '#7C3AED'),
+    kpiTile('Social Followers', tfL.value!=null?fmtCompact(tfL.value):'—', dtf,ptf,'up', dtf==null?null:fmtCompact(Math.abs(dtf)), tfV, '#EC4899'),
   ].join('');
 
-  // Charts
-  const leadRows = ads.map(a=>({label:a.label, value:a.leads, disp:fmtCompact(a.leads)}));
-  const spendRows = ads.map(a=>({label:a.label, value:a.spend, disp:fmtCompact(a.spend)}));
-  const sessRows = sess.map(s=>({label:s.label, value:s.value, disp:s.value==null?'—':fmtCompact(s.value)}));
-  const entRows = SMM_ENTITIES.map(e=>{ const dd=STORE.seo.sites[e] && STORE.seo.sites[e][sL.label]; return {label:_entityShort(e), value: dd? dd.sessions : null, color:ENTITY_COLOR[e], disp: dd&&dd.sessions!=null?fmtCompact(dd.sessions):'—'}; });
-  const follRows = SMM_PLATFORMS.map((p,i)=>{ const d=rhLast && STORE.smm['Right Horizons'][rhLast][p]; return {label:p, value:d?d.followers:null, color:'#7C3AED', disp:d&&d.followers!=null?fmtCompact(d.followers):'—'}; });
+  // --- charts ---
+  const mkRows=(arr,fmt)=>arr.map(r=>({label:r.label, value:r.value, disp:r.value==null?'—':(fmt?fmt(r.value):fmtCompact(r.value))}));
+  const trafficLines = svgMultiLine([
+    {name:'Sessions', color:'#10B981', rows:sess},
+    {name:'Organic', color:'#0EA5E9', rows:org},
+  ], fmtCompact);
+  const searchLines = svgMultiLine([
+    {name:'Impressions', color:'#0EA5E9', rows:impr},
+  ], fmtCompact);
+  const ctrLine = svgLine(mkRows(ctr, v=>(v*100).toFixed(2)+'%'), '#F59E0B');
+
+  // spend by channel (top, latest month)
+  const lastAdMonth = ads.length? ads[ads.length-1].label : null;
+  let channelRows=[];
+  if(lastAdMonth){
+    channelRows = ADS_CHANNELS.map(c=>{ const d=STORE.ads[lastAdMonth][c]; return {label:c.replace(' / Organic Search','').slice(0,16), value:d?d.spend:0}; })
+      .filter(r=>r.value>0).sort((a,b)=>b.value-a.value).slice(0,6)
+      .map((r,i)=>({label:r.label, value:r.value, color:HUES[i%HUES.length], disp:fmtCompact(r.value)}));
+  }
+  // followers by platform (scope, latest)
+  const follByPlat = SMM_PLATFORMS.map((p,i)=>{ const rows=_socialScoped(p,'followers'); const last=_lastNonNull(rows); return {label:p, value:last.value!=null?last.value:null, color:HUES[i%HUES.length], disp:last.value!=null?fmtCompact(last.value):'—'}; });
+  // engagement rate by platform (scope, latest)
+  const engByPlat = SMM_PLATFORMS.map((p,i)=>{ const rows=_socialScoped(p,'engagementRate'); const last=_lastNonNull(rows); return {label:p, value:last.value!=null?last.value*100:null, color:'#EC4899', disp:last.value!=null?(last.value*100).toFixed(2)+'%':'—'}; });
+  // sessions by entity (only meaningful for All)
+  const entRows = SMM_ENTITIES.map(e=>{ const d=STORE.seo.sites[e]&&STORE.seo.sites[e][sL.label]; return {label:_entityShort(e), value:d?d.sessions:null, color:ENTITY_COLOR[e], disp:d&&d.sessions!=null?fmtCompact(d.sessions):'—'}; });
+
+  const pills = ['All','Right Horizons','Right Horizons PMS','Right Horizons AIF'].map(e=>{
+    const active=e===dashEntity, col = e==='All'?'#7C3AED':ENTITY_COLOR[e];
+    return `<button type="button" class="pill-btn ${active?'active':''}" style="color:${active?col:''}" data-dashent="${e}"><span class="dot" style="background:${col}"></span>${e==='All'?'All Domains':_entityShort(e)}</button>`;
+  }).join('');
 
   el.innerHTML = `
-    <h2 class="section-title"><span class="title-txt">📊 Executive Overview</span></h2>
-    <div style="font-size:0.72rem;color:var(--text-muted);margin:-0.4rem 0 1rem">Top metrics across Ads, Website/SEO and Social — reflects your manual edits. Latest month vs previous.</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.7rem;margin-bottom:1.4rem">${kpis}</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem">
-      ${chartCard('Leads by Month','Total across all channels', svgVBars(leadRows, '#7C3AED'))}
-      ${chartCard('Ad Spend by Month','₹ total across all channels', svgVBars(spendRows, '#0EA5E9'))}
-      ${chartCard('Website Sessions Trend','All entities combined', svgLine(sessRows, '#10B981'))}
-      ${chartCard('Sessions by Entity','Latest month', svgHBars(entRows))}
-      ${chartCard('RH Followers by Platform','Latest month', svgHBars(follRows))}
+    <h2 class="section-title"><span class="title-txt">📊 Executive Dashboard</span></h2>
+    <div style="font-size:0.72rem;color:var(--text-muted);margin:-0.4rem 0 0.8rem">Live view across every channel — updates instantly with your manual edits. Pick a domain to drill in.</div>
+    <div class="pill-row" id="dashPills">${pills}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:0.7rem;margin-bottom:1.4rem">${kpis}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:1rem">
+      ${chartCard('Traffic Trend','Sessions vs Organic — '+(dashEntity==='All'?'all domains':_entityShort(dashEntity)), trafficLines)}
+      ${chartCard('Search Impressions','Google Search Console', searchLines)}
+      ${chartCard('Organic CTR','Search click-through rate', ctrLine)}
+      ${chartCard('Ad Spend by Month', adsOnly?'₹ total across channels':'RH only', svgVBars(mkRows(ads.map(a=>({label:a.label,value:adsOnly?a.spend:null})), fmtCompact), '#7C3AED'))}
+      ${chartCard('Leads by Month', adsOnly?'Total across channels':'RH only', svgVBars(mkRows(ads.map(a=>({label:a.label,value:adsOnly?a.leads:null})), fmtCompact), '#0EA5E9'))}
+      ${chartCard('Top Spend by Channel','Latest month', channelRows.length?svgHBars(channelRows):'<div class="empty" style="font-size:0.72rem;color:var(--text-muted);padding:1rem 0">No channel spend yet.</div>')}
+      ${chartCard('Followers by Platform','Latest month', svgHBars(follByPlat))}
+      ${chartCard('Engagement Rate by Platform','Latest month', svgHBars(engByPlat))}
+      ${dashEntity==='All'? chartCard('Sessions by Domain','Latest month', svgHBars(entRows)) : ''}
     </div>`;
+
+  el.querySelectorAll('#dashPills .pill-btn').forEach(b=> b.addEventListener('click', ()=>{ dashEntity=b.dataset.dashent; renderDashboard(); }));
 }
 
 /* ===== NAV / SHELL ===== */
