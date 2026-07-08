@@ -1024,6 +1024,26 @@ def _chat_context(domain: str, start: str, end: str) -> dict:
             ctx["youtube"] = yt
         except Exception as e:
             ctx["youtube"] = {"error": str(e)[:200]}
+
+    # Content calendar (planned / AI-generated posts) for this domain, all months
+    try:
+        cal = {}
+        for k, items in _calendars.items():
+            dk, _, mon = k.partition(":")
+            if dk == domain and items:
+                cal[mon] = items
+        if cal:
+            ctx["content_calendar"] = cal
+    except Exception:
+        pass
+    # Ideas Lab history (generated content ideas) for this domain
+    try:
+        ideas = _ideas_history.get(f"ideas:{domain}") or _ideas_history.get(domain)
+        if ideas:
+            ctx["content_ideas"] = ideas[-40:]
+    except Exception:
+        pass
+
     import time as _t
     _chat_ctx_cache[ck] = (_t.time(), ctx)
     return ctx
@@ -1050,7 +1070,24 @@ def chat_endpoint(payload: dict = Body(...)):
     doms = ["rh", "pms", "aif", "akeana"] if domain in ("all", "") else [domain]
     context = {"period": {"start": start, "end": end}, "domains": {}}
     for dk in doms:
-        context["domains"][dk] = _chat_context(dk, start, end)
+        c = _chat_context(dk, start, end)
+        # Always attach the freshest content (not subject to the metrics cache)
+        try:
+            cal = {}
+            for k, items in _calendars.items():
+                d2, _, mon = k.partition(":")
+                if d2 == dk and items:
+                    cal[mon] = items
+            if cal:
+                c = dict(c); c["content_calendar"] = cal
+            ideas = _ideas_history.get(f"ideas:{dk}") or _ideas_history.get(dk)
+            if ideas:
+                if "content_calendar" not in c:
+                    c = dict(c)
+                c["content_ideas"] = ideas[-40:]
+        except Exception:
+            pass
+        context["domains"][dk] = c
 
     sys_prompt = (
         "You are the Right Horizons Reporting data assistant. You answer questions about digital "
@@ -1065,6 +1102,7 @@ def chat_endpoint(payload: dict = Body(...)):
         "6. For comparisons or 'variation' questions, compute differences ONLY from numbers present in the DATA and show the math.\n"
         "7. Be concise and specific. Use short bullet points or a tiny table. If the user asks for a comment/insight, give it but clearly grounded in the shown numbers.\n"
         "8. The reporting period is " + start + " to " + end + ". If asked about data outside this range, say it wasn't fetched.\n"
+        "9. CONTENT: 'content_calendar' holds the planned / AI-generated posts per month (titles, descriptions, dates, platforms), and 'content_ideas' holds generated content ideas. Use these to answer anything about content that is planned, generated, scheduled, or yet to be generated — list the actual titles/dates from the data. If a month has no calendar entry, say no content has been generated for it yet.\n"
     )
     hist_txt = ""
     for h in history[-6:]:
