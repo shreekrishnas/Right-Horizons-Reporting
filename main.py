@@ -944,6 +944,141 @@ def reports_generate(period: str = "weekly", domain: str = "rh", start: str = ""
     return out
 
 
+_chat_ctx_cache: dict = {}  # (domain,start,end) -> (ts, data)
+
+def _chat_context(domain: str, start: str, end: str) -> dict:
+    """Gather everything available for one domain in the range — the ground
+    truth the assistant must answer from. Errors are captured, not hidden.
+    Cached ~5 min so follow-up questions don't re-hit every API."""
+    import time as _t
+    ck = (domain, start, end)
+    hit = _chat_ctx_cache.get(ck)
+    if hit and (_t.time() - hit[0]) < 300:
+        return hit[1]
+    d = DOMAINS.get(domain)
+    if not d:
+        return {"domain": domain, "error": "unknown domain"}
+    ctx = {"domain": domain, "label": d["label"], "start": start, "end": end}
+    try:
+        creds = get_credentials()
+    except Exception as e:
+        creds = None
+        ctx["google_auth_error"] = str(e)[:200]
+    if creds:
+        try:
+            g = gsc.get_summary(creds, d["gsc_site"], start, end)
+            g["top_queries"] = gsc.get_top_queries(creds, d["gsc_site"], start, end, 30)
+            g["top_pages"] = gsc.get_top_pages(creds, d["gsc_site"], start, end, 15)
+            ctx["search_console"] = g
+        except Exception as e:
+            ctx["search_console"] = {"error": str(e)[:200]}
+        prop = d.get("ga4_property")
+        if prop:
+            try:
+                a = ga4.get_summary(creds, prop, start, end)
+                try: a["organic"] = ga4.get_organic_summary(creds, prop, start, end)
+                except Exception: pass
+                try: a["traffic_sources"] = ga4.get_traffic_sources(creds, prop, start, end)
+                except Exception: pass
+                try: a["top_pages"] = ga4.get_top_pages(creds, prop, start, end, 15)
+                except Exception: pass
+                try: a["landing_pages"] = ga4.get_landing_pages(creds, prop, start, end, 12)
+                except Exception: pass
+                try: a["devices"] = ga4.get_device_breakdown(creds, prop, start, end)
+                except Exception: pass
+                try: a["cities"] = ga4.get_city_breakdown(creds, prop, start, end, 12)
+                except Exception: pass
+                try: a["age"] = ga4.get_age_breakdown(creds, prop, start, end)
+                except Exception: pass
+                ctx["analytics_ga4"] = a
+            except Exception as e:
+                ctx["analytics_ga4"] = {"error": str(e)[:200]}
+    ad = d.get("meta_ad_account", "")
+    if META_MARKETING_TOKEN and ad and not d.get("meta_manual"):
+        try:
+            ctx["meta_ads"] = meta.get_account_summary(META_MARKETING_TOKEN, ad, start, end)
+        except Exception as e:
+            ctx["meta_ads"] = {"error": str(e)[:200]}
+    t, pid = _meta_creds(domain)
+    if t and pid:
+        try:
+            pt = social.resolve_page_token(t, pid)
+            try:
+                ctx["facebook"] = social.get_fb_comprehensive(pt, pid, start, end)
+            except Exception as e:
+                ctx["facebook"] = {"error": str(e)[:200]}
+            try:
+                ig = social.get_ig_account(pt, pid)
+                if ig:
+                    ctx["instagram"] = social.get_ig_comprehensive(pt, ig, start, end, fast=True)
+            except Exception as e:
+                ctx["instagram"] = {"error": str(e)[:200]}
+        except Exception as e:
+            ctx["meta_page_error"] = str(e)[:200]
+    if domain == "rh" and YOUTUBE_REFRESH_TOKEN:
+        try:
+            yc = get_youtube_credentials()
+            yt = youtube.get_monthly_summary(yc, start, end)
+            try: yt["channel_total"] = youtube.get_channel_stats(yc)
+            except Exception: pass
+            ctx["youtube"] = yt
+        except Exception as e:
+            ctx["youtube"] = {"error": str(e)[:200]}
+    import time as _t
+    _chat_ctx_cache[ck] = (_t.time(), ctx)
+    return ctx
+
+
+@app.post("/api/chat")
+def chat_endpoint(payload: dict = Body(...)):
+    """Grounded data assistant — answers ONLY from live fetched data."""
+    import ai as _ai
+    import json as _json
+    question = (payload.get("question") or "").strip()
+    if not question:
+        raise HTTPException(400, "question required")
+    domain = (payload.get("domain") or "rh").lower()
+    start = payload.get("start") or ""
+    end = payload.get("end") or ""
+    history = payload.get("history") or []
+    today = _today_ist()
+    if not end:
+        end = today.isoformat()
+    if not start:
+        start = (today - timedelta(days=29)).isoformat()
+
+    doms = ["rh", "pms", "aif", "akeana"] if domain in ("all", "") else [domain]
+    context = {"period": {"start": start, "end": end}, "domains": {}}
+    for dk in doms:
+        context["domains"][dk] = _chat_context(dk, start, end)
+
+    sys_prompt = (
+        "You are the Right Horizons Reporting data assistant. You answer questions about digital "
+        "marketing performance for Right Horizons (RH), Right Horizons PMS, Right Horizons AIF and Akeana.\n\n"
+        "ABSOLUTE RULES:\n"
+        "1. Answer ONLY using the DATA JSON provided below. Every number you state must come directly from it.\n"
+        "2. NEVER invent, estimate, extrapolate or assume a figure. If a value is not in the DATA, say plainly: "
+        "\"That isn't available in the fetched data for this domain/period.\"\n"
+        "3. If a source returned an \"error\", tell the user that source failed and show the error — don't guess around it.\n"
+        "4. Cite the source for figures in parentheses: (Search Console), (GA4), (Meta Ads), (Facebook), (Instagram), (YouTube).\n"
+        "5. All currency is ₹ (INR). Percentages: CTR/engagement are fractions in the data (0.53 = 0.53%). Bounce rate/mobile% are already percents.\n"
+        "6. For comparisons or 'variation' questions, compute differences ONLY from numbers present in the DATA and show the math.\n"
+        "7. Be concise and specific. Use short bullet points or a tiny table. If the user asks for a comment/insight, give it but clearly grounded in the shown numbers.\n"
+        "8. The reporting period is " + start + " to " + end + ". If asked about data outside this range, say it wasn't fetched.\n"
+    )
+    hist_txt = ""
+    for h in history[-6:]:
+        role = "User" if h.get("role") == "user" else "Assistant"
+        hist_txt += f"{role}: {h.get('content','')}\n"
+    data_json = _json.dumps(context, default=str)[:60000]
+    user_msg = (hist_txt + "\nQUESTION: " + question + "\n\nDATA (the only source of truth):\n" + data_json)
+    try:
+        answer = _ai.chat(sys_prompt, user_msg, max_tokens=1400, temperature=0.15)
+    except Exception as e:
+        raise HTTPException(502, f"AI error: {e}")
+    return {"answer": answer, "domains_covered": doms, "period": {"start": start, "end": end}}
+
+
 @app.get("/api/reports/export")
 def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", end: str = "", format: str = "excel", mode: str = "client", purpose: str = "client", sections: str = ""):
     today = _today_ist()

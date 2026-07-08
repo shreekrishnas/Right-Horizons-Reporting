@@ -1122,6 +1122,70 @@
 </div>
 </div>
 
+<!-- ═══ AI Data Assistant (bottom-right) ═══ -->
+<div id="rh-chat">
+  <button id="rh-chat-fab" onclick="toggleChat()" title="Ask the data assistant" aria-label="Open data assistant">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  </button>
+  <div id="rh-chat-panel" style="display:none">
+    <div class="rh-chat-head">
+      <div>
+        <div class="rh-chat-title">Data Assistant</div>
+        <div class="rh-chat-sub" id="rh-chat-scope">Grounded in live data · nothing assumed</div>
+      </div>
+      <button class="rh-chat-x" onclick="toggleChat()" aria-label="Close">✕</button>
+    </div>
+    <div id="rh-chat-body" class="rh-chat-body">
+      <div class="rh-chat-msg bot">Hi! Ask me anything about your marketing data — traffic, keywords, ad spend, leads, social, YouTube. I only answer from the live fetched data for the selected domain and date range, with sources. Try:
+        <div class="rh-chat-chips">
+          <span onclick="chatAsk(this.textContent)">Top 5 keywords by clicks</span>
+          <span onclick="chatAsk(this.textContent)">What changed vs last period?</span>
+          <span onclick="chatAsk(this.textContent)">Blended CPL and total leads</span>
+          <span onclick="chatAsk(this.textContent)">Instagram engagement & new followers</span>
+        </div>
+      </div>
+    </div>
+    <div class="rh-chat-input">
+      <input id="rh-chat-text" type="text" placeholder="Ask about the data…" onkeydown="if(event.key==='Enter')chatSend()" autocomplete="off">
+      <button onclick="chatSend()" id="rh-chat-send" aria-label="Send">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+<style>
+#rh-chat-fab{position:fixed;right:22px;bottom:22px;width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;
+  background:linear-gradient(135deg,#6366F1,#7C3AED);color:#fff;box-shadow:0 12px 30px rgba(124,58,237,.42);z-index:9998;
+  display:flex;align-items:center;justify-content:center;transition:transform .15s}
+#rh-chat-fab:hover{transform:scale(1.07)}
+#rh-chat-panel{position:fixed;right:22px;bottom:92px;width:390px;max-width:calc(100vw - 32px);height:560px;max-height:calc(100vh - 130px);
+  background:var(--card,#fff);border:1px solid var(--line,#e5e7eb);border-radius:20px;box-shadow:0 30px 70px rgba(15,23,42,.28);
+  z-index:9999;display:flex;flex-direction:column;overflow:hidden}
+.rh-chat-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;
+  background:linear-gradient(135deg,#0f2b46,#4f46e5 70%,#7c3aed);color:#fff}
+.rh-chat-title{font-weight:800;font-size:15px}
+.rh-chat-sub{font-size:11px;opacity:.82;margin-top:2px}
+.rh-chat-x{background:rgba(255,255,255,.16);border:none;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer}
+.rh-chat-body{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--soft,#f6f8fb)}
+.rh-chat-msg{font-size:13px;line-height:1.5;padding:10px 13px;border-radius:14px;max-width:88%;white-space:pre-wrap;word-wrap:break-word}
+.rh-chat-msg.bot{background:#fff;border:1px solid var(--line,#e5e7eb);color:var(--ink,#172033);align-self:flex-start;border-bottom-left-radius:4px}
+.rh-chat-msg.user{background:#4f46e5;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.rh-chat-msg.bot table{border-collapse:collapse;margin:6px 0;font-size:12px}
+.rh-chat-msg.bot td,.rh-chat-msg.bot th{border:1px solid #e5e7eb;padding:3px 7px}
+.rh-chat-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.rh-chat-chips span{font-size:11px;background:#eef2ff;color:#4338ca;padding:5px 9px;border-radius:999px;cursor:pointer;font-weight:600}
+.rh-chat-chips span:hover{background:#e0e7ff}
+.rh-chat-input{display:flex;gap:8px;padding:11px;border-top:1px solid var(--line,#e5e7eb);background:var(--card,#fff)}
+.rh-chat-input input{flex:1;border:1.5px solid var(--line,#e5e7eb);border-radius:12px;padding:10px 12px;font-size:13px;font-family:inherit;outline:none;background:var(--card,#fff);color:var(--ink,#172033)}
+.rh-chat-input input:focus{border-color:#6366F1}
+#rh-chat-send{border:none;background:#4f46e5;color:#fff;width:42px;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#rh-chat-send:disabled{opacity:.5;cursor:default}
+.rh-typing{display:inline-flex;gap:3px}.rh-typing i{width:6px;height:6px;border-radius:50%;background:#94a3b8;animation:rhb 1s infinite}
+.rh-typing i:nth-child(2){animation-delay:.15s}.rh-typing i:nth-child(3){animation-delay:.3s}
+@keyframes rhb{0%,60%,100%{opacity:.3}30%{opacity:1}}
+@media(max-width:480px){#rh-chat-panel{right:8px;bottom:84px}}
+</style>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="/static/app.js"></script>

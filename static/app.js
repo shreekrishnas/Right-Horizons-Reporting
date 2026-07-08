@@ -3028,3 +3028,94 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     loadAll();
 });
+
+// ═══════════════════ AI Data Assistant ═══════════════════
+let _chatHistory = [];
+let _chatBusy = false;
+
+function toggleChat() {
+    const panel = document.getElementById('rh-chat-panel');
+    if (!panel) return;
+    const open = panel.style.display !== 'none';
+    panel.style.display = open ? 'none' : 'flex';
+    if (!open) {
+        const scope = document.getElementById('rh-chat-scope');
+        const dom = (typeof _repDomain === 'function' && document.getElementById('rep-domain')) ? _repDomain() : (currentDomain || 'rh');
+        if (scope) scope.textContent = `${(domains[dom] && domains[dom].label) || dom} · ${dateStart || '—'} to ${dateEnd || '—'}`;
+        const t = document.getElementById('rh-chat-text'); if (t) t.focus();
+    }
+}
+
+function _chatAppend(role, html) {
+    const body = document.getElementById('rh-chat-body');
+    const div = document.createElement('div');
+    div.className = 'rh-chat-msg ' + (role === 'user' ? 'user' : 'bot');
+    div.innerHTML = html;
+    body.appendChild(div);
+    body.scrollTop = body.scrollHeight;
+    return div;
+}
+
+// minimal, safe markdown → html (bold, bullets, tables, line breaks)
+function _chatMd(t) {
+    let s = (t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // tables (pipe)
+    s = s.replace(/(^\|.+\|\s*$\n?)+/gm, block => {
+        const rows = block.trim().split('\n').filter(r => r.trim());
+        let html = '<table>';
+        rows.forEach((r, i) => {
+            if (/^\|[\s:\-|]+\|$/.test(r)) return;
+            const cells = r.split('|').slice(1, -1);
+            html += '<tr>' + cells.map(c => `<${i === 0 ? 'th' : 'td'}>${c.trim()}</${i === 0 ? 'th' : 'td'}>`).join('') + '</tr>';
+        });
+        return html + '</table>';
+    });
+    s = s.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    s = s.replace(/^[\-\*] (.+)$/gm, '• $1');
+    s = s.replace(/\n/g, '<br>');
+    return s;
+}
+
+function chatAsk(q) {
+    const t = document.getElementById('rh-chat-text');
+    if (t) t.value = q;
+    chatSend();
+}
+
+async function chatSend() {
+    if (_chatBusy) return;
+    const input = document.getElementById('rh-chat-text');
+    const q = (input.value || '').trim();
+    if (!q) return;
+    input.value = '';
+    _chatAppend('user', _chatMd(q));
+    _chatHistory.push({ role: 'user', content: q });
+
+    _chatBusy = true;
+    document.getElementById('rh-chat-send').disabled = true;
+    const typing = _chatAppend('bot', '<span class="rh-typing"><i></i><i></i><i></i></span>');
+
+    const dom = (typeof _repDomain === 'function' && document.getElementById('rep-domain')) ? _repDomain() : (currentDomain || 'rh');
+    try {
+        const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question: q, domain: dom, start: dateStart, end: dateEnd, history: _chatHistory.slice(0, -1) })
+        });
+        const data = await res.json();
+        typing.remove();
+        if (!res.ok) {
+            _chatAppend('bot', '⚠ ' + _chatMd(data.detail || 'Something went wrong.'));
+        } else {
+            _chatAppend('bot', _chatMd(data.answer));
+            _chatHistory.push({ role: 'assistant', content: data.answer });
+        }
+    } catch (e) {
+        typing.remove();
+        _chatAppend('bot', '⚠ Network error: ' + e.message);
+    } finally {
+        _chatBusy = false;
+        document.getElementById('rh-chat-send').disabled = false;
+        input.focus();
+    }
+}
