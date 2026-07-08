@@ -944,84 +944,132 @@ def reports_generate(period: str = "weekly", domain: str = "rh", start: str = ""
     return out
 
 
-_chat_ctx_cache: dict = {}  # (domain,start,end) -> (ts, data)
+_chat_ctx_cache: dict = {}  # (domain, day, deep) -> (ts, data)
 
-def _chat_context(domain: str, start: str, end: str) -> dict:
-    """Gather everything available for one domain in the range — the ground
-    truth the assistant must answer from. Errors are captured, not hidden.
-    Cached ~5 min so follow-up questions don't re-hit every API."""
+def _chat_context(domain: str, start: str = "", end: str = "", deep: bool = True) -> dict:
+    """Full time-flexible snapshot for one domain — NOT limited to the selected
+    range. Provides standard windows (this week, last week, this month, last
+    month, last 90 days) plus daily series, so the assistant can answer any
+    period question and compute week/month comparisons itself. Errors captured,
+    not hidden. Cached ~10 min."""
     import time as _t
-    ck = (domain, start, end)
-    hit = _chat_ctx_cache.get(ck)
-    if hit and (_t.time() - hit[0]) < 300:
-        return hit[1]
     d = DOMAINS.get(domain)
     if not d:
         return {"domain": domain, "error": "unknown domain"}
-    ctx = {"domain": domain, "label": d["label"], "start": start, "end": end}
+    today = _today_ist()
+    ck = (domain, today.isoformat(), deep)
+    hit = _chat_ctx_cache.get(ck)
+    if hit and (_t.time() - hit[0]) < 600:
+        return hit[1]
+
+    def _r(days_back_start, days_back_end):
+        return ((today - timedelta(days=days_back_start)).isoformat(),
+                (today - timedelta(days=days_back_end)).isoformat())
+    WIN = {
+        "last_7_days": _r(6, 0),
+        "previous_7_days": _r(13, 7),
+        "last_30_days": _r(29, 0),
+        "previous_30_days": _r(59, 30),
+    }
+    if deep:
+        WIN["last_90_days"] = _r(89, 0)
+    w90s, w90e = _r(89, 0)
+    m30s, m30e = WIN["last_30_days"]
+
+    ctx = {"domain": domain, "label": d["label"], "as_of": today.isoformat(),
+           "note": "All windows are relative to as_of (today). Not tied to the app's selected range.",
+           "windows": {k: {"start": v[0], "end": v[1]} for k, v in WIN.items()}}
     try:
         creds = get_credentials()
     except Exception as e:
         creds = None
         ctx["google_auth_error"] = str(e)[:200]
+
     if creds:
+        # Search Console — per-window summary + daily + top queries/pages
         try:
-            g = gsc.get_summary(creds, d["gsc_site"], start, end)
-            g["top_queries"] = gsc.get_top_queries(creds, d["gsc_site"], start, end, 30)
-            g["top_pages"] = gsc.get_top_pages(creds, d["gsc_site"], start, end, 15)
-            ctx["search_console"] = g
+            sc = {"by_window": {}}
+            for name, (s, e) in WIN.items():
+                try: sc["by_window"][name] = gsc.get_summary(creds, d["gsc_site"], s, e)
+                except Exception as ex: sc["by_window"][name] = {"error": str(ex)[:120]}
+            try: sc["top_queries_90d"] = gsc.get_top_queries(creds, d["gsc_site"], w90s, w90e, 30)
+            except Exception: pass
+            try: sc["top_pages_90d"] = gsc.get_top_pages(creds, d["gsc_site"], w90s, w90e, 15)
+            except Exception: pass
+            if deep:
+                try: sc["daily_90d"] = gsc.get_daily(creds, d["gsc_site"], w90s, w90e)
+                except Exception: pass
+            ctx["search_console"] = sc
         except Exception as e:
             ctx["search_console"] = {"error": str(e)[:200]}
+        # GA4 — per-window summary + extras for last 30d + daily
         prop = d.get("ga4_property")
         if prop:
             try:
-                a = ga4.get_summary(creds, prop, start, end)
-                try: a["organic"] = ga4.get_organic_summary(creds, prop, start, end)
+                a = {"by_window": {}}
+                for name, (s, e) in WIN.items():
+                    try: a["by_window"][name] = ga4.get_summary(creds, prop, s, e)
+                    except Exception as ex: a["by_window"][name] = {"error": str(ex)[:120]}
+                try: a["organic_30d"] = ga4.get_organic_summary(creds, prop, m30s, m30e)
                 except Exception: pass
-                try: a["traffic_sources"] = ga4.get_traffic_sources(creds, prop, start, end)
+                try: a["traffic_sources_30d"] = ga4.get_traffic_sources(creds, prop, m30s, m30e)
                 except Exception: pass
-                try: a["top_pages"] = ga4.get_top_pages(creds, prop, start, end, 15)
+                try: a["top_pages_30d"] = ga4.get_top_pages(creds, prop, m30s, m30e, 15)
                 except Exception: pass
-                try: a["landing_pages"] = ga4.get_landing_pages(creds, prop, start, end, 12)
+                try: a["devices_30d"] = ga4.get_device_breakdown(creds, prop, m30s, m30e)
                 except Exception: pass
-                try: a["devices"] = ga4.get_device_breakdown(creds, prop, start, end)
+                try: a["cities_30d"] = ga4.get_city_breakdown(creds, prop, m30s, m30e, 12)
                 except Exception: pass
-                try: a["cities"] = ga4.get_city_breakdown(creds, prop, start, end, 12)
-                except Exception: pass
-                try: a["age"] = ga4.get_age_breakdown(creds, prop, start, end)
-                except Exception: pass
+                if deep:
+                    try: a["daily_90d"] = ga4.get_daily(creds, prop, w90s, w90e)
+                    except Exception: pass
                 ctx["analytics_ga4"] = a
             except Exception as e:
                 ctx["analytics_ga4"] = {"error": str(e)[:200]}
+
+    # Meta Ads — per-window account summary
     ad = d.get("meta_ad_account", "")
     if META_MARKETING_TOKEN and ad and not d.get("meta_manual"):
-        try:
-            ctx["meta_ads"] = meta.get_account_summary(META_MARKETING_TOKEN, ad, start, end)
-        except Exception as e:
-            ctx["meta_ads"] = {"error": str(e)[:200]}
+        adw = {}
+        for name, (s, e) in WIN.items():
+            try: adw[name] = meta.get_account_summary(META_MARKETING_TOKEN, ad, s, e)
+            except Exception as ex: adw[name] = {"error": str(ex)[:120]}
+        ctx["meta_ads_by_window"] = adw
+
+    # Social — light per-window snapshots (fast, batched)
     t, pid = _meta_creds(domain)
     if t and pid:
         try:
             pt = social.resolve_page_token(t, pid)
-            try:
-                ctx["facebook"] = social.get_fb_comprehensive(pt, pid, start, end)
-            except Exception as e:
-                ctx["facebook"] = {"error": str(e)[:200]}
-            try:
-                ig = social.get_ig_account(pt, pid)
+            ig = None
+            try: ig = social.get_ig_account(pt, pid)
+            except Exception: pass
+            social_windows = list(WIN.keys()) if deep else ["last_30_days", "previous_30_days"]
+            fbw, igw = {}, {}
+            for name in social_windows:
+                s, e = WIN[name]
+                try: fbw[name] = social.get_fb_light(pt, pid, s, e)
+                except Exception as ex: fbw[name] = {"error": str(ex)[:120]}
                 if ig:
-                    ctx["instagram"] = social.get_ig_comprehensive(pt, ig, start, end, fast=True)
-            except Exception as e:
-                ctx["instagram"] = {"error": str(e)[:200]}
+                    try: igw[name] = social.get_ig_light(pt, ig, s, e)
+                    except Exception as ex: igw[name] = {"error": str(ex)[:120]}
+            ctx["facebook_by_window"] = fbw
+            if ig:
+                ctx["instagram_by_window"] = igw
         except Exception as e:
             ctx["meta_page_error"] = str(e)[:200]
+
+    # YouTube (RH channel) — per-window analytics
     if domain == "rh" and YOUTUBE_REFRESH_TOKEN:
         try:
             yc = get_youtube_credentials()
-            yt = youtube.get_monthly_summary(yc, start, end)
-            try: yt["channel_total"] = youtube.get_channel_stats(yc)
+            ytw = {}
+            for name, (s, e) in WIN.items():
+                try: ytw[name] = youtube.get_analytics_summary(yc, s, e)
+                except Exception as ex: ytw[name] = {"error": str(ex)[:120]}
+            try: ytw["channel_total"] = youtube.get_channel_stats(yc)
             except Exception: pass
-            ctx["youtube"] = yt
+            ctx["youtube_by_window"] = ytw
         except Exception as e:
             ctx["youtube"] = {"error": str(e)[:200]}
 
@@ -1058,19 +1106,14 @@ def chat_endpoint(payload: dict = Body(...)):
     if not question:
         raise HTTPException(400, "question required")
     domain = (payload.get("domain") or "rh").lower()
-    start = payload.get("start") or ""
-    end = payload.get("end") or ""
     history = payload.get("history") or []
     today = _today_ist()
-    if not end:
-        end = today.isoformat()
-    if not start:
-        start = (today - timedelta(days=29)).isoformat()
 
     doms = ["rh", "pms", "aif", "akeana"] if domain in ("all", "") else [domain]
-    context = {"period": {"start": start, "end": end}, "domains": {}}
+    deep = len(doms) == 1  # full windows + daily for one domain; lighter for all
+    context = {"as_of": today.isoformat(), "domains": {}}
     for dk in doms:
-        c = _chat_context(dk, start, end)
+        c = _chat_context(dk, deep=deep)
         # Always attach the freshest content (not subject to the metrics cache)
         try:
             cal = {}
@@ -1098,23 +1141,24 @@ def chat_endpoint(payload: dict = Body(...)):
         "\"That isn't available in the fetched data for this domain/period.\"\n"
         "3. If a source returned an \"error\", tell the user that source failed and show the error — don't guess around it.\n"
         "4. Cite the source for figures in parentheses: (Search Console), (GA4), (Meta Ads), (Facebook), (Instagram), (YouTube).\n"
-        "5. All currency is ₹ (INR). Percentages: CTR/engagement are fractions in the data (0.53 = 0.53%). Bounce rate/mobile% are already percents.\n"
-        "6. For comparisons or 'variation' questions, compute differences ONLY from numbers present in the DATA and show the math.\n"
-        "7. Be concise and specific. Use short bullet points or a tiny table. If the user asks for a comment/insight, give it but clearly grounded in the shown numbers.\n"
-        "8. The reporting period is " + start + " to " + end + ". If asked about data outside this range, say it wasn't fetched.\n"
-        "9. CONTENT: 'content_calendar' holds the planned / AI-generated posts per month (titles, descriptions, dates, platforms), and 'content_ideas' holds generated content ideas. Use these to answer anything about content that is planned, generated, scheduled, or yet to be generated — list the actual titles/dates from the data. If a month has no calendar entry, say no content has been generated for it yet.\n"
+        "5. All currency is ₹ (INR). Percentages: GSC CTR & IG/FB engagement_rate/ctr are fractions (0.53 = 0.53%); engagement_rate_pct and bounce_rate & mobile% are already percents.\n"
+        "6. For comparisons/'variation'/'why did X change' questions, compute the difference ONLY from numbers present in the DATA and show the math.\n"
+        "7. Be concise and specific. Use short bullet points or a tiny table. If the user asks for a comment/insight, give it grounded in the shown numbers.\n"
+        "8. TIME WINDOWS: the data is NOT limited to any selected range. Each source has a 'by_window' / '_by_window' object keyed by: last_7_days, previous_7_days, last_30_days, previous_30_days, last_90_days — all relative to 'as_of' (today). "
+        "For 'this week' use last_7_days and compare to previous_7_days; for 'this month' use last_30_days vs previous_30_days. GSC/GA4 also include 'daily_90d' arrays — aggregate those yourself for any custom period the user names. The exact dates of each window are in 'windows'.\n"
+        "9. CONTENT: 'content_calendar' holds planned/AI-generated posts per month (titles, dates, platforms); 'content_ideas' holds generated ideas. Use these to answer anything about content planned, generated, scheduled, or not yet generated — list the actual titles/dates. If a month has no entry, say no content has been generated for it yet.\n"
     )
     hist_txt = ""
     for h in history[-6:]:
         role = "User" if h.get("role") == "user" else "Assistant"
         hist_txt += f"{role}: {h.get('content','')}\n"
-    data_json = _json.dumps(context, default=str)[:60000]
+    data_json = _json.dumps(context, default=str)[:90000]
     user_msg = (hist_txt + "\nQUESTION: " + question + "\n\nDATA (the only source of truth):\n" + data_json)
     try:
         answer = _ai.chat(sys_prompt, user_msg, max_tokens=1400, temperature=0.15)
     except Exception as e:
         raise HTTPException(502, f"AI error: {e}")
-    return {"answer": answer, "domains_covered": doms, "period": {"start": start, "end": end}}
+    return {"answer": answer, "domains_covered": doms, "as_of": today.isoformat()}
 
 
 @app.get("/api/reports/export")

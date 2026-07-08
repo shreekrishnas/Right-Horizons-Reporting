@@ -3041,7 +3041,7 @@ function toggleChat() {
     if (!open) {
         const scope = document.getElementById('rh-chat-scope');
         const dom = (typeof _repDomain === 'function' && document.getElementById('rep-domain')) ? _repDomain() : (currentDomain || 'rh');
-        if (scope) scope.textContent = `${(domains[dom] && domains[dom].label) || dom} · ${dateStart || '—'} to ${dateEnd || '—'}`;
+        if (scope) scope.textContent = `${(domains[dom] && domains[dom].label) || dom} · live data · any time period`;
         const t = document.getElementById('rh-chat-text'); if (t) t.focus();
     }
 }

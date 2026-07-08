@@ -134,6 +134,94 @@ def diagnose_page_access(token: str, page_id: str) -> dict:
     return out
 
 
+def get_fb_light(token: str, page_id: str, start: str, end: str) -> dict:
+    """Fast Facebook snapshot for a window — batched insights, no post
+    pagination. Used to fetch several time windows for the AI assistant."""
+    tok = resolve_page_token(token, page_id)
+    res = {}
+    try:
+        page = _get(f"/{page_id}", tok, {"fields": "fan_count,followers_count"})
+        res["followers"] = page.get("followers_count", 0)
+        res["page_likes"] = page.get("fan_count", 0)
+    except Exception:
+        pass
+    try:
+        data = _get(f"/{page_id}/insights", tok, {
+            "metric": "page_post_engagements,page_views_total",
+            "period": "total_over_range", "since": start, "until": end,
+        })
+        for item in data.get("data", []):
+            v = item.get("values", [{}])[0].get("value", 0)
+            res[item["name"]] = v if not isinstance(v, dict) else sum(v.values())
+    except Exception:
+        pass
+    res["new_followers"] = None
+    try:
+        data = _get(f"/{page_id}/insights", tok, {
+            "metric": "page_daily_follows_unique", "period": "day",
+            "since": start, "until": end,
+        })
+        for item in data.get("data", []):
+            res["new_followers"] = sum(x.get("value", 0) for x in item.get("values", []))
+    except Exception:
+        pass
+    eng = res.get("page_post_engagements", 0)
+    foll = res.get("followers", 0) or res.get("page_likes", 0)
+    res["engagements"] = eng
+    res["views"] = res.get("page_views_total", 0)
+    res["engagement_rate_pct"] = round(eng / foll * 100, 2) if foll else 0
+    return res
+
+
+def get_ig_light(token: str, ig_id: str, start: str, end: str) -> dict:
+    """Fast Instagram snapshot for a window — batched insights, no media
+    pagination. Used for multi-window fetches for the AI assistant."""
+    res = {}
+    try:
+        prof = _get(f"/{ig_id}", token, {"fields": "followers_count,media_count"})
+        res["followers"] = prof.get("followers_count", 0)
+        res["total_media"] = prof.get("media_count", 0)
+    except Exception:
+        pass
+    try:
+        data = _get(f"/{ig_id}/insights", token, {
+            "metric": "reach,views,accounts_engaged,total_interactions",
+            "period": "day", "metric_type": "total_value", "since": start, "until": end,
+        })
+        for item in data.get("data", []):
+            v = item.get("total_value", {}).get("value", 0)
+            res[item["name"]] = v if not isinstance(v, dict) else 0
+    except Exception:
+        pass
+    res["new_followers"] = None
+    try:
+        data = _get(f"/{ig_id}/insights", token, {
+            "metric": "follows_and_unfollows", "period": "day",
+            "metric_type": "total_value", "breakdown": "follow_type",
+            "since": start, "until": end,
+        })
+        for item in data.get("data", []):
+            f = u = 0
+            for bd in item.get("total_value", {}).get("breakdowns", []):
+                for r in bd.get("results", []):
+                    dims = " ".join(str(x).upper() for x in r.get("dimension_values", []))
+                    val = r.get("value", 0)
+                    if "NON_FOLLOWER" in dims:
+                        u += val
+                    elif "FOLLOWER" in dims:
+                        f += val
+            if f or u:
+                res["new_followers"] = f - u
+    except Exception:
+        pass
+    reach = res.get("reach", 0)
+    eng = res.get("total_interactions", 0) or res.get("accounts_engaged", 0)
+    res["engagements"] = eng
+    res["views"] = res.get("views", 0) or reach
+    res["engagement_rate_pct"] = round(eng / reach * 100, 2) if reach else 0
+    return res
+
+
 def get_fb_comprehensive(token: str, page_id: str, start: str, end: str) -> dict:
     token = resolve_page_token(token, page_id)
     page = _get(f"/{page_id}", token, {"fields": "name,fan_count,followers_count"})
