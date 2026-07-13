@@ -616,6 +616,7 @@
                         <button class="il-tab-btn" data-il-tab="library" onclick="switchILTab('library')">Idea Library</button>
                         <button class="il-tab-btn" data-il-tab="seasonal" onclick="switchILTab('seasonal')">Seasonal Ideas</button>
                         <button class="il-tab-btn" data-il-tab="webinar" onclick="switchILTab('webinar')">Webinar Repurposing</button>
+                        <button class="il-tab-btn" data-il-tab="trends" onclick="switchILTab('trends')">Trends</button>
                         <button class="il-tab-btn" data-il-tab="seo" onclick="switchILTab('seo')">SEO Content Ideas</button>
                     </nav>
 
@@ -790,6 +791,23 @@
                                         <div class="il-empty-state" style="grid-column:1/-1">Paste webinar content and click generate to create a repurposing pack.</div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- TAB: Trends -->
+                    <section id="il-tab-trends" class="il-tab-panel">
+                        <div class="il-full-panel">
+                            <div class="il-toolbar" style="margin-bottom:14px">
+                                <div class="il-section-title" style="margin-bottom:0">
+                                    <h2>Trending Now</h2>
+                                    <p>Live trending topics from the past week — Google Trends, finance news, and social buzz turned into timely content ideas.</p>
+                                </div>
+                                <button class="il-btn il-btn-primary" onclick="generateILTrends()">✦ Fetch trends &amp; generate</button>
+                            </div>
+                            <div class="il-kpi-strip" id="il-trends-kpis"></div>
+                            <div class="il-seasonal-grid" id="il-trends-grid">
+                                <div class="il-empty-state" style="grid-column:1/-1">Click "Fetch trends & generate" to pull live trending data and create content ideas.</div>
                             </div>
                         </div>
                     </section>

@@ -2449,6 +2449,56 @@ async function generateILSeasonalAI() {
     _ilRenderSeasonal();
 }
 
+async function generateILTrends() {
+    const grid = document.getElementById('il-trends-grid');
+    const kpis = document.getElementById('il-trends-kpis');
+    if (!grid) return;
+    grid.innerHTML = Array(6).fill('<div class="il-skeleton"></div>').join('');
+    if (kpis) kpis.innerHTML = '<span class="il-kpi" style="opacity:0.5">Fetching live trends...</span>';
+    const client = document.getElementById('il-client')?.value || 'rh';
+    try {
+        const data = await api(`/api/ideas/lab/trends?domain=${client}`);
+        const items = data.ideas || [];
+        if (kpis) {
+            const hot = items.filter(x => (x.trend_strength || '').toLowerCase() === 'hot').length;
+            const rising = items.filter(x => (x.trend_strength || '').toLowerCase() === 'rising').length;
+            const emerging = items.filter(x => (x.trend_strength || '').toLowerCase() === 'emerging').length;
+            kpis.innerHTML = `<span class="il-kpi">${items.length} ideas</span><span class="il-kpi" style="color:#ef4444">${hot} hot</span><span class="il-kpi" style="color:#f59e0b">${rising} rising</span><span class="il-kpi" style="color:#3b82f6">${emerging} emerging</span><span class="il-kpi">${data.trend_sources || 0} sources</span>`;
+        }
+        if (items.length) {
+            grid.innerHTML = items.map(x => {
+                const str = (x.trend_strength || 'rising').toLowerCase();
+                const strClass = str === 'hot' ? 'il-urgency-high' : str === 'rising' ? 'il-urgency-medium' : 'il-urgency-low';
+                const strLabel = str === 'hot' ? '🔥 Hot' : str === 'rising' ? '📈 Rising' : '🌱 Emerging';
+                return `<article class="il-seasonal-card">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
+                        <span class="il-badge il-badge-orange">${esc(x.format || '')}</span>
+                        <span class="il-urgency ${strClass}">${strLabel}</span>
+                    </div>
+                    <h3 style="font-size:14px;margin:0 0 6px;font-weight:700;line-height:1.3">${esc(x.title || '')}</h3>
+                    ${x.hook ? `<p style="font-size:12px;font-style:italic;font-weight:600;color:var(--text-primary);margin:0 0 6px;line-height:1.4">"${esc(x.hook)}"</p>` : ''}
+                    <p style="font-size:12px;color:var(--text-muted);margin:0 0 6px;line-height:1.5">${esc(x.description || '')}</p>
+                    ${x.why_trending ? `<p style="font-size:11px;color:var(--accent-section,#7C3AED);margin:4px 0 8px;line-height:1.4"><strong>Why trending:</strong> ${esc(x.why_trending)}</p>` : ''}
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+                        ${x.trend_source ? `<span class="il-badge il-badge-red">${esc(x.trend_source)}</span>` : ''}
+                        ${x.timeliness ? `<span class="il-badge il-badge-green">${esc(x.timeliness)}</span>` : ''}
+                        ${x.content_pillar ? `<span class="il-badge il-badge-blue">${esc(x.content_pillar)}</span>` : ''}
+                    </div>
+                    <div class="il-card-actions">
+                        <button class="il-btn il-btn-small" data-angle="${esc(x.title || '')}" onclick="document.getElementById('il-topic').value=this.dataset.angle;switchILTab('generate');_ilToast('Trend loaded as topic')">Use as topic</button>
+                        <button class="il-btn il-btn-small" data-copy-text="${esc((x.title || '') + '\nHook: ' + (x.hook || '') + '\n' + (x.description || '') + '\nTrend: ' + (x.trend_source || ''))}" onclick="_copyToClipboard(this.dataset.copyText);_ilToast('Copied')">Copy</button>
+                    </div>
+                </article>`;
+            }).join('');
+            _ilToast('Trend ideas generated from live data');
+            return;
+        }
+    } catch (e) {
+        if (kpis) kpis.innerHTML = '';
+    }
+    grid.innerHTML = '<div class="il-empty-state" style="grid-column:1/-1">Could not fetch trends. Check your API keys (Tavily / Google Trends) or try again.</div>';
+}
+
 let _ilToastTimer;
 function _ilToast(msg) {
     let el = document.getElementById('il-toast');

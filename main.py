@@ -2747,6 +2747,87 @@ def ideas_lab_seasonal(domain: str = "rh", month: int = 0):
         raise HTTPException(502, f"AI error: {e}")
 
 
+# ── Trends (past-week trending topics → content ideas) ────────────────────────
+
+@app.get("/api/ideas/lab/trends")
+def ideas_lab_trends(domain: str = "rh"):
+    if not ai_mod:
+        raise HTTPException(503, "AI module not available")
+    domain_label = DOMAINS.get(domain, {}).get("label", domain)
+    today = _today_ist()
+
+    trend_data = []
+
+    if google_trends:
+        gt_trending = google_trends.trending_searches_india()
+        if gt_trending:
+            trend_data.append(f"GOOGLE TRENDING SEARCHES (India, right now):\n{gt_trending}")
+
+        for seed in ["mutual funds India", "NRI investment", "ESOP tax", "retirement planning India", "stock market India"]:
+            q = google_trends.related_queries(seed)
+            if q:
+                trend_data.append(f"RISING QUERIES for '{seed}':\n{q}")
+                break
+
+        iot = google_trends.interest_over_time(["PMS India", "NRI tax", "SIP returns", "AIF India", "retirement corpus"])
+        if iot:
+            trend_data.append(f"SEARCH INTEREST (last 3 months):\n{iot}")
+
+    if web_search:
+        news = web_search.search_finance_news("")
+        if news:
+            trend_data.append(f"TOP FINANCE NEWS THIS WEEK:\n{news}")
+        viral = web_search.search_content_trends("Indian finance wealth management")
+        if viral:
+            trend_data.append(f"TRENDING FINANCE CONTENT ON SOCIAL:\n{viral}")
+        market = web_search.search_market_context()
+        if market:
+            trend_data.append(f"MARKET CONTEXT:\n{market}")
+
+    trend_block = "\n\n".join(trend_data) if trend_data else "No live trend data available — generate ideas based on evergreen Indian finance trends for this week."
+
+    sys_prompt = (
+        f"You are the head of content strategy at {domain_label}, a SEBI-registered Indian financial services firm "
+        "(Investment Advisory, PMS, AIF). You monitor trends obsessively and turn them into timely content.\n\n"
+        + RH_CONTENT_DNA +
+        "\n\nTASK: Analyse the LIVE TREND DATA below and generate 10 content ideas that capitalize on what's "
+        "trending RIGHT NOW in India. Every idea must connect a trending topic to a specific financial angle "
+        "relevant to Right Horizons' audience (HNIs, NRIs, senior professionals, UHNI families).\n\n"
+        "EACH IDEA MUST HAVE:\n"
+        "- title: punchy, specific title that references the trending topic + a financial angle — include ₹ amounts or stats\n"
+        "- format: content format (LinkedIn carousel / Instagram Reel / Blog article / Twitter thread / YouTube Short / Social static)\n"
+        "- trend_source: what trend this capitalizes on (the specific search query, news headline, or market event)\n"
+        "- trend_strength: 'hot' (trending now, publish within 48 hours) / 'rising' (growing interest, publish this week) / 'emerging' (early signal, plan for next week)\n"
+        "- timeliness: exact publishing window (e.g. 'Publish today — news is fresh', 'This week while search volume is high')\n"
+        "- description: 80+ word production brief — the angle, why this trend matters to RH's audience, specific ₹ figures, data points to reference, and CTA\n"
+        "- hook: the EXACT opening line — scroll-stopping, references the trend + a surprising financial stat\n"
+        "- audience: specific Indian investor persona this speaks to\n"
+        "- content_pillar: Retirement Planning / NRI / ESOPs / Family Office\n"
+        "- why_trending: 1-2 sentences on WHY this is trending and why RH should ride this wave\n\n"
+        "RULES:\n"
+        "- Every idea must reference a REAL trend from the data below — no generic evergreen ideas\n"
+        "- Sort by trend_strength: 'hot' first, then 'rising', then 'emerging'\n"
+        "- At least 3 ideas should be 'hot' (publish within 48 hours)\n"
+        "- Mix formats: not all carousels, not all blogs\n"
+        "- Indian financial context: ₹ amounts, SEBI, Nifty, tax sections, RBI rates\n"
+        "- Each idea must have a different trend source — don't repeat the same trend\n"
+    )
+
+    user_msg = (
+        f"Client: {domain_label}\n"
+        f"Today: {today.strftime('%A, %B %d, %Y')}\n\n"
+        f"=== LIVE TREND DATA (past 7 days) ===\n\n{trend_block}\n\n"
+        "Generate 10 trend-driven content ideas. Prioritize what's hottest right now."
+    )
+
+    try:
+        items = ai_mod.chat_json(sys_prompt, user_msg, max_tokens=6000, temperature=0.8)
+        items = _unwrap_items(items)
+        return {"ideas": items, "domain": domain, "date": today.isoformat(), "trend_sources": len(trend_data)}
+    except Exception as e:
+        raise HTTPException(502, f"AI error: {e}")
+
+
 # ── Content Validator ────────────────────────────────────────────────────────
 
 _RH_BRAND_GUIDELINES = """
