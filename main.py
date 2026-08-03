@@ -275,6 +275,20 @@ def ga4_daily(domain: str = "rh", start: str = "", end: str = ""):
         raise HTTPException(502, f"GA4 error: {e}")
 
 
+@app.get("/api/ga4/devices")
+def ga4_devices(domain: str = "rh", start: str = "", end: str = ""):
+    start, end = _dates(start, end)
+    d = _domain(domain)
+    prop = d["ga4_property"]
+    if not prop:
+        raise HTTPException(400, "GA4 property not configured")
+    try:
+        creds = get_credentials()
+        return ga4.get_device_breakdown(creds, prop, start, end)
+    except Exception as e:
+        raise HTTPException(502, f"GA4 error: {e}")
+
+
 # ── Meta Endpoints ───────────────────────────────────────────────────────────
 
 @app.get("/api/meta/status")
