@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from config import DOMAINS, META_MARKETING_TOKEN, META_SOCIAL_TOKEN, META_PAGE_ID, META_APP_ID, META_APP_SECRET, ADMIN_PASSWORD
+from config import ALERT_EMAIL_FROM, ALERT_EMAIL_PASSWORD, ALERT_EMAIL_TO, ALERT_FUND_THRESHOLD
 from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
 from config import YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN
 from config import OPENROUTER_API_KEY, TAVILY_API_KEY, SE_RANKING_API_KEY
@@ -337,6 +338,125 @@ def meta_accounts(domain: str = "rh"):
         return accounts
     except Exception as e:
         raise HTTPException(502, f"Meta API error: {e}")
+
+
+# ── Meta Fund Status & Alerts ────────────────────────────────────────────────
+
+@app.get("/api/meta/fund-status")
+def meta_fund_status(domain: str = "rh"):
+    if not META_MARKETING_TOKEN:
+        raise HTTPException(400, "Meta Marketing token not configured")
+    ad_account = DOMAINS.get(domain, {}).get("meta_ad_account", "")
+    if not ad_account:
+        raise HTTPException(400, "Meta Ads not configured for this domain")
+    try:
+        return meta.get_account_balance(META_MARKETING_TOKEN, ad_account)
+    except Exception as e:
+        raise HTTPException(502, f"Meta API error: {e}")
+
+
+@app.get("/api/meta/fund-status/all")
+def meta_fund_status_all():
+    if not META_MARKETING_TOKEN:
+        raise HTTPException(400, "Meta Marketing token not configured")
+    results = {}
+    for key, d in DOMAINS.items():
+        ad_account = d.get("meta_ad_account", "")
+        if not ad_account:
+            continue
+        try:
+            results[key] = meta.get_account_balance(META_MARKETING_TOKEN, ad_account)
+            results[key]["domain_label"] = d["label"]
+        except Exception as e:
+            results[key] = {"error": str(e), "domain_label": d["label"]}
+    return results
+
+
+def _send_fund_alert(low_accounts: list):
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    if not ALERT_EMAIL_FROM or not ALERT_EMAIL_PASSWORD or not ALERT_EMAIL_TO:
+        return {"sent": False, "reason": "Email not configured"}
+
+    recipients = [e.strip() for e in ALERT_EMAIL_TO.split(",") if e.strip()]
+    if not recipients:
+        return {"sent": False, "reason": "No recipients"}
+
+    rows = ""
+    for acc in low_accounts:
+        rows += (
+            f"<tr>"
+            f"<td style='padding:8px 12px;border:1px solid #e2e8f0;'>{acc['domain_label']}</td>"
+            f"<td style='padding:8px 12px;border:1px solid #e2e8f0;'>{acc['name']}</td>"
+            f"<td style='padding:8px 12px;border:1px solid #e2e8f0;font-weight:700;color:#dc2626;'>"
+            f"₹{acc['balance']:,.2f}</td>"
+            f"<td style='padding:8px 12px;border:1px solid #e2e8f0;'>₹{acc['amount_spent']:,.2f}</td>"
+            f"</tr>"
+        )
+
+    html = f"""
+    <div style="font-family:sans-serif;max-width:600px;margin:auto;">
+        <div style="background:#7C3AED;color:#fff;padding:20px;border-radius:8px 8px 0 0;">
+            <h2 style="margin:0;">⚠️ Meta Ads Fund Alert</h2>
+            <p style="margin:4px 0 0;opacity:0.9;">One or more ad accounts are running low on funds</p>
+        </div>
+        <div style="padding:20px;background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
+            <p>The following Meta ad accounts have a balance below <strong>₹{ALERT_FUND_THRESHOLD:,}</strong>:</p>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+                <thead>
+                    <tr style="background:#f8fafc;">
+                        <th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:left;">Domain</th>
+                        <th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:left;">Account</th>
+                        <th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:left;">Balance</th>
+                        <th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:left;">Spent</th>
+                    </tr>
+                </thead>
+                <tbody>{rows}</tbody>
+            </table>
+            <p style="color:#64748b;font-size:0.85rem;">Please top up these accounts to avoid ad delivery interruptions.</p>
+            <p style="color:#94a3b8;font-size:0.75rem;margin-top:24px;">— Right Horizons Reporting Dashboard</p>
+        </div>
+    </div>
+    """
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"⚠️ Meta Ads Fund Alert — {len(low_accounts)} account(s) below ₹{ALERT_FUND_THRESHOLD:,}"
+    msg["From"] = ALERT_EMAIL_FROM
+    msg["To"] = ", ".join(recipients)
+    msg.attach(MIMEText(html, "html"))
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(ALERT_EMAIL_FROM, ALERT_EMAIL_PASSWORD)
+            server.sendmail(ALERT_EMAIL_FROM, recipients, msg.as_string())
+        return {"sent": True, "recipients": recipients, "accounts": len(low_accounts)}
+    except Exception as e:
+        return {"sent": False, "reason": str(e)}
+
+
+@app.get("/api/cron/check-funds")
+def cron_check_funds():
+    if not META_MARKETING_TOKEN:
+        return {"checked": False, "reason": "Meta token not configured"}
+    low_accounts = []
+    for key, d in DOMAINS.items():
+        ad_account = d.get("meta_ad_account", "")
+        if not ad_account:
+            continue
+        try:
+            bal = meta.get_account_balance(META_MARKETING_TOKEN, ad_account)
+            bal["domain_label"] = d["label"]
+            if bal["balance"] < ALERT_FUND_THRESHOLD:
+                low_accounts.append(bal)
+        except Exception:
+            pass
+    if not low_accounts:
+        return {"checked": True, "low_accounts": 0, "alert_sent": False}
+    result = _send_fund_alert(low_accounts)
+    return {"checked": True, "low_accounts": len(low_accounts), "alert": result}
 
 
 # ── Social (Facebook + Instagram) ────────────────────────────────────────────
