@@ -1,4 +1,5 @@
 import io
+import os
 import traceback
 from datetime import date, timedelta, datetime, timezone
 _IST = timezone(timedelta(hours=5, minutes=30))
@@ -441,8 +442,12 @@ def _send_fund_alert(low_accounts: list):
 def cron_check_funds():
     if not META_MARKETING_TOKEN:
         return {"checked": False, "reason": "Meta token not configured"}
+    monitor_domains = [k.strip() for k in os.environ.get("ALERT_FUND_DOMAINS", "rh").split(",") if k.strip()]
     low_accounts = []
-    for key, d in DOMAINS.items():
+    for key in monitor_domains:
+        d = DOMAINS.get(key)
+        if not d:
+            continue
         ad_account = d.get("meta_ad_account", "")
         if not ad_account:
             continue
