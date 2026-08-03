@@ -439,7 +439,7 @@ def _send_fund_alert(low_accounts: list):
 
 
 @app.get("/api/cron/check-funds")
-def cron_check_funds():
+def cron_check_funds(test: bool = False):
     if not META_MARKETING_TOKEN:
         return {"checked": False, "reason": "Meta token not configured"}
     monitor_domains = [k.strip() for k in os.environ.get("ALERT_FUND_DOMAINS", "rh").split(",") if k.strip()]
@@ -454,14 +454,15 @@ def cron_check_funds():
         try:
             bal = meta.get_account_balance(META_MARKETING_TOKEN, ad_account)
             bal["domain_label"] = d["label"]
-            if bal["balance"] < ALERT_FUND_THRESHOLD:
+            if test or bal["balance"] < ALERT_FUND_THRESHOLD:
                 low_accounts.append(bal)
-        except Exception:
-            pass
+        except Exception as e:
+            if test:
+                low_accounts.append({"domain_label": d["label"], "name": ad_account, "balance": 0, "amount_spent": 0, "error": str(e)})
     if not low_accounts:
         return {"checked": True, "low_accounts": 0, "alert_sent": False}
     result = _send_fund_alert(low_accounts)
-    return {"checked": True, "low_accounts": len(low_accounts), "alert": result}
+    return {"checked": True, "low_accounts": len(low_accounts), "test": test, "alert": result}
 
 
 # ── Social (Facebook + Instagram) ────────────────────────────────────────────
