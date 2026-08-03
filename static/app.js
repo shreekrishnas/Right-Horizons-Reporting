@@ -805,6 +805,7 @@ function switchDashTab(tab) {
 let _dashGSCDaily = [];
 let _dashGA4Daily = [];
 let _dashGA4Sources = [];
+let _dashGA4Devices = [];
 
 async function loadGSC() {
     const overviewIds = ['gsc-clicks', 'gsc-impressions', 'gsc-ctr', 'gsc-position'];
@@ -846,13 +847,15 @@ async function loadGA4() {
     [...overviewIds, ...detailIds].forEach(id => showLoading(id));
     try {
         const qs = `?domain=${currentDomain}&start=${dateStart}&end=${dateEnd}`;
-        const [daily, sources, pages] = await Promise.all([
+        const [daily, sources, pages, devices] = await Promise.all([
             api(`/api/ga4/daily${qs}`),
             api(`/api/ga4/sources${qs}`),
             api(`/api/ga4/pages${qs}&limit=15`),
+            api(`/api/ga4/devices${qs}`).catch(() => []),
         ]);
         _dashGA4Daily = daily || [];
         _dashGA4Sources = sources || [];
+        _dashGA4Devices = devices || [];
         const summary = _ga4SummaryFromDaily(_dashGA4Daily);
         const vals = [summary.sessions, summary.users, summary.pageviews, summary.bounce_rate + '%'];
         overviewIds.forEach((id, i) => renderMetric(id, vals[i]));
@@ -866,10 +869,36 @@ async function loadGA4() {
         ], pages || []);
         const ga4MetricSel = document.getElementById('ga4-metric-select');
         switchGA4Metric(ga4MetricSel ? ga4MetricSel.value : 'sessions-users');
+        renderDeviceChart(_dashGA4Devices);
     } catch (e) {
         console.error('GA4 error:', e);
         [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) { el.className = 'metric-value'; el.textContent = '-'; } });
     }
+}
+
+function renderDeviceChart(devices) {
+    if (!devices || !devices.length) return;
+    const deviceColors = { desktop: '#7C3AED', mobile: '#0EA5E9', tablet: '#10B981' };
+    const labels = devices.map(d => {
+        const cat = (d.deviceCategory || 'unknown').toLowerCase();
+        return cat.charAt(0).toUpperCase() + cat.slice(1);
+    });
+    const data = devices.map(d => parseInt(d.sessions || d.users || 0));
+    const colors = devices.map(d => deviceColors[(d.deviceCategory || '').toLowerCase()] || '#F59E0B');
+    const total = data.reduce((a, b) => a + b, 0);
+    makeChart('chart-overview-devices', {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data, backgroundColor: colors }] },
+        options: {
+            plugins: {
+                legend: { position: 'right', labels: { font: { size: 10 }, padding: 8, boxWidth: 10 } },
+                tooltip: { callbacks: { label: function(ctx) {
+                    const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : 0;
+                    return ctx.label + ': ' + formatNum(ctx.parsed) + ' (' + pct + '%)';
+                }}}
+            }
+        }
+    });
 }
 
 function switchGSCMetric(value) {
