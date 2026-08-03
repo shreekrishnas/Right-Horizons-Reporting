@@ -22,6 +22,31 @@ def get_ad_accounts(token: str) -> list:
     return data.get("data", [])
 
 
+def get_account_balance(token: str, ad_account_id: str) -> dict:
+    data = _get(
+        f"/{ad_account_id}", token,
+        {"fields": "id,name,account_status,balance,spend_cap,amount_spent,"
+                    "currency,funding_source_details"},
+    )
+    balance_raw = int(data.get("balance", 0))
+    spend_cap_raw = int(data.get("spend_cap", 0))
+    amount_spent_raw = int(data.get("amount_spent", 0))
+    currency = data.get("currency", "INR")
+    divisor = 100
+    funding = data.get("funding_source_details", {})
+    return {
+        "id": data.get("id", ad_account_id),
+        "name": data.get("name", ""),
+        "account_status": data.get("account_status", 0),
+        "balance": round(balance_raw / divisor, 2),
+        "spend_cap": round(spend_cap_raw / divisor, 2) if spend_cap_raw else None,
+        "amount_spent": round(amount_spent_raw / divisor, 2),
+        "currency": currency,
+        "funding_source": funding.get("display_string", ""),
+        "funding_type": funding.get("type", ""),
+    }
+
+
 def get_campaigns_summary(token: str, ad_account_id: str, start: str, end: str, status_filter: str = "all") -> list:
     statuses = '["ACTIVE"]' if status_filter == "active" else '["ACTIVE","PAUSED"]'
     data = _get(

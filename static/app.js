@@ -981,6 +981,7 @@ function switchGA4Metric(value) {
 }
 
 async function loadMeta() {
+    loadMetaFundStatus();
     try {
         const statusFilterEl = document.getElementById('meta-status-filter');
         const statusVal = statusFilterEl ? statusFilterEl.value : 'active';
@@ -1034,6 +1035,35 @@ async function loadMeta() {
         } catch(e) {}
     } catch (e) {
         showError('meta-overview', e.message);
+    }
+}
+
+async function loadMetaFundStatus() {
+    const container = document.getElementById('meta-fund-cards');
+    if (!container) return;
+    try {
+        const data = await api(`/api/meta/fund-status?domain=${currentDomain}`);
+        if (data.error) {
+            container.innerHTML = '<div class="empty-state"><p>' + data.error + '</p></div>';
+            return;
+        }
+        const isLow = data.balance < 10000;
+        const balColor = isLow ? '#dc2626' : '#10B981';
+        const statusMap = { 1: 'Active', 2: 'Disabled', 3: 'Unsettled', 7: 'Pending Review', 9: 'In Grace Period', 101: 'Temporarily Unavailable' };
+        const statusText = statusMap[data.account_status] || ('Status ' + data.account_status);
+        container.innerHTML = `
+            <div class="metric-card"><div class="accent-strip" style="background:${balColor}"></div><div class="metric-label">Balance</div><div class="metric-value" style="color:${balColor}">₹${formatNum(Math.round(data.balance))}</div></div>
+            <div class="metric-card"><div class="accent-strip" style="background:#7C3AED"></div><div class="metric-label">Amount Spent</div><div class="metric-value">₹${formatNum(Math.round(data.amount_spent))}</div></div>
+            <div class="metric-card"><div class="accent-strip" style="background:#0EA5E9"></div><div class="metric-label">Spend Cap</div><div class="metric-value">${data.spend_cap ? '₹' + formatNum(Math.round(data.spend_cap)) : 'No Limit'}</div></div>
+            <div class="metric-card"><div class="accent-strip" style="background:#F59E0B"></div><div class="metric-label">Account Status</div><div class="metric-value" style="font-size:0.95rem;">${statusText}</div></div>
+        `;
+        if (isLow) {
+            container.insertAdjacentHTML('afterend',
+                '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 16px;margin-top:8px;color:#991b1b;font-size:0.85rem;font-weight:500;">' +
+                '⚠️ Fund balance is below ₹10,000 — please top up to avoid ad delivery interruptions.</div>');
+        }
+    } catch (e) {
+        container.innerHTML = '<div class="empty-state"><p>Fund status unavailable</p></div>';
     }
 }
 
