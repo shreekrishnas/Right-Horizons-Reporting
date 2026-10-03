@@ -1495,6 +1495,7 @@ def chat_endpoint(payload: dict = Body(...)):
         "- BOT / SPAM TRAFFIC: GA4 has no bot label, so the server computes 'bot_traffic_30d', 'bot_traffic_previous_30d' and "
         "'bot_traffic_7d' (heuristic). You MAY report these numbers — they are part of the DATA — but always call them an "
         "ESTIMATE ('suspected bot traffic') and briefly state the signals used (see 'method' and each segment's 'reasons'). "
+        "Also available: 'spike_days' (days far above the normal daily level and which location drove them), 'hourly_profile' (24 hourly session counts, property timezone — flat = automated, office-hours curve = people) and 'bot_targeted_pages' (landing pages with <10% engagement and <10s). "
         "Use 'clean' for human-only sessions/engagement/avg session and compare with 'reported'. For any custom period not covered, "
         "say only these windows are available.\n"
         "- When asked for analysis, give: what changed (with numbers), why (which channel/region/page drove it), and 2-3 concrete actions.\n\n"

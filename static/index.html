@@ -257,6 +257,14 @@
                             <div class="metric-card"><div class="accent-strip" style="background:#0EA5E9"></div><div class="metric-label">Human Avg Session</div><div class="metric-value loading" id="ga4b-clean-dur"></div></div>
                         </div>
                         <div style="margin-top:1.5rem;"><div class="table-title">Suspected Bot Segments</div><div class="table-card" id="ga4b-table"><div class="empty-state"><p>Loading...</p></div></div></div>
+                        <div class="two-col" style="margin-top:1.5rem;">
+                            <div><div class="table-title">Traffic Spike Days</div><div class="table-card" id="ga4b-spikes"><div class="empty-state"><p>Loading...</p></div></div></div>
+                            <div><div class="table-title">Bot-Targeted Landing Pages</div><div class="table-card" id="ga4b-pages"><div class="empty-state"><p>Loading...</p></div></div></div>
+                        </div>
+                        <div class="glass-card-static" style="padding:1.25rem; margin-top:1.5rem;">
+                            <div style="font-weight:700; font-size:0.75rem; letter-spacing:0.05em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.75rem;">Sessions by Hour of Day <span style="text-transform:none; letter-spacing:0; font-weight:500;">(flat = bots, office-hours curve = people)</span></div>
+                            <div style="position:relative; height:200px;"><canvas id="chart-ga4b-hourly"></canvas></div>
+                        </div>
                     </div>
                 </div>
 
