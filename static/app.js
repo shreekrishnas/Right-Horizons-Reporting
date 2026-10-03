@@ -885,6 +885,7 @@ function _fmtDur(sec) {
 async function loadGA4Quality(qs) {
     const cardIds = ['ga4q-eng-rate', 'ga4q-avg-session', 'ga4q-engaged', 'ga4q-vps', 'ga4q-key-events'];
     cardIds.forEach(id => showLoading(id));
+    ['ga4b-sessions', 'ga4b-share', 'ga4b-clean-sessions', 'ga4b-clean-er', 'ga4b-clean-dur'].forEach(id => showLoading(id));
     let q = {};
     try { q = await api(`/api/ga4/quality${qs}`); } catch (e) { console.error('GA4 quality error:', e); }
     const e = (q.engagement && !q.engagement.error) ? q.engagement : null;
@@ -917,6 +918,20 @@ async function loadGA4Quality(qs) {
         prep(q.regions, ['region', 'country']));
     renderTable('ga4q-landing-table', [{ label: 'Landing Page', key: 'page' }, ...qualityCols],
         prep((Array.isArray(q.landing_pages) ? q.landing_pages : []).map(r => ({ ...r, page: r.landingPagePlusQueryString })), ['page']));
+
+    const b = (q.bot_traffic && !q.bot_traffic.error) ? q.bot_traffic : null;
+    const bVals = b ? [b.suspected_bot_sessions, b.bot_share_pct + '%', b.clean.sessions,
+                       b.clean.engagement_rate + '%', _fmtDur(b.clean.avg_session)] : ['-', '-', '-', '-', '-'];
+    ['ga4b-sessions', 'ga4b-share', 'ga4b-clean-sessions', 'ga4b-clean-er', 'ga4b-clean-dur']
+        .forEach((id, i) => renderMetric(id, bVals[i]));
+    renderTable('ga4b-table', [
+        { label: 'Country', key: 'country' }, { label: 'City', key: 'city' }, { label: 'Browser', key: 'browser' },
+        { label: 'Channel', key: 'channel' }, { label: 'Sessions', key: 'sessions' },
+        { label: 'Avg Session', key: 'avg_session' }, { label: 'Eng. Rate', key: 'engagement_rate' }, { label: 'Why flagged', key: 'reasons' },
+    ], (b ? b.top_suspect_segments : []).map(r => ({
+        ...r, country: esc(r.country), city: esc(r.city), browser: esc(r.browser), channel: esc(r.channel),
+        avg_session: _fmtDur(r.avg_session), engagement_rate: r.engagement_rate + '%', reasons: esc((r.reasons || []).join(', ')),
+    })));
 }
 
 function renderDeviceChart(devices) {

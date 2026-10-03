@@ -378,7 +378,8 @@ def ga4_quality(domain: str = "rh", start: str = "", end: str = ""):
     out = {}
     for key, fn in (("engagement", ga4.get_engagement_summary), ("channels", ga4.get_channel_quality),
                     ("source_medium", ga4.get_source_medium), ("countries", ga4.get_country_breakdown),
-                    ("regions", ga4.get_region_breakdown), ("landing_pages", ga4.get_landing_page_quality)):
+                    ("regions", ga4.get_region_breakdown), ("landing_pages", ga4.get_landing_page_quality),
+                    ("bot_traffic", ga4.get_bot_traffic)):
         try:
             out[key] = fn(creds, prop, start, end)
         except Exception as e:
@@ -1279,8 +1280,11 @@ def _chat_context(domain: str, start: str = "", end: str = "", deep: bool = True
                     ("countries_30d", ga4.get_country_breakdown, (m30s, m30e, 12)),
                     ("regions_30d", ga4.get_region_breakdown, (m30s, m30e, 15)),
                     ("landing_pages_quality_30d", ga4.get_landing_page_quality, (m30s, m30e, 15)),
+                    ("bot_traffic_30d", ga4.get_bot_traffic, (m30s, m30e)),
+                    ("bot_traffic_previous_30d", ga4.get_bot_traffic, (p30s, p30e)),
+                    ("bot_traffic_7d", ga4.get_bot_traffic, WIN["last_7_days"]),
                 ):
-                    if not deep and k2 not in ("engagement_last_30d", "channel_quality_30d", "countries_30d"):
+                    if not deep and k2 not in ("engagement_last_30d", "channel_quality_30d", "countries_30d", "bot_traffic_30d"):
                         continue
                     try: a[k2] = fn(creds, prop, *args)
                     except Exception as ex: a[k2] = {"error": str(ex)[:120]}
@@ -1416,6 +1420,11 @@ def chat_endpoint(payload: dict = Body(...)):
         "- devices_30d: mobile vs desktop share; B2B audiences skew desktop.\n"
         "- Search Console: clicks, impressions, ctr (fraction), position (lower is better). Rising impressions + falling CTR = ranking for "
         "broader queries or SERP features stealing clicks. Connect top queries to landing pages.\n"
+        "- BOT / SPAM TRAFFIC: GA4 has no bot label, so the server computes 'bot_traffic_30d', 'bot_traffic_previous_30d' and "
+        "'bot_traffic_7d' (heuristic). You MAY report these numbers — they are part of the DATA — but always call them an "
+        "ESTIMATE ('suspected bot traffic') and briefly state the signals used (see 'method' and each segment's 'reasons'). "
+        "Use 'clean' for human-only sessions/engagement/avg session and compare with 'reported'. For any custom period not covered, "
+        "say only these windows are available.\n"
         "- When asked for analysis, give: what changed (with numbers), why (which channel/region/page drove it), and 2-3 concrete actions.\n\n"
         "ABSOLUTE RULES:\n"
         "1. Answer ONLY using the DATA JSON provided below. Every number you state must come directly from it.\n"
