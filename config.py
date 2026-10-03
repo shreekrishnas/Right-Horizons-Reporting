@@ -79,4 +79,35 @@ DOMAINS = {
         "meta_social_token": os.getenv("META_SOCIAL_TOKEN_AKEANA", ""),
         "meta_ad_account": os.getenv("META_AD_ACCOUNT_AKEANA", ""),
     },
+    "nextwealth": {
+        "label": "NextWealth",
+        "short": "NW",
+        "gsc_site": os.getenv("GSC_SITE_NEXTWEALTH", "sc-domain:nextwealth.com"),
+        "ga4_property": os.getenv("GA4_PROPERTY_NEXTWEALTH", "313815408"),
+        "color": "#E11D48",
+        "url": os.getenv("NEXTWEALTH_URL", "https://www.nextwealth.com"),
+        "meta_page_id": os.getenv("META_PAGE_ID_NEXTWEALTH", ""),
+        "meta_social_token": os.getenv("META_SOCIAL_TOKEN_NEXTWEALTH", ""),
+        "meta_ad_account": os.getenv("META_AD_ACCOUNT_NEXTWEALTH", ""),
+    },
+}
+
+# Business context the AI assistant uses to interpret each domain's numbers.
+DOMAIN_KNOWLEDGE = {
+    "rh": "Right Horizons — Indian wealth management / investment advisory firm (Bangalore HQ). "
+          "Audience: HNIs, NRIs, pre-retirees, senior tech professionals, UHNI families. "
+          "Content pillars: Retirement Planning, NRI wealth, ESOPs, Family Office. Conversions = enquiries/consultation leads.",
+    "pms": "Right Horizons PMS — SEBI-registered Portfolio Management Service (min ticket ₹50L). "
+           "Audience: HNI investors evaluating PMS strategies. Traffic is niche and high-intent; low volume is normal.",
+    "aif": "Right Horizons AIF — Alternative Investment Fund (min ticket ₹1Cr). Audience: UHNIs, family offices, "
+           "NRIs (incl. GIFT City). Very niche, low-volume, high-value traffic.",
+    "akeana": "Akeana — US-based RISC-V processor IP / semiconductor company. Audience: chip architects, SoC design "
+              "teams, engineers, investors, job seekers. Primary market is US/global, not India.",
+    "nextwealth": "NextWealth (nextwealth.com) — Bangalore-based B2B AI/ML data services company: human-in-the-loop "
+                  "data annotation & labeling, GenAI/LLM data (RLHF, evaluation), computer vision, document/content "
+                  "operations and digital ops. Known for 'impact sourcing' via delivery centres in Tier-2/3 Indian towns. "
+                  "Audience: AI/ML, data-science and operations leaders at enterprises & AI-first companies, mostly in "
+                  "the US/Europe; India traffic often includes job seekers and employees. Conversions = 'Contact us' / "
+                  "demo / RFP enquiries; careers pages draw high but non-buyer traffic — separate them when judging lead quality. "
+                  "Long sales cycles: judge quality by engaged sessions, time on service/case-study pages and US/EU share, not raw volume.",
 }

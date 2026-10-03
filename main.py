@@ -15,6 +15,7 @@ from config import ALERT_EMAIL_FROM, ALERT_EMAIL_PASSWORD, ALERT_EMAIL_TO, ALERT
 from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
 from config import YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN
 from config import OPENROUTER_API_KEY, TAVILY_API_KEY, SE_RANKING_API_KEY
+from config import DOMAIN_KNOWLEDGE
 try:
     import web_search
 except Exception:
@@ -164,6 +165,53 @@ def get_domains():
     return {k: {kk: vv for kk, vv in v.items() if kk not in ("gsc_site", "ga4_property")} for k, v in DOMAINS.items()}
 
 
+@app.get("/api/google/whoami")
+def google_whoami():
+    """Which Google account the dashboard is signed in as, and which GA4
+    properties / Search Console sites that account can access."""
+    import requests as _rq
+    out = {}
+    try:
+        creds = get_credentials()
+    except Exception as e:
+        raise HTTPException(502, f"Google auth error: {e}")
+    try:
+        ti = _rq.get("https://oauth2.googleapis.com/tokeninfo",
+                     params={"access_token": creds.token}, timeout=15).json()
+        out["email"] = ti.get("email") or "(email not shared by token scopes)"
+        out["scopes"] = (ti.get("scope") or "").split()
+    except Exception as e:
+        out["tokeninfo_error"] = str(e)[:200]
+    try:
+        props, page = [], None
+        while True:
+            r = _rq.get("https://analyticsadmin.googleapis.com/v1beta/accountSummaries",
+                        headers={"Authorization": f"Bearer {creds.token}"},
+                        params={"pageSize": 200, **({"pageToken": page} if page else {})}, timeout=20).json()
+            if "error" in r:
+                out["ga4_properties_error"] = r["error"].get("message", str(r["error"]))[:300]
+                break
+            for acc in r.get("accountSummaries", []):
+                for p in acc.get("propertySummaries", []):
+                    props.append({"account": acc.get("displayName"),
+                                  "property": p.get("displayName"),
+                                  "id": p.get("property", "").split("/")[-1]})
+            page = r.get("nextPageToken")
+            if not page:
+                break
+        out["ga4_properties"] = props
+    except Exception as e:
+        out["ga4_properties_error"] = str(e)[:200]
+    try:
+        out["gsc_sites"] = gsc.list_sites(creds)
+    except Exception as e:
+        out["gsc_sites_error"] = str(e)[:200]
+    out["configured"] = {k: {"ga4_property": v.get("ga4_property"), "gsc_site": v.get("gsc_site"),
+                             "ga4_access": any(p["id"] == v.get("ga4_property") for p in out.get("ga4_properties", []))}
+                         for k, v in DOMAINS.items()}
+    return out
+
+
 @app.get("/api/gsc/sites")
 def gsc_sites():
     try:
@@ -275,6 +323,25 @@ def ga4_daily(domain: str = "rh", start: str = "", end: str = ""):
         return ga4.get_daily(creds, prop, start, end)
     except Exception as e:
         raise HTTPException(502, f"GA4 error: {e}")
+
+
+@app.get("/api/ga4/quality")
+def ga4_quality(domain: str = "rh", start: str = "", end: str = ""):
+    """Engagement + channel quality + source/medium + country/region + landing pages."""
+    start, end = _dates(start, end)
+    prop = _domain(domain)["ga4_property"]
+    if not prop:
+        raise HTTPException(400, "GA4 property not configured")
+    creds = get_credentials()
+    out = {}
+    for key, fn in (("engagement", ga4.get_engagement_summary), ("channels", ga4.get_channel_quality),
+                    ("source_medium", ga4.get_source_medium), ("countries", ga4.get_country_breakdown),
+                    ("regions", ga4.get_region_breakdown), ("landing_pages", ga4.get_landing_page_quality)):
+        try:
+            out[key] = fn(creds, prop, start, end)
+        except Exception as e:
+            out[key] = {"error": str(e)[:200]}
+    return out
 
 
 @app.get("/api/ga4/devices")
@@ -550,7 +617,7 @@ def social_diagnose(token: str = ""):
         except Exception as e:
             out["_token_identity_error"] = str(e)[:300]
 
-    for dom_key in ("rh", "pms", "aif", "akeana"):
+    for dom_key in DOMAINS:
         cfg_token, page_id = _meta_creds(dom_key)
         use_token = token or cfg_token
         if not use_token or not page_id:
@@ -1160,6 +1227,21 @@ def _chat_context(domain: str, start: str = "", end: str = "", deep: bool = True
                 except Exception: pass
                 try: a["cities_30d"] = ga4.get_city_breakdown(creds, prop, m30s, m30e, 12)
                 except Exception: pass
+                p30s, p30e = WIN["previous_30_days"]
+                for k2, fn, args in (
+                    ("engagement_last_30d", ga4.get_engagement_summary, (m30s, m30e)),
+                    ("engagement_previous_30d", ga4.get_engagement_summary, (p30s, p30e)),
+                    ("channel_quality_30d", ga4.get_channel_quality, (m30s, m30e)),
+                    ("channel_quality_previous_30d", ga4.get_channel_quality, (p30s, p30e)),
+                    ("source_medium_30d", ga4.get_source_medium, (m30s, m30e, 15)),
+                    ("countries_30d", ga4.get_country_breakdown, (m30s, m30e, 12)),
+                    ("regions_30d", ga4.get_region_breakdown, (m30s, m30e, 15)),
+                    ("landing_pages_quality_30d", ga4.get_landing_page_quality, (m30s, m30e, 15)),
+                ):
+                    if not deep and k2 not in ("engagement_last_30d", "channel_quality_30d", "countries_30d"):
+                        continue
+                    try: a[k2] = fn(creds, prop, *args)
+                    except Exception as ex: a[k2] = {"error": str(ex)[:120]}
                 if deep:
                     try: a["daily_90d"] = ga4.get_daily(creds, prop, w90s, w90e)
                     except Exception: pass
@@ -1249,7 +1331,7 @@ def chat_endpoint(payload: dict = Body(...)):
     history = payload.get("history") or []
     today = _today_ist()
 
-    doms = ["rh", "pms", "aif", "akeana"] if domain in ("all", "") else [domain]
+    doms = list(DOMAINS.keys()) if domain in ("all", "") else [domain]
     deep = len(doms) == 1  # full windows + daily for one domain; lighter for all
     context = {"as_of": today.isoformat(), "domains": {}}
     for dk in doms:
@@ -1273,8 +1355,26 @@ def chat_endpoint(payload: dict = Body(...)):
         context["domains"][dk] = c
 
     sys_prompt = (
-        "You are the Right Horizons Reporting data assistant. You answer questions about digital "
-        "marketing performance for Right Horizons (RH), Right Horizons PMS, Right Horizons AIF and Akeana.\n\n"
+        "You are the Right Horizons Reporting data assistant — a senior digital-marketing analyst. You answer "
+        "questions about digital marketing performance for: " + ", ".join(DOMAINS[k]["label"] for k in DOMAINS) + ".\n\n"
+        "BUSINESS CONTEXT (use it to interpret numbers, never as a source of numbers):\n"
+        + "".join(f"- {DOMAINS[k]['label']} [{k}]: {DOMAIN_KNOWLEDGE.get(k, '')}\n" for k in doms) + "\n"
+        "HOW TO ANALYSE (GA4 field guide):\n"
+        "- sessions = visits; users = unique visitors; new_users vs users shows acquisition vs returning loyalty.\n"
+        "- engagement_rate (%) = engaged sessions / sessions (engaged = >10s, 2+ pageviews or a key event). bounce_rate = 100 - engagement_rate.\n"
+        "- avg_session is in SECONDS — present as m:ss. views_per_session = depth. key_events = conversions configured in GA4.\n"
+        "- Combine metrics: high sessions + low engagement on a channel/region = low-quality or misaligned traffic; low sessions + high "
+        "engagement/key events = high-intent segment worth scaling. Always weigh volume against quality.\n"
+        "- channel_quality_* gives per-channel sessions, engagement, avg session and key events — compare last 30d vs previous 30d to "
+        "explain WHY totals moved (which channel drove the change). source_medium_30d drills into exact sources (google / organic, linkedin.com / referral, etc.).\n"
+        "- countries_30d / regions_30d / cities_30d: judge geography against the business's target market (e.g. NextWealth & Akeana "
+        "sell to US/EU buyers, so India-heavy traffic may be job seekers; RH/PMS/AIF target India + NRI hubs like UAE, Singapore, US, UK).\n"
+        "- landing_pages_quality_30d / top_pages_30d: tie content to outcomes — which pages attract traffic AND hold attention. "
+        "Classify pages (service, case study, blog, careers, contact) when reading them.\n"
+        "- devices_30d: mobile vs desktop share; B2B audiences skew desktop.\n"
+        "- Search Console: clicks, impressions, ctr (fraction), position (lower is better). Rising impressions + falling CTR = ranking for "
+        "broader queries or SERP features stealing clicks. Connect top queries to landing pages.\n"
+        "- When asked for analysis, give: what changed (with numbers), why (which channel/region/page drove it), and 2-3 concrete actions.\n\n"
         "ABSOLUTE RULES:\n"
         "1. Answer ONLY using the DATA JSON provided below. Every number you state must come directly from it.\n"
         "2. NEVER invent, estimate, extrapolate or assume a figure. If a value is not in the DATA, say plainly: "

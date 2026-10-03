@@ -870,10 +870,53 @@ async function loadGA4() {
         const ga4MetricSel = document.getElementById('ga4-metric-select');
         switchGA4Metric(ga4MetricSel ? ga4MetricSel.value : 'sessions-users');
         renderDeviceChart(_dashGA4Devices);
+        loadGA4Quality(qs);
     } catch (e) {
         console.error('GA4 error:', e);
         [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) { el.className = 'metric-value'; el.textContent = '-'; } });
     }
+}
+
+function _fmtDur(sec) {
+    sec = Math.round(sec || 0);
+    return Math.floor(sec / 60) + 'm ' + String(sec % 60).padStart(2, '0') + 's';
+}
+
+async function loadGA4Quality(qs) {
+    const cardIds = ['ga4q-eng-rate', 'ga4q-avg-session', 'ga4q-engaged', 'ga4q-vps', 'ga4q-key-events'];
+    cardIds.forEach(id => showLoading(id));
+    let q = {};
+    try { q = await api(`/api/ga4/quality${qs}`); } catch (e) { console.error('GA4 quality error:', e); }
+    const e = (q.engagement && !q.engagement.error) ? q.engagement : null;
+    const vals = e ? [e.engagement_rate + '%', _fmtDur(e.avg_session), e.engaged_sessions, e.views_per_session, e.key_events]
+                   : ['-', '-', '-', '-', '-'];
+    cardIds.forEach((id, i) => renderMetric(id, vals[i]));
+
+    const prep = (rows, labelKeys) => (Array.isArray(rows) ? rows : []).map(r => {
+        const o = { ...r };
+        labelKeys.forEach(k => { o[k] = esc(r[k] || '(not set)'); });
+        o.engagement_rate = (r.engagement_rate ?? 0) + '%';
+        o.bounce_rate = (r.bounce_rate ?? 0) + '%';
+        o.avg_session = _fmtDur(r.avg_session);
+        return o;
+    });
+    const qualityCols = [
+        { label: 'Sessions', key: 'sessions' }, { label: 'Users', key: 'users' },
+        { label: 'Engaged', key: 'engaged_sessions' }, { label: 'Eng. Rate', key: 'engagement_rate' },
+        { label: 'Avg Session', key: 'avg_session' }, { label: 'Pages/Sess', key: 'views_per_session' },
+        { label: 'Key Events', key: 'key_events' },
+    ];
+    const short = [{ label: 'Sessions', key: 'sessions' }, { label: 'Eng. Rate', key: 'engagement_rate' }, { label: 'Avg Session', key: 'avg_session' }];
+    renderTable('ga4q-channels-table', [{ label: 'Channel', key: 'sessionDefaultChannelGroup' }, ...qualityCols],
+        prep(q.channels, ['sessionDefaultChannelGroup']));
+    renderTable('ga4q-source-table', [{ label: 'Source / Medium', key: 'sessionSourceMedium' }, ...qualityCols],
+        prep(q.source_medium, ['sessionSourceMedium']));
+    renderTable('ga4q-countries-table', [{ label: 'Country', key: 'country' }, ...short],
+        prep(q.countries, ['country']));
+    renderTable('ga4q-regions-table', [{ label: 'Region', key: 'region' }, { label: 'Country', key: 'country' }, ...short],
+        prep(q.regions, ['region', 'country']));
+    renderTable('ga4q-landing-table', [{ label: 'Landing Page', key: 'page' }, ...qualityCols],
+        prep((Array.isArray(q.landing_pages) ? q.landing_pages : []).map(r => ({ ...r, page: r.landingPagePlusQueryString })), ['page']));
 }
 
 function renderDeviceChart(devices) {
@@ -1663,14 +1706,16 @@ function switchDomain(key) {
 
     const hiddenForAkeana = ['meta', 'social', 'youtube', 'linkedin'];
     const isAkeana = key === 'akeana';
+    // Domains without Meta / social / YouTube / LinkedIn connected
+    const noSocial = isAkeana || key === 'nextwealth';
     hiddenForAkeana.forEach(tab => {
         const btn = document.querySelector(`[data-dash="${tab}"]`);
-        if (btn) btn.style.display = isAkeana ? 'none' : '';
+        if (btn) btn.style.display = noSocial ? 'none' : '';
     });
     const serBtn = document.getElementById('tab-seranking');
     if (serBtn) serBtn.style.display = isAkeana ? '' : 'none';
 
-    if (isAkeana && hiddenForAkeana.includes(currentDashTab)) {
+    if (noSocial && hiddenForAkeana.includes(currentDashTab)) {
         switchDashTab('overview');
     }
 

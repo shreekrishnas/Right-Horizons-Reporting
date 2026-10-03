@@ -237,3 +237,69 @@ def get_daily(creds: Credentials, property_id: str, start: str, end: str) -> lis
         }
         for r in resp.rows
     ]
+
+
+def _rows(resp, dims: list, mets: list) -> list:
+    out = []
+    for r in resp.rows:
+        row = {d: r.dimension_values[i].value for i, d in enumerate(dims)}
+        for i, (key, kind) in enumerate(mets):
+            v = float(r.metric_values[i].value or 0)
+            if kind == "pct":
+                row[key] = round(v * 100, 1)
+            elif kind == "sec":
+                row[key] = round(v)
+            elif kind == "float":
+                row[key] = round(v, 2)
+            else:
+                row[key] = int(v)
+        out.append(row)
+    return out
+
+
+_QUALITY_METRICS = [
+    ("sessions", "int"), ("users", "int"), ("engaged_sessions", "int"),
+    ("engagement_rate", "pct"), ("bounce_rate", "pct"),
+    ("avg_session", "sec"), ("views_per_session", "float"), ("key_events", "int"),
+]
+_QUALITY_GA4 = ["sessions", "totalUsers", "engagedSessions", "engagementRate", "bounceRate",
+                "averageSessionDuration", "screenPageViewsPerSession", "keyEvents"]
+
+
+def _quality_report(creds, property_id, start, end, dims, limit):
+    resp = _client(creds).run_report(RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start, end_date=end)],
+        dimensions=[Dimension(name=d) for d in dims],
+        metrics=[Metric(name=m) for m in _QUALITY_GA4],
+        order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="sessions"), desc=True)],
+        limit=limit,
+    ))
+    return _rows(resp, dims, _QUALITY_METRICS)
+
+
+def get_engagement_summary(creds: Credentials, property_id: str, start: str, end: str) -> dict:
+    """Site-wide engagement quality: engaged sessions, engagement rate, views/session, key events."""
+    rows = _quality_report(creds, property_id, start, end, [], 1)
+    return rows[0] if rows else {k: 0 for k, _ in _QUALITY_METRICS}
+
+
+def get_channel_quality(creds: Credentials, property_id: str, start: str, end: str) -> list:
+    """Per-channel volume AND quality (engagement, avg session, key events)."""
+    return _quality_report(creds, property_id, start, end, ["sessionDefaultChannelGroup"], 15)
+
+
+def get_source_medium(creds: Credentials, property_id: str, start: str, end: str, limit: int = 20) -> list:
+    return _quality_report(creds, property_id, start, end, ["sessionSourceMedium"], limit)
+
+
+def get_country_breakdown(creds: Credentials, property_id: str, start: str, end: str, limit: int = 15) -> list:
+    return _quality_report(creds, property_id, start, end, ["country"], limit)
+
+
+def get_region_breakdown(creds: Credentials, property_id: str, start: str, end: str, limit: int = 20) -> list:
+    return _quality_report(creds, property_id, start, end, ["country", "region"], limit)
+
+
+def get_landing_page_quality(creds: Credentials, property_id: str, start: str, end: str, limit: int = 20) -> list:
+    return _quality_report(creds, property_id, start, end, ["landingPagePlusQueryString"], limit)
