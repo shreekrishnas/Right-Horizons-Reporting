@@ -303,3 +303,90 @@ def get_region_breakdown(creds: Credentials, property_id: str, start: str, end: 
 
 def get_landing_page_quality(creds: Credentials, property_id: str, start: str, end: str, limit: int = 20) -> list:
     return _quality_report(creds, property_id, start, end, ["landingPagePlusQueryString"], limit)
+
+
+# Cities that host major cloud data centres — traffic from here with near-zero
+# engagement is usually crawlers, uptime monitors or scrapers, not people.
+_DATACENTER_CITIES = {
+    "ashburn", "boardman", "council bluffs", "the dalles", "san jose", "santa clara",
+    "dublin", "frankfurt", "singapore", "moses lake", "quincy", "des moines",
+    "north charleston", "columbus", "san antonio", "phoenix", "lenoir",
+}
+
+
+def get_bot_traffic(creds: Credentials, property_id: str, start: str, end: str) -> dict:
+    """Heuristic bot/spam estimate. GA4 has no 'bot' dimension, so we score
+    country+city+browser+channel segments on behaviour: almost no time on site,
+    ~1 page, ~all new users, low engagement, data-centre locations, (not set)
+    geo. Returns totals, % of traffic, suspect segments and 'clean' metrics."""
+    dims = ["country", "city", "browser", "sessionDefaultChannelGroup"]
+    resp = _client(creds).run_report(RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start, end_date=end)],
+        dimensions=[Dimension(name=d) for d in dims],
+        metrics=[Metric(name=m) for m in ("sessions", "totalUsers", "newUsers", "engagedSessions",
+                                          "averageSessionDuration", "screenPageViewsPerSession", "keyEvents")],
+        order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="sessions"), desc=True)],
+        limit=1000,
+    ))
+    total = {"sessions": 0, "users": 0, "engaged": 0, "dur": 0.0, "key_events": 0}
+    bot = {"sessions": 0, "users": 0, "engaged": 0, "dur": 0.0}
+    suspects = []
+    for r in resp.rows:
+        country, city, browser, channel = (v.value for v in r.dimension_values)
+        s, u, nu, eng, dur, vps, ke = (float(m.value or 0) for m in r.metric_values)
+        total["sessions"] += s; total["users"] += u; total["engaged"] += eng
+        total["dur"] += dur * s; total["key_events"] += ke
+        if s < 5 or ke > 0:
+            continue
+        er = eng / s if s else 0
+        reasons, score = [], 0
+        if dur < 5:
+            score += 2; reasons.append(f"avg session {dur:.0f}s")
+        elif dur < 10:
+            score += 1; reasons.append(f"avg session {dur:.0f}s")
+        if er < 0.3:
+            score += 1; reasons.append(f"engagement {er*100:.0f}%")
+        if u and nu / u > 0.95 and s >= 10:
+            score += 1; reasons.append("~100% new users")
+        if vps <= 1.05:
+            score += 1; reasons.append("single page")
+        if city.lower() in _DATACENTER_CITIES:
+            score += 1; reasons.append(f"data-centre city ({city})")
+        if city in ("(not set)", "") or country in ("(not set)", ""):
+            score += 1; reasons.append("location not set")
+        if s and u / s > 0.97 and s >= 20 and dur < 10:
+            score += 1; reasons.append("1 session per user")
+        if score >= 4:
+            bot["sessions"] += s; bot["users"] += u; bot["engaged"] += eng; bot["dur"] += dur * s
+            suspects.append({"country": country, "city": city, "browser": browser, "channel": channel,
+                             "sessions": int(s), "users": int(u), "avg_session": round(dur),
+                             "engagement_rate": round(er * 100, 1), "score": score, "reasons": reasons})
+    ts, bs = total["sessions"], bot["sessions"]
+    hs = ts - bs
+    by_country, by_channel = {}, {}
+    for x in suspects:
+        by_country[x["country"]] = by_country.get(x["country"], 0) + x["sessions"]
+        by_channel[x["channel"]] = by_channel.get(x["channel"], 0) + x["sessions"]
+    return {
+        "method": "heuristic estimate — GA4 does not label bots; segments scored on near-zero time, single page, "
+                  "~100% new users, low engagement, data-centre/unknown location; segments with key events are never flagged",
+        "total_sessions": int(ts),
+        "suspected_bot_sessions": int(bs),
+        "suspected_bot_users": int(bot["users"]),
+        "bot_share_pct": round(bs / ts * 100, 1) if ts else 0,
+        "by_country": dict(sorted(by_country.items(), key=lambda kv: -kv[1])),
+        "by_channel": dict(sorted(by_channel.items(), key=lambda kv: -kv[1])),
+        "top_suspect_segments": sorted(suspects, key=lambda x: -x["sessions"])[:15],
+        "clean": {
+            "sessions": int(hs),
+            "users": int(total["users"] - bot["users"]),
+            "engagement_rate": round((total["engaged"] - bot["engaged"]) / hs * 100, 1) if hs else 0,
+            "avg_session": round((total["dur"] - bot["dur"]) / hs) if hs else 0,
+            "key_events": int(total["key_events"]),
+        },
+        "reported": {
+            "engagement_rate": round(total["engaged"] / ts * 100, 1) if ts else 0,
+            "avg_session": round(total["dur"] / ts) if ts else 0,
+        },
+    }
