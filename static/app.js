@@ -1737,6 +1737,7 @@ function switchDomain(key) {
     loadAll();
     reloadActiveDashTab();
     if (currentView === 'analytics') loadAnalytics();
+    _chatUpdateScope();
 }
 
 function exportReport() {
@@ -3202,6 +3203,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 let _chatHistory = [];
 let _chatBusy = false;
 
+// Reports page has its own client picker; everywhere else follow the domain tab.
+function _chatDomain() {
+    if (currentView === 'reports' && document.getElementById('rep-domain')) return _repDomain() || currentDomain || 'rh';
+    return currentDomain || 'rh';
+}
+
+function _chatUpdateScope() {
+    const scope = document.getElementById('rh-chat-scope');
+    const dom = _chatDomain();
+    if (scope) scope.textContent = `${(domains[dom] && domains[dom].label) || dom} · live data · any time period`;
+}
+
 function toggleChat() {
     const panel = document.getElementById('rh-chat-panel');
     if (!panel) return;
@@ -3209,8 +3222,7 @@ function toggleChat() {
     panel.style.display = open ? 'none' : 'flex';
     if (!open) {
         const scope = document.getElementById('rh-chat-scope');
-        const dom = (typeof _repDomain === 'function' && document.getElementById('rep-domain')) ? _repDomain() : (currentDomain || 'rh');
-        if (scope) scope.textContent = `${(domains[dom] && domains[dom].label) || dom} · live data · any time period`;
+        _chatUpdateScope();
         const t = document.getElementById('rh-chat-text'); if (t) t.focus();
     }
 }
@@ -3264,7 +3276,7 @@ async function chatSend() {
     document.getElementById('rh-chat-send').disabled = true;
     const typing = _chatAppend('bot', '<span class="rh-typing"><i></i><i></i><i></i></span>');
 
-    const dom = (typeof _repDomain === 'function' && document.getElementById('rep-domain')) ? _repDomain() : (currentDomain || 'rh');
+    const dom = _chatDomain();
     try {
         const res = await fetch('/api/chat', {
             method: 'POST',
