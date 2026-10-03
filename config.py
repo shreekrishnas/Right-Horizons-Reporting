@@ -82,7 +82,7 @@ DOMAINS = {
     "nextwealth": {
         "label": "NextWealth",
         "short": "NW",
-        "gsc_site": os.getenv("GSC_SITE_NEXTWEALTH", "sc-domain:nextwealth.com"),
+        "gsc_site": os.getenv("GSC_SITE_NEXTWEALTH", "https://www.nextwealth.com/"),
         "ga4_property": os.getenv("GA4_PROPERTY_NEXTWEALTH", "313815408"),
         "color": "#E11D48",
         "url": os.getenv("NEXTWEALTH_URL", "https://www.nextwealth.com"),
