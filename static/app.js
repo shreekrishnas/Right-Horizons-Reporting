@@ -1663,14 +1663,16 @@ function switchDomain(key) {
 
     const hiddenForAkeana = ['meta', 'social', 'youtube', 'linkedin'];
     const isAkeana = key === 'akeana';
+    // Domains without Meta / social / YouTube / LinkedIn connected
+    const noSocial = isAkeana || key === 'nextwealth';
     hiddenForAkeana.forEach(tab => {
         const btn = document.querySelector(`[data-dash="${tab}"]`);
-        if (btn) btn.style.display = isAkeana ? 'none' : '';
+        if (btn) btn.style.display = noSocial ? 'none' : '';
     });
     const serBtn = document.getElementById('tab-seranking');
     if (serBtn) serBtn.style.display = isAkeana ? '' : 'none';
 
-    if (isAkeana && hiddenForAkeana.includes(currentDashTab)) {
+    if (noSocial && hiddenForAkeana.includes(currentDashTab)) {
         switchDashTab('overview');
     }
 
