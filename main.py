@@ -165,6 +165,53 @@ def get_domains():
     return {k: {kk: vv for kk, vv in v.items() if kk not in ("gsc_site", "ga4_property")} for k, v in DOMAINS.items()}
 
 
+@app.get("/api/google/whoami")
+def google_whoami():
+    """Which Google account the dashboard is signed in as, and which GA4
+    properties / Search Console sites that account can access."""
+    import requests as _rq
+    out = {}
+    try:
+        creds = get_credentials()
+    except Exception as e:
+        raise HTTPException(502, f"Google auth error: {e}")
+    try:
+        ti = _rq.get("https://oauth2.googleapis.com/tokeninfo",
+                     params={"access_token": creds.token}, timeout=15).json()
+        out["email"] = ti.get("email") or "(email not shared by token scopes)"
+        out["scopes"] = (ti.get("scope") or "").split()
+    except Exception as e:
+        out["tokeninfo_error"] = str(e)[:200]
+    try:
+        props, page = [], None
+        while True:
+            r = _rq.get("https://analyticsadmin.googleapis.com/v1beta/accountSummaries",
+                        headers={"Authorization": f"Bearer {creds.token}"},
+                        params={"pageSize": 200, **({"pageToken": page} if page else {})}, timeout=20).json()
+            if "error" in r:
+                out["ga4_properties_error"] = r["error"].get("message", str(r["error"]))[:300]
+                break
+            for acc in r.get("accountSummaries", []):
+                for p in acc.get("propertySummaries", []):
+                    props.append({"account": acc.get("displayName"),
+                                  "property": p.get("displayName"),
+                                  "id": p.get("property", "").split("/")[-1]})
+            page = r.get("nextPageToken")
+            if not page:
+                break
+        out["ga4_properties"] = props
+    except Exception as e:
+        out["ga4_properties_error"] = str(e)[:200]
+    try:
+        out["gsc_sites"] = gsc.list_sites(creds)
+    except Exception as e:
+        out["gsc_sites_error"] = str(e)[:200]
+    out["configured"] = {k: {"ga4_property": v.get("ga4_property"), "gsc_site": v.get("gsc_site"),
+                             "ga4_access": any(p["id"] == v.get("ga4_property") for p in out.get("ga4_properties", []))}
+                         for k, v in DOMAINS.items()}
+    return out
+
+
 @app.get("/api/gsc/sites")
 def gsc_sites():
     try:
