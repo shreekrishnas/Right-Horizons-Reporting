@@ -932,6 +932,23 @@ async function loadGA4Quality(qs) {
         ...r, country: esc(r.country), city: esc(r.city), browser: esc(r.browser), channel: esc(r.channel),
         avg_session: _fmtDur(r.avg_session), engagement_rate: r.engagement_rate + '%', reasons: esc((r.reasons || []).join(', ')),
     })));
+    renderTable('ga4b-spikes', [
+        { label: 'Date', key: 'date' }, { label: 'Sessions', key: 'sessions' }, { label: 'Normal Day', key: 'baseline' },
+        { label: 'Driven By', key: 'top_location' }, { label: 'Its Sessions', key: 'top_location_sessions' },
+    ], (b ? b.spike_days : []).map(r => ({ ...r, top_location: esc(r.top_location) })));
+    renderTable('ga4b-pages', [
+        { label: 'Landing Page', key: 'page' }, { label: 'Sessions', key: 'sessions' },
+        { label: 'Eng. Rate', key: 'engagement_rate' }, { label: 'Avg Session', key: 'avg_session' },
+    ], (b ? b.bot_targeted_pages : []).map(r => ({ ...r, page: esc(r.page), engagement_rate: r.engagement_rate + '%', avg_session: _fmtDur(r.avg_session) })));
+    const hp = (b && b.hourly_profile) || [];
+    if (hp.length === 24) {
+        makeChart('chart-ga4b-hourly', {
+            type: 'bar',
+            data: { labels: hp.map((_, i) => String(i).padStart(2, '0') + ':00'),
+                    datasets: [{ label: 'Sessions', data: hp, backgroundColor: '#7C3AED' }] },
+            options: { plugins: { legend: { display: false } }, scales: { x: { ticks: { font: { size: 9 } } } } }
+        });
+    }
 }
 
 function renderDeviceChart(devices) {
