@@ -362,8 +362,14 @@ def get_bot_traffic(creds: Credentials, property_id: str, start: str, end: str) 
             suspects.append({"country": country, "city": city, "browser": browser, "channel": channel,
                              "sessions": int(s), "users": int(u), "avg_session": round(dur),
                              "engagement_rate": round(er * 100, 1), "score": score, "reasons": reasons})
+    # Segment rows double-count users/sessions that span several cities or
+    # browsers, so take the real totals from an undimensioned query and
+    # subtract the suspected bots from those.
+    t = get_engagement_summary(creds, property_id, start, end)
+    total = {"sessions": t["sessions"], "users": t["users"], "engaged": t["engaged_sessions"],
+             "dur": t["avg_session"] * t["sessions"], "key_events": t["key_events"]}
     ts, bs = total["sessions"], bot["sessions"]
-    hs = ts - bs
+    hs = max(ts - bs, 0)
     by_country, by_channel = {}, {}
     for x in suspects:
         by_country[x["country"]] = by_country.get(x["country"], 0) + x["sessions"]
@@ -372,6 +378,7 @@ def get_bot_traffic(creds: Credentials, property_id: str, start: str, end: str) 
         "method": "heuristic estimate — GA4 does not label bots; segments scored on near-zero time, single page, "
                   "~100% new users, low engagement, data-centre/unknown location; segments with key events are never flagged",
         "total_sessions": int(ts),
+        "total_users": int(total["users"]),
         "suspected_bot_sessions": int(bs),
         "suspected_bot_users": int(bot["users"]),
         "bot_share_pct": round(bs / ts * 100, 1) if ts else 0,
@@ -380,9 +387,9 @@ def get_bot_traffic(creds: Credentials, property_id: str, start: str, end: str) 
         "top_suspect_segments": sorted(suspects, key=lambda x: -x["sessions"])[:15],
         "clean": {
             "sessions": int(hs),
-            "users": int(total["users"] - bot["users"]),
-            "engagement_rate": round((total["engaged"] - bot["engaged"]) / hs * 100, 1) if hs else 0,
-            "avg_session": round((total["dur"] - bot["dur"]) / hs) if hs else 0,
+            "users": int(max(total["users"] - bot["users"], 0)),
+            "engagement_rate": round(max(total["engaged"] - bot["engaged"], 0) / hs * 100, 1) if hs else 0,
+            "avg_session": round(max(total["dur"] - bot["dur"], 0) / hs) if hs else 0,
             "key_events": int(total["key_events"]),
         },
         "reported": {
