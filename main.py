@@ -1221,8 +1221,15 @@ def _chat_context(domain: str, start: str = "", end: str = "", deep: bool = True
         "last_30_days": _r(29, 0),
         "previous_30_days": _r(59, 30),
     }
+    # Calendar months (e.g. "this month", "last month" = September when today is in October)
+    _first_this = today.replace(day=1)
+    _last_prev = _first_this - timedelta(days=1)
+    WIN["this_month_to_date"] = (_first_this.isoformat(), today.isoformat())
+    WIN["last_calendar_month"] = (_last_prev.replace(day=1).isoformat(), _last_prev.isoformat())
     if deep:
         WIN["last_90_days"] = _r(89, 0)
+        _last_prev2 = _last_prev.replace(day=1) - timedelta(days=1)
+        WIN["calendar_month_before_last"] = (_last_prev2.replace(day=1).isoformat(), _last_prev2.isoformat())
     w90s, w90e = _r(89, 0)
     m30s, m30e = WIN["last_30_days"]
 
@@ -1365,6 +1372,63 @@ def _chat_context(domain: str, start: str = "", end: str = "", deep: bool = True
     return ctx
 
 
+_MONTHS = {m: i for i, m in enumerate(
+    ["january", "february", "march", "april", "may", "june", "july", "august",
+     "september", "october", "november", "december"], 1)}
+_MONTH_ABBR = {k[:3]: v for k, v in _MONTHS.items()} | {"sept": 9}
+
+
+def _periods_in_question(q: str, today) -> dict:
+    """Find explicit calendar months / dates in the question ("September",
+    "aug 2026", "2026-09-01 to 2026-09-15") and return {label: (start, end)}."""
+    import re
+    import calendar
+    out = {}
+    ql = q.lower()
+    for a, b in re.findall(r"(\d{4}-\d{2}-\d{2})\s*(?:to|-|–|until|and)\s*(\d{4}-\d{2}-\d{2})", ql):
+        out[f"{a} to {b}"] = (a, b)
+    for word, yr in re.findall(r"\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec)\b\.?,?\s*(\d{4})?", ql):
+        if word == "may" and not yr and not re.search(r"\bmay\s+(month|20\d\d)|\bin\s+may\b|\bof\s+may\b", ql):
+            continue  # "may" as a verb
+        m = _MONTHS.get(word) or _MONTH_ABBR.get(word)
+        y = int(yr) if yr else (today.year if m <= today.month else today.year - 1)
+        start = date(y, m, 1)
+        if start > today:
+            continue
+        end = min(date(y, m, calendar.monthrange(y, m)[1]), today)
+        out[f"{start.strftime('%B %Y')}" + (" (to date)" if end == today else "")] = (start.isoformat(), end.isoformat())
+    return dict(list(out.items())[:4])
+
+
+def _period_snapshot(domain: str, start: str, end: str) -> dict:
+    d = DOMAINS.get(domain, {})
+    snap = {"start": start, "end": end}
+    try:
+        creds = get_credentials()
+    except Exception as e:
+        return {**snap, "error": str(e)[:200]}
+    prop = d.get("ga4_property")
+    jobs = [("search_console", lambda: gsc.get_summary(creds, d["gsc_site"], start, end)),
+            ("search_console_top_queries", lambda: gsc.get_top_queries(creds, d["gsc_site"], start, end, 15))]
+    if prop:
+        jobs += [("ga4_summary", lambda: ga4.get_summary(creds, prop, start, end)),
+                 ("ga4_engagement", lambda: ga4.get_engagement_summary(creds, prop, start, end)),
+                 ("ga4_channel_quality", lambda: ga4.get_channel_quality(creds, prop, start, end)),
+                 ("ga4_countries", lambda: ga4.get_country_breakdown(creds, prop, start, end, 10)),
+                 ("ga4_devices", lambda: ga4.get_device_breakdown(creds, prop, start, end)),
+                 ("ga4_top_pages", lambda: ga4.get_top_pages(creds, prop, start, end, 10)),
+                 ("bot_traffic", lambda: ga4.get_bot_traffic(creds, prop, start, end))]
+    ad = d.get("meta_ad_account", "")
+    if META_MARKETING_TOKEN and ad and not d.get("meta_manual"):
+        jobs.append(("meta_ads", lambda: meta.get_account_summary(META_MARKETING_TOKEN, ad, start, end)))
+    for name, fn in jobs:
+        try:
+            snap[name] = fn()
+        except Exception as e:
+            snap[name] = {"error": str(e)[:150]}
+    return snap
+
+
 @app.post("/api/chat")
 def chat_endpoint(payload: dict = Body(...)):
     """Grounded data assistant — answers ONLY from live fetched data."""
@@ -1399,6 +1463,14 @@ def chat_endpoint(payload: dict = Body(...)):
         except Exception:
             pass
         context["domains"][dk] = c
+
+    # Periods the user explicitly named (e.g. "September") — fetched exactly.
+    asked = _periods_in_question(question + " " + " ".join(h.get("content", "") for h in history[-2:] if h.get("role") == "user"), today)
+    if asked:
+        for dk in doms:
+            # Put it FIRST so the 90k-char data cap can never cut it off.
+            per = {lbl: _period_snapshot(dk, s, e) for lbl, (s, e) in list(asked.items())[:(4 if len(doms) == 1 else 2)]}
+            context["domains"][dk] = {"requested_periods": per, **context["domains"][dk]}
 
     sys_prompt = (
         "You are the Right Horizons Reporting data assistant — a senior digital-marketing analyst. You answer "
@@ -1435,7 +1507,8 @@ def chat_endpoint(payload: dict = Body(...)):
         "5. All currency is ₹ (INR). Percentages: GSC CTR & IG/FB engagement_rate/ctr are fractions (0.53 = 0.53%); engagement_rate_pct and bounce_rate & mobile% are already percents.\n"
         "6. For comparisons/'variation'/'why did X change' questions, compute the difference ONLY from numbers present in the DATA and show the math.\n"
         "7. Be concise and specific. Use short bullet points or a tiny table. If the user asks for a comment/insight, give it grounded in the shown numbers.\n"
-        "8. TIME WINDOWS: the data is NOT limited to any selected range. Each source has a 'by_window' / '_by_window' object keyed by: last_7_days, previous_7_days, last_30_days, previous_30_days, last_90_days — all relative to 'as_of' (today). "
+        "8. TIME WINDOWS: the data is NOT limited to any selected range. Each source has a 'by_window' / '_by_window' object keyed by: last_7_days, previous_7_days, last_30_days, previous_30_days, this_month_to_date, last_calendar_month, calendar_month_before_last, last_90_days — all relative to 'as_of' (today); exact dates are in 'windows'. "
+        "If the user names a month or date range, it is fetched exactly under 'requested_periods' (keyed by e.g. 'September 2026') — ALWAYS use that first. 'Last month' = last_calendar_month. "
         "For 'this week' use last_7_days and compare to previous_7_days; for 'this month' use last_30_days vs previous_30_days. GSC/GA4 also include 'daily_90d' arrays — aggregate those yourself for any custom period the user names. The exact dates of each window are in 'windows'.\n"
         "9. CONTENT: 'content_calendar' holds planned/AI-generated posts per month (titles, dates, platforms); 'content_ideas' holds generated ideas. Use these to answer anything about content planned, generated, scheduled, or not yet generated — list the actual titles/dates. If a month has no entry, say no content has been generated for it yet.\n"
     )
