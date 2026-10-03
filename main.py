@@ -165,6 +165,48 @@ def get_domains():
     return {k: {kk: vv for kk, vv in v.items() if kk not in ("gsc_site", "ga4_property")} for k, v in DOMAINS.items()}
 
 
+@app.get("/api/ai/health")
+def ai_health():
+    """Live OpenRouter check: key validity/credits + a tiny test completion."""
+    import requests as _rq
+    import time as _t
+    import ai as _ai
+    out = {"key_configured": bool(OPENROUTER_API_KEY), "model": _ai.MODEL, "fallback_model": _ai.FALLBACK_MODEL}
+    if not OPENROUTER_API_KEY:
+        out["working"] = False
+        return out
+    try:
+        r = _rq.get("https://openrouter.ai/api/v1/key",
+                    headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"}, timeout=15)
+        out["key_status_code"] = r.status_code
+        d = (r.json() or {}).get("data", {}) if r.ok else {}
+        out["key"] = {k: d.get(k) for k in ("label", "usage", "limit", "limit_remaining", "is_free_tier")} if d else r.text[:300]
+    except Exception as e:
+        out["key_error"] = str(e)[:200]
+    try:
+        r = _rq.get("https://openrouter.ai/api/v1/credits",
+                    headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"}, timeout=15)
+        if r.ok:
+            d = r.json().get("data", {})
+            tc, tu = d.get("total_credits"), d.get("total_usage")
+            out["credits"] = {"total_credits": tc, "total_usage": tu,
+                              "remaining": round(tc - tu, 4) if tc is not None and tu is not None else None}
+        else:
+            out["credits"] = {"status_code": r.status_code, "body": r.text[:200]}
+    except Exception as e:
+        out["credits_error"] = str(e)[:200]
+    t0 = _t.time()
+    try:
+        reply = _ai.chat("Reply with exactly: OK", "Health check", max_tokens=5, temperature=0)
+        out["test_reply"] = (reply or "").strip()[:50]
+        out["working"] = True
+    except Exception as e:
+        out["test_error"] = str(e)[:400]
+        out["working"] = False
+    out["latency_ms"] = round((_t.time() - t0) * 1000)
+    return out
+
+
 @app.get("/api/google/whoami")
 def google_whoami():
     """Which Google account the dashboard is signed in as, and which GA4
