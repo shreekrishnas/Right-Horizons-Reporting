@@ -11,6 +11,25 @@
     <link rel="stylesheet" href="/static/styles.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%238B5CF6'/%3E%3Cstop offset='1' stop-color='%236D28D9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23bg)'/%3E%3Cpath d='M4 22 Q12 8 20 14 T28 10' stroke='%23fff' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='28' cy='10' r='2.2' fill='%23fff'/%3E%3Cline x1='4' y1='25' x2='28' y2='25' stroke='%23fff' stroke-width='1.4' stroke-linecap='round' opacity='0.55'/%3E%3C/svg%3E">
+<style>
+    .acct-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:0.75rem; }
+    .acct-row { display:flex; align-items:center; gap:0.75rem; padding:0.85rem 1rem; border-radius:0.8rem;
+                background:var(--surface-card); border:1.5px solid var(--border-subtle); cursor:pointer; }
+    .acct-name { flex:1; display:flex; flex-direction:column; font-weight:700; font-size:0.9rem; min-width:0; }
+    .acct-name small { font-weight:500; font-size:0.72rem; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .acct-state { font-size:0.7rem; font-weight:700; padding:2px 9px; border-radius:9999px; }
+    .acct-state.on { background:#10B98120; color:#10B981; }
+    .acct-state.off { background:#94A3B826; color:var(--text-muted); }
+    .acct-switch { appearance:none; -webkit-appearance:none; width:42px; height:24px; border-radius:9999px; background:#CBD5E1;
+                   position:relative; cursor:pointer; transition:background .2s; flex-shrink:0; margin:0; }
+    .acct-switch::after { content:""; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%;
+                          background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform .2s; }
+    .acct-switch:checked { background:#7C3AED; }
+    .acct-switch:checked::after { transform:translateX(18px); }
+    .acct-switch:focus-visible { outline:2px solid #7C3AED; outline-offset:2px; }
+    .acct-switch:disabled { opacity:.6; cursor:wait; }
+    @media (prefers-reduced-motion: reduce) { .acct-switch, .acct-switch::after { transition:none; } }
+</style>
 </head>
 <body>
 
@@ -1142,6 +1161,14 @@
                             Lock
                         </button>
                     </div>
+
+                    <!-- Accounts on/off -->
+                    <div class="section-label">Accounts</div>
+                    <p style="color:var(--text-muted); font-size:0.8rem; margin:-0.25rem 0 0.75rem;">Switch an account off to hide it from the dashboard, reports, Ideas Lab and the AI assistant. Its data and settings are kept, so you can switch it back on at any time.</p>
+                    <div id="admin-accounts-warn" style="display:none; background:#F59E0B1A; color:#B45309; border:1px solid #F59E0B55; border-radius:0.6rem; padding:0.6rem 0.9rem; font-size:0.8rem; margin-bottom:0.75rem;">
+                        Changes aren't saved permanently yet. Connect Upstash Redis in Vercel → Storage, then redeploy.
+                    </div>
+                    <div id="admin-accounts" class="acct-list" style="margin-bottom:2rem;"></div>
 
                     <!-- Credentials overview -->
                     <div id="admin-credentials" style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:2rem;"></div>
