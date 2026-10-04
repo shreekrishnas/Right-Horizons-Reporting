@@ -54,9 +54,63 @@ def _dates(start: str, end: str):
     return start, end
 
 
+# ── Account on/off settings ──────────────────────────────────────────────────
+# Saved in Upstash Redis (Vercel Storage → Upstash) so toggles survive deploys
+# and are shared by every serverless instance. Without it, falls back to the
+# DISABLED_DOMAINS env var + this instance's memory (not durable).
+_REDIS_URL = os.environ.get("KV_REST_API_URL") or os.environ.get("UPSTASH_REDIS_REST_URL") or ""
+_REDIS_TOKEN = os.environ.get("KV_REST_API_TOKEN") or os.environ.get("UPSTASH_REDIS_REST_TOKEN") or ""
+_SETTINGS_KEY = "rh-reporting:disabled-domains"
+_disabled_cache = {"ts": 0.0, "val": None}
+_disabled_mem = {k.strip() for k in os.environ.get("DISABLED_DOMAINS", "").split(",") if k.strip()}
+
+
+def _redis(*cmd):
+    import requests as _rq
+    r = _rq.post(_REDIS_URL, json=list(cmd), headers={"Authorization": f"Bearer {_REDIS_TOKEN}"}, timeout=5)
+    r.raise_for_status()
+    return r.json().get("result")
+
+
+def _disabled_domains() -> set:
+    import time as _t
+    import json as _json
+    if not (_REDIS_URL and _REDIS_TOKEN):
+        return set(_disabled_mem)
+    if _disabled_cache["val"] is not None and _t.time() - _disabled_cache["ts"] < 15:
+        return set(_disabled_cache["val"])
+    try:
+        raw = _redis("GET", _SETTINGS_KEY)
+        val = set(_json.loads(raw)) if raw else set(_disabled_mem)
+    except Exception:
+        val = set(_disabled_cache["val"] or _disabled_mem)
+    _disabled_cache.update(ts=_t.time(), val=val)
+    return set(val)
+
+
+def _set_disabled_domains(val: set) -> bool:
+    """Returns True if saved durably."""
+    import time as _t
+    import json as _json
+    global _disabled_mem
+    _disabled_mem = set(val)
+    _disabled_cache.update(ts=_t.time(), val=set(val))
+    if _REDIS_URL and _REDIS_TOKEN:
+        _redis("SET", _SETTINGS_KEY, _json.dumps(sorted(val)))
+        return True
+    return False
+
+
+def _enabled_domains() -> list:
+    off = _disabled_domains()
+    return [k for k in DOMAINS if k not in off]
+
+
 def _domain(key: str) -> dict:
     if key not in DOMAINS:
         raise HTTPException(400, f"Unknown domain: {key}")
+    if key in _disabled_domains():
+        raise HTTPException(403, f"{DOMAINS[key]['label']} is switched off in Admin → Accounts")
     return DOMAINS[key]
 
 
@@ -134,6 +188,39 @@ def admin_credentials(password: str = ""):
     }
 
 
+@app.post("/api/admin/accounts")
+def admin_accounts(password: str = ""):
+    if not password or password != ADMIN_PASSWORD:
+        raise HTTPException(401, "Invalid password")
+    off = _disabled_domains()
+    return {
+        "durable": bool(_REDIS_URL and _REDIS_TOKEN),
+        "accounts": [{"key": k, "label": v["label"], "color": v.get("color", ""), "url": v.get("url", ""),
+                      "enabled": k not in off} for k, v in DOMAINS.items()],
+    }
+
+
+@app.post("/api/admin/accounts/toggle")
+def admin_accounts_toggle(payload: dict = Body(...)):
+    if payload.get("password") != ADMIN_PASSWORD or not ADMIN_PASSWORD:
+        raise HTTPException(401, "Invalid password")
+    key = payload.get("domain", "")
+    if key not in DOMAINS:
+        raise HTTPException(400, f"Unknown domain: {key}")
+    off = _disabled_domains()
+    if payload.get("enabled"):
+        off.discard(key)
+    else:
+        if len([k for k in DOMAINS if k not in off and k != key]) == 0:
+            raise HTTPException(400, "At least one account must stay on")
+        off.add(key)
+    try:
+        durable = _set_disabled_domains(off)
+    except Exception as e:
+        raise HTTPException(502, f"Could not save setting: {e}")
+    return {"ok": True, "domain": key, "enabled": key not in off, "durable": durable}
+
+
 @app.post("/api/admin/history")
 def admin_history(password: str = ""):
     if not password or password != ADMIN_PASSWORD:
@@ -162,7 +249,9 @@ def admin_reset_history(password: str = "", scope: str = "all"):
 
 @app.get("/api/domains")
 def get_domains():
-    return {k: {kk: vv for kk, vv in v.items() if kk not in ("gsc_site", "ga4_property")} for k, v in DOMAINS.items()}
+    off = _disabled_domains()
+    return {k: {kk: vv for kk, vv in v.items() if kk not in ("gsc_site", "ga4_property", "meta_social_token")}
+            for k, v in DOMAINS.items() if k not in off}
 
 
 @app.get("/api/ai/health")
@@ -555,6 +644,8 @@ def cron_check_funds(test: bool = False):
     monitor_domains = [k.strip() for k in os.environ.get("ALERT_FUND_DOMAINS", "rh").split(",") if k.strip()]
     low_accounts = []
     for key in monitor_domains:
+        if key in _disabled_domains():
+            continue
         d = DOMAINS.get(key)
         if not d:
             continue
@@ -660,7 +751,7 @@ def social_diagnose(token: str = ""):
         except Exception as e:
             out["_token_identity_error"] = str(e)[:300]
 
-    for dom_key in DOMAINS:
+    for dom_key in _enabled_domains():
         cfg_token, page_id = _meta_creds(dom_key)
         use_token = token or cfg_token
         if not use_token or not page_id:
@@ -1441,7 +1532,9 @@ def chat_endpoint(payload: dict = Body(...)):
     history = payload.get("history") or []
     today = _today_ist()
 
-    doms = list(DOMAINS.keys()) if domain in ("all", "") else [domain]
+    doms = _enabled_domains() if domain in ("all", "") else [domain]
+    if domain not in ("all", ""):
+        _domain(domain)  # 403 if switched off
     deep = len(doms) == 1  # full windows + daily for one domain; lighter for all
     context = {"as_of": today.isoformat(), "domains": {}}
     for dk in doms:
@@ -1600,7 +1693,7 @@ def reports_export(period: str = "weekly", domain: str = "rh", start: str = "", 
     if fmt == "html":
         import html_report
         import json as _json
-        report_domains = ["rh", "pms", "aif"]
+        report_domains = [k for k in ("rh", "pms", "aif") if k in _enabled_domains()]
         try:
             creds = get_credentials()
         except Exception:

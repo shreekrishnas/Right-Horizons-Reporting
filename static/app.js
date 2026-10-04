@@ -1775,6 +1775,88 @@ async function checkHealth() {
     }
 }
 
+// Builds domain tabs + client pickers from the server's list of switched-on accounts.
+async function refreshDomains() {
+    domains = await api('/api/domains');
+    const keys = Object.keys(domains);
+    if (!keys.length) return;
+    if (!domains[currentDomain]) {
+        currentDomain = keys[0];
+        const t = document.getElementById('topbar-title');
+        if (t) t.textContent = domains[currentDomain].label;
+    }
+    const tabs = document.getElementById('domain-tabs');
+    tabs.innerHTML = '';
+    Object.entries(domains).forEach(([key, d]) => {
+        const btn = document.createElement('button');
+        btn.className = 'domain-tab' + (key === currentDomain ? ' active' : '');
+        btn.dataset.domain = key;
+        btn.innerHTML = `<span class="domain-dot" style="background:${d.color}"></span> ${esc(d.label)}`;
+        btn.onclick = () => switchDomain(key);
+        tabs.appendChild(btn);
+    });
+    const repDom = document.getElementById('rep-domain');
+    if (repDom) {
+        const prev = repDom.value;
+        repDom.innerHTML = '';
+        Object.entries(domains).forEach(([key, d]) => {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = d.label;
+            if (key === (domains[prev] ? prev : currentDomain)) opt.selected = true;
+            repDom.appendChild(opt);
+        });
+    }
+    // Ideas Lab client picker: hide switched-off accounts
+    const il = document.getElementById('il-client');
+    if (il) {
+        [...il.options].forEach(o => { o.hidden = !domains[o.value]; o.disabled = !domains[o.value]; });
+        if (!domains[il.value]) { const first = [...il.options].find(o => !o.disabled); if (first) il.value = first.value; }
+    }
+    if (typeof _chatUpdateScope === 'function') _chatUpdateScope();
+}
+
+// ── Admin: account on/off ──
+async function loadAdminAccounts() {
+    const box = document.getElementById('admin-accounts');
+    if (!box) return;
+    try {
+        const data = await api(`/api/admin/accounts?password=${encodeURIComponent(_adminPassword)}`, { method: 'POST' });
+        const warn = document.getElementById('admin-accounts-warn');
+        if (warn) warn.style.display = data.durable ? 'none' : 'block';
+        box.innerHTML = data.accounts.map(a => `
+            <label class="acct-row">
+                <span class="domain-dot" style="background:${esc(a.color)}"></span>
+                <span class="acct-name">${esc(a.label)}<small>${esc(a.url)}</small></span>
+                <span class="acct-state ${a.enabled ? 'on' : 'off'}">${a.enabled ? 'On' : 'Off'}</span>
+                <input type="checkbox" class="acct-switch" ${a.enabled ? 'checked' : ''}
+                       onchange="toggleAccount('${esc(a.key)}', this)" aria-label="Switch ${esc(a.label)} on or off">
+            </label>`).join('');
+    } catch (e) {
+        box.innerHTML = '<div class="empty-state"><p>Could not load accounts</p></div>';
+    }
+}
+
+async function toggleAccount(key, el) {
+    const enabled = el.checked;
+    el.disabled = true;
+    try {
+        const r = await api('/api/admin/accounts/toggle', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: _adminPassword, domain: key, enabled }),
+        });
+        const state = el.closest('.acct-row').querySelector('.acct-state');
+        state.textContent = r.enabled ? 'On' : 'Off';
+        state.className = 'acct-state ' + (r.enabled ? 'on' : 'off');
+        await refreshDomains();
+    } catch (e) {
+        el.checked = !enabled;
+        alert('Could not change this account: ' + (e.message || e));
+    } finally {
+        el.disabled = false;
+    }
+}
+
 let _adminPassword = '';
 
 async function adminLogin() {
@@ -1787,6 +1869,7 @@ async function adminLogin() {
         document.getElementById('admin-login-gate').style.display = 'none';
         document.getElementById('admin-panel').style.display = 'block';
         errEl.style.display = 'none';
+        loadAdminAccounts();
         loadAdminCredentials();
     } catch (e) {
         errEl.textContent = 'Invalid password';
@@ -1801,6 +1884,7 @@ function adminLogout() {
     document.getElementById('admin-login-gate').style.display = 'block';
     document.getElementById('admin-password').value = '';
     document.getElementById('admin-credentials').innerHTML = '';
+    const acc = document.getElementById('admin-accounts'); if (acc) acc.innerHTML = '';
     document.getElementById('admin-domains').innerHTML = '';
 }
 
@@ -3132,29 +3216,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setInterval(checkIdeasNotifications, 60000);
 
     try {
-        domains = await api('/api/domains');
-        const tabs = document.getElementById('domain-tabs');
-        tabs.innerHTML = '';
-        Object.entries(domains).forEach(([key, d]) => {
-            const btn = document.createElement('button');
-            btn.className = 'domain-tab' + (key === currentDomain ? ' active' : '');
-            btn.dataset.domain = key;
-            btn.innerHTML = `<span class="domain-dot" style="background:${d.color}"></span> ${d.label}`;
-            btn.onclick = () => switchDomain(key);
-            tabs.appendChild(btn);
-        });
-        // Populate report domain dropdown
-        const repDom = document.getElementById('rep-domain');
-        if (repDom) {
-            repDom.innerHTML = '';
-            Object.entries(domains).forEach(([key, d]) => {
-                const opt = document.createElement('option');
-                opt.value = key;
-                opt.textContent = d.label;
-                if (key === currentDomain) opt.selected = true;
-                repDom.appendChild(opt);
-            });
-        }
+        await refreshDomains();
     } catch (e) { console.error('Failed to load domains', e); }
 
     // Set default report dates
