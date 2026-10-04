@@ -55,35 +55,54 @@ def _dates(start: str, end: str):
 
 
 # ── Account on/off settings ──────────────────────────────────────────────────
-# Saved in Upstash Redis (Vercel Storage → Upstash) so toggles survive deploys
-# and are shared by every serverless instance. Without it, falls back to the
-# DISABLED_DOMAINS env var + this instance's memory (not durable).
-_REDIS_URL = os.environ.get("KV_REST_API_URL") or os.environ.get("UPSTASH_REDIS_REST_URL") or ""
-_REDIS_TOKEN = os.environ.get("KV_REST_API_TOKEN") or os.environ.get("UPSTASH_REDIS_REST_TOKEN") or ""
-_SETTINGS_KEY = "rh-reporting:disabled-domains"
-_disabled_cache = {"ts": 0.0, "val": None}
+# Stored in a small Supabase project (rh-reporting-settings) so toggles survive
+# deploys and are shared by every serverless instance. The URL + publishable key
+# are public by design: the table is read-only to the public, and writes go
+# through a SECURITY DEFINER function that checks a secret derived from
+# ADMIN_PASSWORD (registered by this server on first use). Falls back to the
+# DISABLED_DOMAINS env var + instance memory if Supabase is unreachable.
+_SB_URL = os.environ.get("SETTINGS_SUPABASE_URL", "https://lcebpqsrbzhrsiwgkjhe.supabase.co")
+_SB_KEY = os.environ.get("SETTINGS_SUPABASE_KEY", "sb_publishable_YMnIkT2a4TbRuebdAvRX8Q_C6yZSdU3")
+_disabled_cache = {"ts": 0.0, "val": None, "ok": False}
 _disabled_mem = {k.strip() for k in os.environ.get("DISABLED_DOMAINS", "").split(",") if k.strip()}
+_sb_secret_ready = {"done": False}
 
 
-def _redis(*cmd):
+def _sb_secret() -> str:
+    import hashlib
+    return hashlib.sha256(f"rh-settings:{ADMIN_PASSWORD}".encode()).hexdigest()
+
+
+def _sb(method: str, path: str, **kw):
     import requests as _rq
-    r = _rq.post(_REDIS_URL, json=list(cmd), headers={"Authorization": f"Bearer {_REDIS_TOKEN}"}, timeout=5)
-    r.raise_for_status()
-    return r.json().get("result")
+    h = {"apikey": _SB_KEY, "Authorization": f"Bearer {_SB_KEY}", "Content-Type": "application/json"}
+    r = _rq.request(method, f"{_SB_URL}/rest/v1/{path}", headers=h, timeout=6, **kw)
+    if r.status_code >= 400:
+        raise RuntimeError(f"Supabase {r.status_code}: {r.text[:200]}")
+    return r.json() if r.content else None
+
+
+def _sb_ensure_secret() -> bool:
+    if _sb_secret_ready["done"]:
+        return True
+    ok = bool(_sb("POST", "rpc/init_settings_secret", json={"p_secret": _sb_secret()}))
+    _sb_secret_ready["done"] = ok
+    return ok
 
 
 def _disabled_domains() -> set:
     import time as _t
-    import json as _json
-    if not (_REDIS_URL and _REDIS_TOKEN):
+    if not _SB_URL:
         return set(_disabled_mem)
     if _disabled_cache["val"] is not None and _t.time() - _disabled_cache["ts"] < 15:
         return set(_disabled_cache["val"])
     try:
-        raw = _redis("GET", _SETTINGS_KEY)
-        val = set(_json.loads(raw)) if raw else set(_disabled_mem)
+        rows = _sb("GET", "dashboard_settings?key=eq.disabled_domains&select=value")
+        val = set(rows[0]["value"]) if rows else set(_disabled_mem)
+        _disabled_cache.update(ok=True)
     except Exception:
-        val = set(_disabled_cache["val"] or _disabled_mem)
+        val = set(_disabled_cache["val"] if _disabled_cache["val"] is not None else _disabled_mem)
+        _disabled_cache.update(ok=False)
     _disabled_cache.update(ts=_t.time(), val=val)
     return set(val)
 
@@ -91,14 +110,27 @@ def _disabled_domains() -> set:
 def _set_disabled_domains(val: set) -> bool:
     """Returns True if saved durably."""
     import time as _t
-    import json as _json
     global _disabled_mem
+    if not _SB_URL:
+        _disabled_mem = set(val)
+        _disabled_cache.update(ts=_t.time(), val=set(val))
+        return False
+    if not _sb_ensure_secret():
+        raise RuntimeError("settings store rejected this server's secret (ADMIN_PASSWORD changed?) — "
+                           "reset dashboard_secret in Supabase project rh-reporting-settings")
+    _sb("POST", "rpc/set_setting", json={"p_secret": _sb_secret(), "p_key": "disabled_domains",
+                                          "p_value": sorted(val)})
     _disabled_mem = set(val)
-    _disabled_cache.update(ts=_t.time(), val=set(val))
-    if _REDIS_URL and _REDIS_TOKEN:
-        _redis("SET", _SETTINGS_KEY, _json.dumps(sorted(val)))
-        return True
-    return False
+    _disabled_cache.update(ts=_t.time(), val=set(val), ok=True)
+    return True
+
+
+@app.on_event("startup")
+def _register_settings_secret():
+    try:
+        _sb_ensure_secret()
+    except Exception:
+        pass
 
 
 def _enabled_domains() -> list:
@@ -194,7 +226,7 @@ def admin_accounts(password: str = ""):
         raise HTTPException(401, "Invalid password")
     off = _disabled_domains()
     return {
-        "durable": bool(_REDIS_URL and _REDIS_TOKEN),
+        "durable": bool(_SB_URL) and _disabled_cache.get("ok", False),
         "accounts": [{"key": k, "label": v["label"], "color": v.get("color", ""), "url": v.get("url", ""),
                       "enabled": k not in off} for k, v in DOMAINS.items()],
     }
@@ -249,6 +281,11 @@ def admin_reset_history(password: str = "", scope: str = "all"):
 
 @app.get("/api/domains")
 def get_domains():
+    if not _sb_secret_ready["done"]:
+        try:
+            _sb_ensure_secret()  # register this server's write secret ASAP after deploy
+        except Exception:
+            pass
     off = _disabled_domains()
     return {k: {kk: vv for kk, vv in v.items() if kk not in ("gsc_site", "ga4_property", "meta_social_token")}
             for k, v in DOMAINS.items() if k not in off}
