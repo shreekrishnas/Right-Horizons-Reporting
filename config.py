@@ -90,7 +90,22 @@ DOMAINS = {
         "meta_social_token": os.getenv("META_SOCIAL_TOKEN_NEXTWEALTH", ""),
         "meta_ad_account": os.getenv("META_AD_ACCOUNT_NEXTWEALTH", ""),
     },
+    "hoya": {
+        "label": "Hoya Vision India",
+        "short": "HOYA",
+        "gsc_site": os.getenv("GSC_SITE_HOYA", "https://www.hoyavision.com/in/"),
+        "ga4_property": os.getenv("GA4_PROPERTY_HOYA", "255658156"),
+        "color": "#0057B8",
+        "url": os.getenv("HOYA_URL", "https://www.hoyavision.com/in/"),
+        "meta_page_id": os.getenv("META_PAGE_ID_HOYA", ""),
+        "meta_social_token": os.getenv("META_SOCIAL_TOKEN_HOYA", ""),
+        "meta_ad_account": os.getenv("META_AD_ACCOUNT_HOYA", ""),
+    },
 }
+
+# Accounts not currently being worked on: hidden from the dashboard, chat,
+# reports and alerts. Override with the PAUSED_DOMAINS env var ("" = none).
+PAUSED_DOMAINS = {k.strip() for k in os.getenv("PAUSED_DOMAINS", "rh,pms,aif").split(",") if k.strip()}
 
 # Business context the AI assistant uses to interpret each domain's numbers.
 DOMAIN_KNOWLEDGE = {
@@ -110,4 +125,10 @@ DOMAIN_KNOWLEDGE = {
                   "the US/Europe; India traffic often includes job seekers and employees. Conversions = 'Contact us' / "
                   "demo / RFP enquiries; careers pages draw high but non-buyer traffic — separate them when judging lead quality. "
                   "Long sales cycles: judge quality by engaged sessions, time on service/case-study pages and US/EU share, not raw volume.",
+    "hoya": "Hoya Vision Care India (hoyavision.com/in) — Indian arm of HOYA, the Japanese optical-technology company making "
+            "spectacle lenses (MiyoSmart myopia-control lenses for children, progressive/varifocal lenses such as Hoyalux iD, "
+            "single-vision, blue-light/screen and photochromic Sensity lenses, Hi-Vision coatings). Sold through optical "
+            "stores/opticians, not direct online. Audiences: parents of myopic children, working professionals with screen "
+            "strain, presbyopes 40+, and optometrists/opticians (B2B). Work here is mainly social media (creatives, content) "
+            "with some SEO. Conversions = store-locator use, 'find an optician' and enquiry forms; India traffic is the target.",
 }

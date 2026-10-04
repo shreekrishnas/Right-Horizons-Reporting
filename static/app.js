@@ -799,6 +799,7 @@ function switchDashTab(tab) {
     if (tab === 'seo') loadSEOWeekly();
     if (tab === 'meta') loadMeta();
     if (tab === 'seranking') loadSERanking();
+    if (tab === 'gsc') loadSEOOpportunities();
 }
 
 // ── Data loading (cache-aware) ──
@@ -806,6 +807,41 @@ let _dashGSCDaily = [];
 let _dashGA4Daily = [];
 let _dashGA4Sources = [];
 let _dashGA4Devices = [];
+
+function _shortUrl(u) {
+    try { const x = new URL(u); return esc(x.pathname + x.search); } catch (e) { return esc(u || ''); }
+}
+
+async function loadSEOOpportunities() {
+    const ids = ['seo-striking', 'seo-lowctr', 'seo-decay', 'seo-cannibal', 'seo-gaps', 'seo-rising'];
+    let o = {};
+    try { o = await api(`/api/seo/opportunities?domain=${currentDomain}`); }
+    catch (e) {
+        ids.forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = '<div class="empty-state"><p>Search Console unavailable for this account</p></div>'; });
+        return;
+    }
+    renderTable('seo-striking', [
+        { label: 'Query', key: 'query' }, { label: 'Ranking Page', key: 'page' }, { label: 'Position', key: 'position' },
+        { label: 'Impressions', key: 'impressions' }, { label: 'Clicks', key: 'clicks' }, { label: '+Clicks if Top 3', key: 'potential_extra_clicks' },
+    ], (o.striking_distance || []).slice(0, 20).map(r => ({ ...r, query: esc(r.query), page: _shortUrl(r.page) })));
+    renderTable('seo-lowctr', [
+        { label: 'Query', key: 'query' }, { label: 'Page', key: 'page' }, { label: 'Position', key: 'position' },
+        { label: 'Impressions', key: 'impressions' }, { label: 'CTR', key: 'ctr' }, { label: 'Expected', key: 'benchmark_ctr' }, { label: 'Missed Clicks', key: 'missed_clicks' },
+    ], (o.low_ctr || []).slice(0, 15).map(r => ({ ...r, query: esc(r.query), page: _shortUrl(r.page), ctr: r.ctr + '%', benchmark_ctr: r.benchmark_ctr + '%' })));
+    renderTable('seo-decay', [
+        { label: 'Page', key: 'page' }, { label: 'Clicks Before', key: 'clicks_before' }, { label: 'Now', key: 'clicks_now' },
+        { label: 'Change', key: 'change_pct' }, { label: 'Pos. Before → Now', key: 'pos' },
+    ], (o.decaying_pages || []).map(r => ({ ...r, page: _shortUrl(r.page), change_pct: r.change_pct + '%', pos: `${r.position_before} → ${r.position_now ?? '—'}` })));
+    renderTable('seo-cannibal', [
+        { label: 'Query', key: 'query' }, { label: 'Impressions', key: 'impressions' }, { label: 'Competing Pages', key: 'pages' },
+    ], (o.cannibalization || []).map(r => ({ ...r, query: esc(r.query), pages: r.pages.map(p => `${_shortUrl(p.page)} (#${p.position})`).join('<br>') })));
+    renderTable('seo-gaps', [
+        { label: 'Query', key: 'query' }, { label: 'Impressions', key: 'impressions' }, { label: 'Best Position', key: 'position' },
+    ], (o.content_gaps || []).slice(0, 15).map(r => ({ ...r, query: esc(r.query) })));
+    renderTable('seo-rising', [
+        { label: 'Query', key: 'query' }, { label: 'Impr. Before', key: 'impressions_before' }, { label: 'Now', key: 'impressions_now' }, { label: 'Position', key: 'position' },
+    ], (o.rising_queries || []).slice(0, 15).map(r => ({ ...r, query: esc(r.query) })));
+}
 
 async function loadGSC() {
     const overviewIds = ['gsc-clicks', 'gsc-impressions', 'gsc-ctr', 'gsc-position'];
@@ -1727,6 +1763,7 @@ function reloadActiveDashTab() {
     else if (currentDashTab === 'youtube') loadYouTube();
     else if (currentDashTab === 'seo') loadSEOWeekly();
     else if (currentDashTab === 'meta') loadMeta();
+    else if (currentDashTab === 'gsc') loadSEOOpportunities();
 }
 
 function switchDomain(key) {
@@ -1739,7 +1776,7 @@ function switchDomain(key) {
     const hiddenForAkeana = ['meta', 'social', 'youtube', 'linkedin'];
     const isAkeana = key === 'akeana';
     // Domains without Meta / social / YouTube / LinkedIn connected
-    const noSocial = isAkeana || key === 'nextwealth';
+    const noSocial = isAkeana || !(d && d.meta_page_id);
     hiddenForAkeana.forEach(tab => {
         const btn = document.querySelector(`[data-dash="${tab}"]`);
         if (btn) btn.style.display = noSocial ? 'none' : '';
@@ -1781,7 +1818,7 @@ async function refreshDomains() {
     const keys = Object.keys(domains);
     if (!keys.length) return;
     if (!domains[currentDomain]) {
-        currentDomain = keys[0];
+        currentDomain = domains.nextwealth ? 'nextwealth' : keys[0];
         const t = document.getElementById('topbar-title');
         if (t) t.textContent = domains[currentDomain].label;
     }
@@ -1814,47 +1851,14 @@ async function refreshDomains() {
         if (!domains[il.value]) { const first = [...il.options].find(o => !o.disabled); if (first) il.value = first.value; }
     }
     if (typeof _chatUpdateScope === 'function') _chatUpdateScope();
-}
-
-// ── Admin: account on/off ──
-async function loadAdminAccounts() {
-    const box = document.getElementById('admin-accounts');
-    if (!box) return;
-    try {
-        const data = await api(`/api/admin/accounts?password=${encodeURIComponent(_adminPassword)}`, { method: 'POST' });
-        const warn = document.getElementById('admin-accounts-warn');
-        if (warn) warn.style.display = data.durable ? 'none' : 'block';
-        box.innerHTML = data.accounts.map(a => `
-            <label class="acct-row">
-                <span class="domain-dot" style="background:${esc(a.color)}"></span>
-                <span class="acct-name">${esc(a.label)}<small>${esc(a.url)}</small></span>
-                <span class="acct-state ${a.enabled ? 'on' : 'off'}">${a.enabled ? 'On' : 'Off'}</span>
-                <input type="checkbox" class="acct-switch" ${a.enabled ? 'checked' : ''}
-                       onchange="toggleAccount('${esc(a.key)}', this)" aria-label="Switch ${esc(a.label)} on or off">
-            </label>`).join('');
-    } catch (e) {
-        box.innerHTML = '<div class="empty-state"><p>Could not load accounts</p></div>';
-    }
-}
-
-async function toggleAccount(key, el) {
-    const enabled = el.checked;
-    el.disabled = true;
-    try {
-        const r = await api('/api/admin/accounts/toggle', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password: _adminPassword, domain: key, enabled }),
-        });
-        const state = el.closest('.acct-row').querySelector('.acct-state');
-        state.textContent = r.enabled ? 'On' : 'Off';
-        state.className = 'acct-state ' + (r.enabled ? 'on' : 'off');
-        await refreshDomains();
-    } catch (e) {
-        el.checked = !enabled;
-        alert('Could not change this account: ' + (e.message || e));
-    } finally {
-        el.disabled = false;
-    }
+    const cur = domains[currentDomain];
+    const noSocial = currentDomain === 'akeana' || !(cur && cur.meta_page_id);
+    ['meta', 'social', 'youtube', 'linkedin'].forEach(tab => {
+        const btn = document.querySelector(`[data-dash="${tab}"]`);
+        if (btn) btn.style.display = noSocial ? 'none' : '';
+    });
+    const serBtn = document.getElementById('tab-seranking');
+    if (serBtn) serBtn.style.display = currentDomain === 'akeana' ? '' : 'none';
 }
 
 let _adminPassword = '';
@@ -1869,7 +1873,6 @@ async function adminLogin() {
         document.getElementById('admin-login-gate').style.display = 'none';
         document.getElementById('admin-panel').style.display = 'block';
         errEl.style.display = 'none';
-        loadAdminAccounts();
         loadAdminCredentials();
     } catch (e) {
         errEl.textContent = 'Invalid password';
@@ -1884,7 +1887,6 @@ function adminLogout() {
     document.getElementById('admin-login-gate').style.display = 'block';
     document.getElementById('admin-password').value = '';
     document.getElementById('admin-credentials').innerHTML = '';
-    const acc = document.getElementById('admin-accounts'); if (acc) acc.innerHTML = '';
     document.getElementById('admin-domains').innerHTML = '';
 }
 

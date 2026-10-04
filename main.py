@@ -15,7 +15,7 @@ from config import ALERT_EMAIL_FROM, ALERT_EMAIL_PASSWORD, ALERT_EMAIL_TO, ALERT
 from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
 from config import YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN
 from config import OPENROUTER_API_KEY, TAVILY_API_KEY, SE_RANKING_API_KEY
-from config import DOMAIN_KNOWLEDGE
+from config import DOMAIN_KNOWLEDGE, PAUSED_DOMAINS
 try:
     import web_search
 except Exception:
@@ -54,83 +54,9 @@ def _dates(start: str, end: str):
     return start, end
 
 
-# ── Account on/off settings ──────────────────────────────────────────────────
-# Stored in a small Supabase project (rh-reporting-settings) so toggles survive
-# deploys and are shared by every serverless instance. The URL + publishable key
-# are public by design: the table is read-only to the public, and writes go
-# through a SECURITY DEFINER function that checks a secret derived from
-# ADMIN_PASSWORD (registered by this server on first use). Falls back to the
-# DISABLED_DOMAINS env var + instance memory if Supabase is unreachable.
-_SB_URL = os.environ.get("SETTINGS_SUPABASE_URL", "https://lcebpqsrbzhrsiwgkjhe.supabase.co")
-_SB_KEY = os.environ.get("SETTINGS_SUPABASE_KEY", "sb_publishable_YMnIkT2a4TbRuebdAvRX8Q_C6yZSdU3")
-_disabled_cache = {"ts": 0.0, "val": None, "ok": False}
-_disabled_mem = {k.strip() for k in os.environ.get("DISABLED_DOMAINS", "").split(",") if k.strip()}
-_sb_secret_ready = {"done": False}
-
-
-def _sb_secret() -> str:
-    import hashlib
-    return hashlib.sha256(f"rh-settings:{ADMIN_PASSWORD}".encode()).hexdigest()
-
-
-def _sb(method: str, path: str, **kw):
-    import requests as _rq
-    h = {"apikey": _SB_KEY, "Authorization": f"Bearer {_SB_KEY}", "Content-Type": "application/json"}
-    r = _rq.request(method, f"{_SB_URL}/rest/v1/{path}", headers=h, timeout=6, **kw)
-    if r.status_code >= 400:
-        raise RuntimeError(f"Supabase {r.status_code}: {r.text[:200]}")
-    return r.json() if r.content else None
-
-
-def _sb_ensure_secret() -> bool:
-    if _sb_secret_ready["done"]:
-        return True
-    ok = bool(_sb("POST", "rpc/init_settings_secret", json={"p_secret": _sb_secret()}))
-    _sb_secret_ready["done"] = ok
-    return ok
-
-
+# ── Paused accounts ───────────────────────────────────────────────────────────
 def _disabled_domains() -> set:
-    import time as _t
-    if not _SB_URL:
-        return set(_disabled_mem)
-    if _disabled_cache["val"] is not None and _t.time() - _disabled_cache["ts"] < 15:
-        return set(_disabled_cache["val"])
-    try:
-        rows = _sb("GET", "dashboard_settings?key=eq.disabled_domains&select=value")
-        val = set(rows[0]["value"]) if rows else set(_disabled_mem)
-        _disabled_cache.update(ok=True)
-    except Exception:
-        val = set(_disabled_cache["val"] if _disabled_cache["val"] is not None else _disabled_mem)
-        _disabled_cache.update(ok=False)
-    _disabled_cache.update(ts=_t.time(), val=val)
-    return set(val)
-
-
-def _set_disabled_domains(val: set) -> bool:
-    """Returns True if saved durably."""
-    import time as _t
-    global _disabled_mem
-    if not _SB_URL:
-        _disabled_mem = set(val)
-        _disabled_cache.update(ts=_t.time(), val=set(val))
-        return False
-    if not _sb_ensure_secret():
-        raise RuntimeError("settings store rejected this server's secret (ADMIN_PASSWORD changed?) — "
-                           "reset dashboard_secret in Supabase project rh-reporting-settings")
-    _sb("POST", "rpc/set_setting", json={"p_secret": _sb_secret(), "p_key": "disabled_domains",
-                                          "p_value": sorted(val)})
-    _disabled_mem = set(val)
-    _disabled_cache.update(ts=_t.time(), val=set(val), ok=True)
-    return True
-
-
-@app.on_event("startup")
-def _register_settings_secret():
-    try:
-        _sb_ensure_secret()
-    except Exception:
-        pass
+    return set(PAUSED_DOMAINS)
 
 
 def _enabled_domains() -> list:
@@ -142,7 +68,7 @@ def _domain(key: str) -> dict:
     if key not in DOMAINS:
         raise HTTPException(400, f"Unknown domain: {key}")
     if key in _disabled_domains():
-        raise HTTPException(403, f"{DOMAINS[key]['label']} is switched off in Admin → Accounts")
+        raise HTTPException(403, f"{DOMAINS[key]['label']} is paused (PAUSED_DOMAINS)")
     return DOMAINS[key]
 
 
@@ -220,39 +146,6 @@ def admin_credentials(password: str = ""):
     }
 
 
-@app.post("/api/admin/accounts")
-def admin_accounts(password: str = ""):
-    if not password or password != ADMIN_PASSWORD:
-        raise HTTPException(401, "Invalid password")
-    off = _disabled_domains()
-    return {
-        "durable": bool(_SB_URL) and _disabled_cache.get("ok", False),
-        "accounts": [{"key": k, "label": v["label"], "color": v.get("color", ""), "url": v.get("url", ""),
-                      "enabled": k not in off} for k, v in DOMAINS.items()],
-    }
-
-
-@app.post("/api/admin/accounts/toggle")
-def admin_accounts_toggle(payload: dict = Body(...)):
-    if payload.get("password") != ADMIN_PASSWORD or not ADMIN_PASSWORD:
-        raise HTTPException(401, "Invalid password")
-    key = payload.get("domain", "")
-    if key not in DOMAINS:
-        raise HTTPException(400, f"Unknown domain: {key}")
-    off = _disabled_domains()
-    if payload.get("enabled"):
-        off.discard(key)
-    else:
-        if len([k for k in DOMAINS if k not in off and k != key]) == 0:
-            raise HTTPException(400, "At least one account must stay on")
-        off.add(key)
-    try:
-        durable = _set_disabled_domains(off)
-    except Exception as e:
-        raise HTTPException(502, f"Could not save setting: {e}")
-    return {"ok": True, "domain": key, "enabled": key not in off, "durable": durable}
-
-
 @app.post("/api/admin/history")
 def admin_history(password: str = ""):
     if not password or password != ADMIN_PASSWORD:
@@ -281,11 +174,6 @@ def admin_reset_history(password: str = "", scope: str = "all"):
 
 @app.get("/api/domains")
 def get_domains():
-    if not _sb_secret_ready["done"]:
-        try:
-            _sb_ensure_secret()  # register this server's write secret ASAP after deploy
-        except Exception:
-            pass
     off = _disabled_domains()
     return {k: {kk: vv for kk, vv in v.items() if kk not in ("gsc_site", "ga4_property", "meta_social_token")}
             for k, v in DOMAINS.items() if k not in off}
@@ -491,6 +379,25 @@ def ga4_daily(domain: str = "rh", start: str = "", end: str = ""):
         return ga4.get_daily(creds, prop, start, end)
     except Exception as e:
         raise HTTPException(502, f"GA4 error: {e}")
+
+
+@app.get("/api/seo/opportunities")
+def seo_opportunities(domain: str = "nextwealth", start: str = "", end: str = ""):
+    """Search Console work list: near-page-1 keywords, low-CTR pages, cannibalisation,
+    decaying pages, content gaps, rising queries. Default: last 28 days vs the 28 before."""
+    d = _domain(domain)
+    today = _today_ist()
+    if not end:
+        end = (today - timedelta(days=2)).isoformat()   # GSC data lags ~2 days
+    if not start:
+        start = (date.fromisoformat(end) - timedelta(days=27)).isoformat()
+    span = (date.fromisoformat(end) - date.fromisoformat(start)).days + 1
+    pe = date.fromisoformat(start) - timedelta(days=1)
+    ps = pe - timedelta(days=span - 1)
+    try:
+        return gsc.get_seo_opportunities(get_credentials(), d["gsc_site"], start, end, ps.isoformat(), pe.isoformat())
+    except Exception as e:
+        raise HTTPException(502, f"Search Console error: {e}")
 
 
 @app.get("/api/ga4/quality")
@@ -1430,6 +1337,15 @@ def _chat_context(domain: str, start: str = "", end: str = "", deep: bool = True
             except Exception as e:
                 ctx["analytics_ga4"] = {"error": str(e)[:200]}
 
+    if creds and deep:
+        try:
+            _e = (today - timedelta(days=2)); _s = _e - timedelta(days=27)
+            _pe = _s - timedelta(days=1); _ps = _pe - timedelta(days=27)
+            ctx["seo_opportunities_28d"] = gsc.get_seo_opportunities(
+                creds, d["gsc_site"], _s.isoformat(), _e.isoformat(), _ps.isoformat(), _pe.isoformat())
+        except Exception as ex:
+            ctx["seo_opportunities_28d"] = {"error": str(ex)[:150]}
+
     # Meta Ads — per-window account summary
     ad = d.get("meta_ad_account", "")
     if META_MARKETING_TOKEN and ad and not d.get("meta_manual"):
@@ -1628,6 +1544,9 @@ def chat_endpoint(payload: dict = Body(...)):
         "Also available: 'spike_days' (days far above the normal daily level and which location drove them), 'hourly_profile' (24 hourly session counts, property timezone — flat = automated, office-hours curve = people) and 'bot_targeted_pages' (landing pages with <10% engagement and <10s). "
         "Use 'clean' for human-only sessions/engagement/avg session and compare with 'reported'. For any custom period not covered, "
         "say only these windows are available.\n"
+        "- SEO: 'seo_opportunities_28d' lists striking_distance (pos 4-20 → push to top 3), low_ctr (rewrite title/meta), "
+        "cannibalization (pick one page per query, merge/canonical/internal-link the rest), decaying_pages, content_gaps (new content) and rising_queries. "
+        "Use it for any SEO, blog or on-page question and name the exact queries and URLs.\n"
         "- When asked for analysis, give: what changed (with numbers), why (which channel/region/page drove it), and 2-3 concrete actions.\n\n"
         "ABSOLUTE RULES:\n"
         "1. Answer ONLY using the DATA JSON provided below. Every number you state must come directly from it.\n"
