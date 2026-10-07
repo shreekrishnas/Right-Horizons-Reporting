@@ -1,3 +1,4 @@
+import os
 import json
 import re
 import time
@@ -5,8 +6,9 @@ import requests
 from config import OPENROUTER_API_KEY
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "anthropic/claude-sonnet-4"
-FALLBACK_MODEL = "anthropic/claude-haiku-4"
+# Override in Vercel with OPENROUTER_MODEL / OPENROUTER_FALLBACK_MODEL (OpenRouter model slugs).
+MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "anthropic/claude-sonnet-4")
 
 
 def _headers():
