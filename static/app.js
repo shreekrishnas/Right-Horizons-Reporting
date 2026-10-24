@@ -362,7 +362,7 @@ function toggleTheme() {
 // ── Views ──
 function switchView(view) {
     currentView = view;
-    ['dashboard', 'analytics', 'calendar', 'ideas', 'validator', 'reports', 'settings'].forEach(v => {
+    ['dashboard', 'analytics', 'builder', 'calendar', 'ideas', 'validator', 'reports', 'settings'].forEach(v => {
         const el = document.getElementById('view-' + v);
         if (el) el.style.display = v === view ? 'block' : 'none';
     });
@@ -370,13 +370,14 @@ function switchView(view) {
         b.classList.toggle('active', b.dataset.view === view);
     });
     const subtitles = {
-        dashboard: 'Dashboard', analytics: 'Analytics', calendar: 'Content Calendar', ideas: 'Idea Lab',
+        dashboard: 'Dashboard', analytics: 'Analytics', builder: 'Metric Builder', calendar: 'Content Calendar', ideas: 'Idea Lab',
         validator: 'Content Validator', reports: 'Reports & Analytics', settings: 'Settings'
     };
     const sub = document.getElementById('topbar-sub');
     if (sub) sub.textContent = subtitles[view] || 'Dashboard';
     if (view === 'ideas') markIdeasSeen();
     if (view === 'analytics') loadAnalytics();
+    if (view === 'builder' && typeof initMetricBuilder === 'function') initMetricBuilder();
 }
 
 // ── Analytics View ──
@@ -1719,6 +1720,7 @@ async function uploadLinkedIn() {
 async function loadAll() {
     console.log('[loadAll] domain=' + currentDomain + ' start=' + dateStart + ' end=' + dateEnd);
     analyticsLoaded = {};
+    if (typeof renderPinnedWidgets === 'function') renderPinnedWidgets();
     await Promise.allSettled([loadGSC(), loadGA4(), loadMeta()]);
     try {
         const gscData = _dashGSCDaily || [];
@@ -1791,6 +1793,7 @@ function switchDomain(key) {
     loadAll();
     reloadActiveDashTab();
     if (currentView === 'analytics') loadAnalytics();
+    if (currentView === 'builder' && typeof initMetricBuilder === 'function') initMetricBuilder();
     _chatUpdateScope();
 }
 

@@ -381,6 +381,39 @@ def ga4_daily(domain: str = "rh", start: str = "", end: str = ""):
         raise HTTPException(502, f"GA4 error: {e}")
 
 
+@app.get("/api/explore/fields")
+def explore_fields():
+    import explore
+    return explore.catalog()
+
+
+@app.post("/api/explore")
+def explore_query(payload: dict = Body(...)):
+    """Metric Builder: dimensions × metrics with filters, for GA4 or Search Console."""
+    import explore
+    d = _domain(payload.get("domain") or "nextwealth")
+    start, end = _dates(payload.get("start", ""), payload.get("end", ""))
+    try:
+        return explore.run(get_credentials(), d, {**payload, "start": start, "end": end})
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(502, f"Data source error: {str(e)[:300]}")
+
+
+@app.get("/api/explore/values")
+def explore_values(domain: str = "nextwealth", source: str = "ga4", field: str = "", start: str = "", end: str = "", q: str = ""):
+    import explore
+    d = _domain(domain)
+    start, end = _dates(start, end)
+    try:
+        return explore.field_values(get_credentials(), d, source, field, start, end, q)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(502, f"Data source error: {str(e)[:300]}")
+
+
 @app.get("/api/seo/opportunities")
 def seo_opportunities(domain: str = "nextwealth", start: str = "", end: str = ""):
     """Search Console work list: near-page-1 keywords, low-CTR pages, cannibalisation,
