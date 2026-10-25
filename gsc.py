@@ -2,8 +2,20 @@ from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 
 
+import threading
+
+_local = threading.local()
+
+
 def _service(creds: Credentials):
-    return build("webmasters", "v3", credentials=creds, cache_discovery=False)
+    # build() fetches the API discovery document over the network each time;
+    # keep one service per thread for the life of the credentials object.
+    cached = getattr(_local, "svc", None)
+    if cached and cached[0] == id(creds):
+        return cached[1]
+    svc = build("webmasters", "v3", credentials=creds, cache_discovery=False)
+    _local.svc = (id(creds), svc)
+    return svc
 
 
 def get_summary(creds: Credentials, site_url: str, start: str, end: str) -> dict:
@@ -118,12 +130,16 @@ def get_seo_opportunities(creds: Credentials, site_url: str, start: str, end: st
     - decaying_pages: pages that lost >=30% clicks vs the previous period
     - content_gaps: queries with demand where our best page ranks beyond 20 (needs new/better content)
     - rising_queries: queries gaining the most impressions vs previous period"""
-    svc = _service(creds)
-    qp = _qp_rows(svc, site_url, start, end, ["query", "page"])
-    q_now = {r["keys"][0]: r for r in _qp_rows(svc, site_url, start, end, ["query"])}
-    q_prev = {r["keys"][0]: r for r in _qp_rows(svc, site_url, prev_start, prev_end, ["query"])}
-    p_now = {r["keys"][0]: r for r in _qp_rows(svc, site_url, start, end, ["page"])}
-    p_prev = {r["keys"][0]: r for r in _qp_rows(svc, site_url, prev_start, prev_end, ["page"])}
+    from concurrent.futures import ThreadPoolExecutor
+    jobs = [(start, end, ["query", "page"]), (start, end, ["query"]), (prev_start, prev_end, ["query"]),
+            (start, end, ["page"]), (prev_start, prev_end, ["page"])]
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        res = list(ex.map(lambda j: _qp_rows(_service(creds), site_url, *j), jobs))
+    qp = res[0]
+    q_now = {r["keys"][0]: r for r in res[1]}
+    q_prev = {r["keys"][0]: r for r in res[2]}
+    p_now = {r["keys"][0]: r for r in res[3]}
+    p_prev = {r["keys"][0]: r for r in res[4]}
 
     best_page = {}
     by_query = {}
