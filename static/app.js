@@ -200,7 +200,7 @@ function makeChart(id, config) {
     config.options.responsive = true;
     config.options.maintainAspectRatio = false;
     config.options.interaction = config.options.interaction || { mode: 'index', intersect: false };
-    config.options.animation = config.options.animation || { duration: 800, easing: 'easeOutCubic' };
+    config.options.animation = config.options.animation || { duration: 300, easing: 'easeOutCubic' };
 
     // Auto-enhance datasets with gradients
     const datasets = (config.data && config.data.datasets) || [];
@@ -801,6 +801,7 @@ function switchDashTab(tab) {
     if (tab === 'meta') loadMeta();
     if (tab === 'seranking') loadSERanking();
     if (tab === 'gsc') loadSEOOpportunities();
+    if (tab === 'ga4') loadGA4Quality(`?domain=${currentDomain}&start=${dateStart}&end=${dateEnd}`);
 }
 
 // ── Data loading (cache-aware) ──
@@ -907,7 +908,6 @@ async function loadGA4() {
         const ga4MetricSel = document.getElementById('ga4-metric-select');
         switchGA4Metric(ga4MetricSel ? ga4MetricSel.value : 'sessions-users');
         renderDeviceChart(_dashGA4Devices);
-        loadGA4Quality(qs);
     } catch (e) {
         console.error('GA4 error:', e);
         [...overviewIds, ...detailIds].forEach(id => { const el = document.getElementById(id); if (el) { el.className = 'metric-value'; el.textContent = '-'; } });
@@ -1721,7 +1721,9 @@ async function loadAll() {
     console.log('[loadAll] domain=' + currentDomain + ' start=' + dateStart + ' end=' + dateEnd);
     analyticsLoaded = {};
     if (typeof renderPinnedWidgets === 'function') renderPinnedWidgets();
-    await Promise.allSettled([loadGSC(), loadGA4(), loadMeta()]);
+    const _d = domains[currentDomain] || {};
+    const _hasMeta = !!(_d.meta_ad_account || _d.meta_page_id);
+    await Promise.allSettled([loadGSC(), loadGA4(), _hasMeta ? loadMeta() : Promise.resolve()]);
     try {
         const gscData = _dashGSCDaily || [];
         const ga4Data = _dashGA4Daily || [];
@@ -1766,6 +1768,7 @@ function reloadActiveDashTab() {
     else if (currentDashTab === 'seo') loadSEOWeekly();
     else if (currentDashTab === 'meta') loadMeta();
     else if (currentDashTab === 'gsc') loadSEOOpportunities();
+    else if (currentDashTab === 'ga4') loadGA4Quality(`?domain=${currentDomain}&start=${dateStart}&end=${dateEnd}`);
 }
 
 function switchDomain(key) {

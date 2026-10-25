@@ -5,8 +5,18 @@ from google.analytics.data_v1beta.types import (
 from google.oauth2.credentials import Credentials
 
 
+_clients: dict = {}
+
+
 def _client(creds: Credentials) -> BetaAnalyticsDataClient:
-    return BetaAnalyticsDataClient(credentials=creds)
+    # Creating a client opens a new gRPC channel (slow); reuse it while the
+    # same credentials object is cached by google_auth.
+    key = id(creds)
+    c = _clients.get(key)
+    if c is None:
+        _clients.clear()
+        c = _clients[key] = BetaAnalyticsDataClient(credentials=creds)
+    return c
 
 
 def get_summary(creds: Credentials, property_id: str, start: str, end: str) -> dict:
@@ -421,6 +431,10 @@ def get_bot_traffic(creds: Credentials, property_id: str, start: str, end: str) 
     country+city+browser+channel segments on behaviour: almost no time on site,
     ~1 page, ~all new users, low engagement, data-centre locations, (not set)
     geo. Returns totals, % of traffic, suspect segments and 'clean' metrics."""
+    from concurrent.futures import ThreadPoolExecutor
+    _ex = ThreadPoolExecutor(max_workers=3)
+    _f_loc = _ex.submit(_location_signals, creds, property_id, start, end)
+    _f_tot = _ex.submit(get_engagement_summary, creds, property_id, start, end)
     dims = ["country", "city", "browser", "sessionDefaultChannelGroup"]
     resp = _client(creds).run_report(RunReportRequest(
         property=f"properties/{property_id}",
@@ -432,7 +446,7 @@ def get_bot_traffic(creds: Credentials, property_id: str, start: str, end: str) 
         limit=1000,
     ))
     try:
-        locsig = _location_signals(creds, property_id, start, end)
+        locsig = _f_loc.result()
     except Exception:
         locsig = {"by_location": {}, "spike_days": [], "hourly_profile": [], "bot_targeted_pages": []}
     total = {"sessions": 0, "users": 0, "engaged": 0, "dur": 0.0, "key_events": 0}
@@ -475,7 +489,8 @@ def get_bot_traffic(creds: Credentials, property_id: str, start: str, end: str) 
     # Segment rows double-count users/sessions that span several cities or
     # browsers, so take the real totals from an undimensioned query and
     # subtract the suspected bots from those.
-    t = get_engagement_summary(creds, property_id, start, end)
+    t = _f_tot.result()
+    _ex.shutdown(wait=False)
     total = {"sessions": t["sessions"], "users": t["users"], "engaged": t["engaged_sessions"],
              "dur": t["avg_session"] * t["sessions"], "key_events": t["key_events"]}
     ts, bs = total["sessions"], bot["sessions"]

@@ -45,6 +45,47 @@ app = FastAPI(title="Right Horizons Reporting")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+# ── Response caching ─────────────────────────────────────────────────────────
+# Google/Meta data calls take 0.5–3 s each. Read-only data GETs are cached for
+# 10 minutes: in this server's memory, and at Vercel's CDN (s-maxage) so repeat
+# visits and account/tab switches return instantly; stale copies are served
+# while a fresh one loads in the background.
+_CACHEABLE = ("/api/gsc/", "/api/ga4/", "/api/seo/", "/api/meta/campaigns", "/api/meta/daily",
+              "/api/social/", "/api/youtube/channel", "/api/youtube/videos", "/api/explore/values",
+              "/api/explore/fields", "/api/se-ranking/")
+_NO_CACHE = ("/api/social/diagnose", "/api/social/ig-follows-debug", "/api/gsc/sites")
+_resp_cache: dict = {}
+_RESP_TTL = 600
+
+
+@app.middleware("http")
+async def _cache_get_responses(request, call_next):
+    import time as _t
+    from starlette.responses import Response
+    path = request.url.path
+    cacheable = (request.method == "GET" and path.startswith(_CACHEABLE)
+                 and not path.startswith(_NO_CACHE) and "nocache" not in request.query_params)
+    if not cacheable:
+        return await call_next(request)
+    key = str(request.url)
+    hit = _resp_cache.get(key)
+    if hit and _t.time() - hit[0] < _RESP_TTL:
+        return Response(hit[1], status_code=200, media_type=hit[2],
+                        headers={"Cache-Control": "public, max-age=60, s-maxage=600, stale-while-revalidate=86400",
+                                 "X-Cache": "HIT"})
+    resp = await call_next(request)
+    if resp.status_code != 200:
+        return resp
+    body = b"".join([chunk async for chunk in resp.body_iterator])
+    mt = resp.headers.get("content-type", "application/json")
+    if len(_resp_cache) > 400:
+        _resp_cache.clear()
+    _resp_cache[key] = (_t.time(), body, mt)
+    return Response(body, status_code=200, media_type=mt,
+                    headers={"Cache-Control": "public, max-age=60, s-maxage=600, stale-while-revalidate=86400",
+                             "X-Cache": "MISS"})
+
+
 def _dates(start: str, end: str):
     today = _today_ist()
     if not end:
@@ -387,14 +428,27 @@ def explore_fields():
     return explore.catalog()
 
 
+_explore_cache: dict = {}
+
+
 @app.post("/api/explore")
 def explore_query(payload: dict = Body(...)):
     """Metric Builder: dimensions × metrics with filters, for GA4 or Search Console."""
     import explore
     d = _domain(payload.get("domain") or "nextwealth")
     start, end = _dates(payload.get("start", ""), payload.get("end", ""))
+    import json as _json
+    import time as _t
+    ck = _json.dumps({**payload, "start": start, "end": end}, sort_keys=True)
+    hit = _explore_cache.get(ck)
+    if hit and _t.time() - hit[0] < 600:
+        return hit[1]
     try:
-        return explore.run(get_credentials(), d, {**payload, "start": start, "end": end})
+        out = explore.run(get_credentials(), d, {**payload, "start": start, "end": end})
+        if len(_explore_cache) > 300:
+            _explore_cache.clear()
+        _explore_cache[ck] = (_t.time(), out)
+        return out
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:
@@ -440,17 +494,21 @@ def ga4_quality(domain: str = "rh", start: str = "", end: str = ""):
     prop = _domain(domain)["ga4_property"]
     if not prop:
         raise HTTPException(400, "GA4 property not configured")
+    from concurrent.futures import ThreadPoolExecutor
     creds = get_credentials()
-    out = {}
-    for key, fn in (("engagement", ga4.get_engagement_summary), ("channels", ga4.get_channel_quality),
-                    ("source_medium", ga4.get_source_medium), ("countries", ga4.get_country_breakdown),
-                    ("regions", ga4.get_region_breakdown), ("landing_pages", ga4.get_landing_page_quality),
-                    ("bot_traffic", ga4.get_bot_traffic)):
+    jobs = (("engagement", ga4.get_engagement_summary), ("channels", ga4.get_channel_quality),
+            ("source_medium", ga4.get_source_medium), ("countries", ga4.get_country_breakdown),
+            ("regions", ga4.get_region_breakdown), ("landing_pages", ga4.get_landing_page_quality),
+            ("bot_traffic", ga4.get_bot_traffic))
+
+    def _one(job):
+        key, fn = job
         try:
-            out[key] = fn(creds, prop, start, end)
+            return key, fn(creds, prop, start, end)
         except Exception as e:
-            out[key] = {"error": str(e)[:200]}
-    return out
+            return key, {"error": str(e)[:200]}
+    with ThreadPoolExecutor(max_workers=len(jobs)) as ex:
+        return dict(ex.map(_one, jobs))
 
 
 @app.get("/api/ga4/devices")
