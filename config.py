@@ -105,7 +105,7 @@ DOMAINS = {
 
 # Accounts not currently being worked on: hidden from the dashboard, chat,
 # reports and alerts. Override with the PAUSED_DOMAINS env var ("" = none).
-PAUSED_DOMAINS = {k.strip() for k in os.getenv("PAUSED_DOMAINS", "rh,pms,aif").split(",") if k.strip()}
+PAUSED_DOMAINS = {k.strip() for k in os.getenv("PAUSED_DOMAINS", "pms,aif").split(",") if k.strip()}
 
 # Business context the AI assistant uses to interpret each domain's numbers.
 DOMAIN_KNOWLEDGE = {
